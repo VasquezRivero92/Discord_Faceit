@@ -1,0 +1,23 @@
+{
+  "name": "discord-faceit-hub-bot",
+  "version": "1.0.0",
+  "description": "Discord bot integrated with Faceit Hub webhooks to announce matches.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "test:webhook": "node test-webhook.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^8.5.2",
+    "firebase-admin": "^12.1.0",
+    "helmet": "^8.2.0",
+    "jsonwebtoken": "^9.0.3",
+    "ws": "^8.21.0"
+  }
+}
