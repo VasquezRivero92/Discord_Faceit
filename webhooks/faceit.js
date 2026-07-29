@@ -1,5 +1,6 @@
+import { PermissionFlagsBits, EmbedBuilder } from 'discord.js';
 import { env, getEffectiveConfig, getEffectiveConfigForGuild, CLUB_ROLES_MAP } from '../config/index.js';
-import { fetchFaceitPlayerById } from '../services/faceitApi.js';
+import { fetchFaceitPlayerById, checkHubBanStatus } from '../services/faceitApi.js';
 import { getPlayerSkillLevel, syncMemberLevelRole, getOrCreateSpecialRole } from '../services/roles.js';
 import { createMatchEmbed, createServerStatusEmbed, updateLivePanel } from '../services/matchMessages.js';
 import {
@@ -33,8 +34,9 @@ export async function handleFaceitWebhook(event, client, db) {
   const isStart = event.event === 'match_status_starting' || event.event === 'match_status_ready';
   const isFinish = event.event === 'match_status_finished';
   const isCancel = event.event === 'match_status_cancelled' || event.event === 'match_status_aborted';
+  const isHubUserRemoved = event.event === 'hub_user_removed';
 
-  if (!isRoleEvent && !isConfigure && !isStart && !isFinish && !isCancel) {
+  if (!isRoleEvent && !isConfigure && !isStart && !isFinish && !isCancel && !isHubUserRemoved) {
     logger.info(`Evento no manejado: ${event.event}`);
     return;
   }
@@ -45,8 +47,10 @@ export async function handleFaceitWebhook(event, client, db) {
 
       if (isRoleEvent) {
         await handleRoleEvent(event, client, db, config);
+      } else if (isHubUserRemoved) {
+        await handleHubUserRemoved(event, client, db, config, guildId);
       } else if (isConfigure || isStart || isFinish || isCancel) {
-        await handleMatchEvent(event, client, db, isConfigure, isStart, isFinish, isCancel, config);
+        await handleMatchEvent(event, client, db, isConfigure, isStart, isFinish, isCancel, config, guildId);
       }
     } catch (err) {
       logger.error(`Error al procesar webhook para la guild ${guildId}:`, err);
@@ -83,7 +87,7 @@ async function handleRoleEvent(event, client, db, config) {
     if (!rolesChannelId) return;
 
     const channel = await client.channels.fetch(rolesChannelId);
-    if (!channel || !channel.guild) return;
+    if (!channel || !channel.guild || channel.guild.id !== guildId) return;
 
     const guild = channel.guild;
     const member = await guild.members.fetch(discordId);
@@ -112,11 +116,32 @@ async function handleRoleEvent(event, client, db, config) {
   }
 }
 
-async function handleMatchEvent(event, client, db, isConfigure, isStart, isFinish, isCancel, config) {
+async function handleMatchEvent(event, client, db, isConfigure, isStart, isFinish, isCancel, config, guildId) {
   const matchData = event.payload;
 
-  if (config.faceitHubId && event.entity?.id !== config.faceitHubId) {
-    logger.info(`Partida ignorada. No coincide con el HUB (ID recibido: ${event.entity?.id}).`);
+  let isMatchingHub = event.entity?.id === config.faceitHubId;
+
+  if (!isMatchingHub && config.faceitHubId && event.entity?.id) {
+    try {
+      const hubRes = await fetch(`https://open.faceit.com/data/v4/hubs/${event.entity.id}`, {
+        headers: {
+          Authorization: `Bearer ${env.FACEIT_API_KEY}`,
+          Accept: 'application/json',
+        },
+      });
+      if (hubRes.ok) {
+        const hubData = await hubRes.json();
+        if (hubData.organizer_id === config.faceitHubId) {
+          isMatchingHub = true;
+        }
+      }
+    } catch (err) {
+      logger.error(`Error al validar parentesco de Hub ${event.entity.id} con Club/Organizador ${config.faceitHubId}:`, err.message);
+    }
+  }
+
+  if (config.faceitHubId && !isMatchingHub) {
+    logger.info(`Partida ignorada. No coincide con el HUB ni el Club (ID recibido: ${event.entity?.id}).`);
     return;
   }
 
@@ -126,8 +151,9 @@ async function handleMatchEvent(event, client, db, isConfigure, isStart, isFinis
   if (config.discordMatchesChannelId) {
     const ids = config.discordMatchesChannelId.split(',').map(id => id.trim());
     for (const id of ids) {
-      channel = await client.channels.fetch(id).catch(() => null);
-      if (channel) {
+      const ch = await client.channels.fetch(id).catch(() => null);
+      if (ch && ch.guild?.id === guildId) {
+        channel = ch;
         matchesChannelId = id;
         break;
       }
@@ -147,6 +173,20 @@ async function handleMatchEvent(event, client, db, isConfigure, isStart, isFinis
 
   try {
     const guild = channel.guild;
+
+    if (channel.guild && channel.permissionsFor) {
+      const me = channel.guild.members.me || channel.guild.members.cache.get(client.user.id);
+      if (me) {
+        const perms = channel.permissionsFor(me);
+        const missing = [];
+        if (!perms.has(PermissionFlagsBits.ViewChannel)) missing.push('ViewChannel (Ver canal)');
+        if (!perms.has(PermissionFlagsBits.SendMessages)) missing.push('SendMessages (Enviar mensajes)');
+        if (!perms.has(PermissionFlagsBits.EmbedLinks)) missing.push('EmbedLinks (Insertar enlaces)');
+        if (missing.length > 0) {
+          logger.error(`[CONFIGURACIÓN DISCORD] Faltan permisos críticos en el canal #${channel.name} (${channel.id}) para el bot: ${missing.join(', ')}`);
+        }
+      }
+    }
 
     const teams = matchData.teams || {};
     const faction1 = teams.faction1 || { roster: [] };
@@ -243,7 +283,7 @@ async function handleMatchEvent(event, client, db, isConfigure, isStart, isFinis
       if (serverStatusEnabled && statusChannelId && !statusChannelId.startsWith('ID_')) {
         try {
           const statusChannel = await client.channels.fetch(statusChannelId);
-          if (statusChannel) {
+          if (statusChannel && statusChannel.guild?.id === guildId) {
             const statusEmbed = await createServerStatusEmbed(location, matchData.game);
             
             const configMsg = await db.getStatusMessageConfig();
@@ -364,10 +404,62 @@ async function handleMatchEvent(event, client, db, isConfigure, isStart, isFinis
         }
       } else if (isCancel) {
         await db.addLogEntry('warn', `Partida ${matchData.id} cancelada/abortada.`, 'bot');
+
+        const reasonCode = (matchData.reason || matchData.cancel_reason || matchData.status_reason || event.payload?.reason || event.payload?.cancel_reason || event.payload?.status_reason || '').toLowerCase();
+        const isCheckinFailed = reasonCode.includes('checkin_failed') || reasonCode.includes('checkin');
+        const isAfk = reasonCode.includes('afk') || reasonCode.includes('leaver') || reasonCode.includes('afk_player');
+        const isCancelledByUser = reasonCode.includes('cancelled_by_user') || reasonCode.includes('veto_aborted');
+
+        if (isCheckinFailed || isAfk || isCancelledByUser) {
+          const sanctionsChannelId = config.discordSanctionsChannelId;
+          if (sanctionsChannelId && !sanctionsChannelId.startsWith('ID_')) {
+            try {
+              const sanctionsChannel = await client.channels.fetch(sanctionsChannelId);
+              if (sanctionsChannel && sanctionsChannel.guild?.id === guildId) {
+                let cause = 'Desconocida';
+                if (isCheckinFailed) cause = 'No aceptó la partida';
+                else if (isAfk) cause = 'Jugador AFK';
+                else if (isCancelledByUser) cause = 'Cancelado por usuario / Veto Abortado';
+
+                let responsible = 'No especificado';
+                if (matchData.responsible_player) {
+                  responsible = matchData.responsible_player.nickname || matchData.responsible_player.id || matchData.responsible_player;
+                } else if (matchData.afk_players && matchData.afk_players.length > 0) {
+                  responsible = matchData.afk_players.map(p => p.nickname || p.id || p).join(', ');
+                } else if (matchData.checkin_failed_players && matchData.checkin_failed_players.length > 0) {
+                  responsible = matchData.checkin_failed_players.map(p => p.nickname || p.id || p).join(', ');
+                } else if (matchData.user_id) {
+                  responsible = matchData.nickname || matchData.user_id;
+                } else if (event.payload?.user_id) {
+                  responsible = event.payload.nickname || event.payload.user_id;
+                }
+
+                const queueEmbed = new EmbedBuilder()
+                  .setTitle('⚠️ Sanción de Cola Aplicada (Queue Ban)')
+                  .setColor(16753920) // Naranja
+                  .addFields(
+                    { name: 'Partida ID', value: `\`${matchData.id || event.payload?.id || 'N/A'}\``, inline: true },
+                    { name: 'Causa', value: cause, inline: true },
+                    { name: 'Jugador / Responsable', value: responsible, inline: true }
+                  )
+                  .setTimestamp();
+
+                await sanctionsChannel.send({ embeds: [queueEmbed] });
+                logger.success(`Notificación de Sanción de Cola (Queue Ban) enviada para la partida ${matchData.id}.`);
+              }
+            } catch (err) {
+              logger.error('Error al enviar notificación de sanción de cola:', err);
+            }
+          }
+        }
       }
     }
   } catch (err) {
-    logger.error('Error en webhook de partida:', err);
+    if (err.code === 50013 && channel) {
+      logger.error(`[ERROR DE PERMISOS] Falta de permisos en el canal #${channel.name} (${channel.id}). Asegúrate de que el bot tenga los permisos de Ver Canal, Enviar Mensajes, e Insertar Enlaces (Embed Links).`);
+    } else {
+      logger.error('Error en webhook de partida:', err);
+    }
   }
 }
 
@@ -410,3 +502,98 @@ async function syncPlayerLevels(guild, players, db) {
 
   await Promise.allSettled(syncPromises);
 }
+
+async function handleHubUserRemoved(event, client, db, config, guildId) {
+  const payload = event.payload || {};
+  const hubId = payload.hub_id || event.entity?.id;
+  const userId = payload.user_id;
+
+  if (!hubId || !userId) {
+    logger.warn('Hub user removed recibido sin hub_id o user_id');
+    return;
+  }
+
+  // Verificamos si realmente fue un baneo en la API de Faceit
+  let banInfo = await checkHubBanStatus(hubId, userId);
+  let isPotentialClubBan = false;
+  let customReason = '';
+
+  if (!banInfo) {
+    // Si no obtuvimos info de baneo (por ejemplo, porque es un Club y el endpoint de bans retorna 404),
+    // verificamos mediante los campos del webhook si fue una expulsión o acción de un administrador.
+    const removedBy = payload.removed_by || payload.admin_id || payload.operator || event.payload?.removed_by;
+    if (removedBy && removedBy !== userId) {
+      isPotentialClubBan = true;
+      customReason = payload.reason || 'Acción de moderación (Expulsión/Baneo) en el Club';
+    } else if (payload.reason) {
+      isPotentialClubBan = true;
+      customReason = payload.reason;
+    } else {
+      logger.info(`Usuario ${userId} removido de Hub/Club ${hubId} no corresponde a un baneo o kick (es salida voluntaria o no admins).`);
+      return;
+    }
+  }
+
+  // Si es un baneo, notificamos al canal de sanciones si está configurado
+  const sanctionsChannelId = config.discordSanctionsChannelId;
+  if (!sanctionsChannelId || sanctionsChannelId.startsWith('ID_')) {
+    logger.info('discordSanctionsChannelId no configurado o inválido. Omitiendo notificación de baneo.');
+    return;
+  }
+
+  try {
+    const channel = await client.channels.fetch(sanctionsChannelId);
+    if (!channel || channel.guild?.id !== guildId) return;
+
+    const nickname = banInfo?.user?.nickname || payload.nickname || userId;
+    const reason = banInfo?.reason || customReason || 'No especificada';
+    const endsAt = banInfo?.ends_at || null;
+
+    // Obtener avatar del jugador para un embed súper estético
+    const playerDetails = await fetchFaceitPlayerById(userId).catch(() => null);
+    const playerAvatar = playerDetails?.avatar || 'https://assets.faceit-cdn.net/hubs/avatar/default_150x150.png';
+    const hubAvatar = 'https://assets.faceit-cdn.net/hubs/avatar/default_150x150.png';
+
+    let durationStr = 'Permanente';
+    let dateStr = '';
+    if (endsAt) {
+      const endsDate = new Date(endsAt);
+      const unixSeconds = Math.floor(endsDate.getTime() / 1000);
+      durationStr = `Expira <t:${unixSeconds}:R>`;
+      
+      const options = { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false };
+      dateStr = `\n(${endsDate.toLocaleString('es-ES', options).replace(',', '')})`;
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle('🚫 Usuario Baneado del Hub')
+      .setDescription('El siguiente usuario ha sido baneado del hub.')
+      .setColor(0xFF0000) // Rojo: #FF0000
+      .setThumbnail(hubAvatar)
+      .addFields(
+        { name: '👤 Jugador', value: `**[${nickname}](https://www.faceit.com/en/players/${nickname})**\nID: ${userId}`, inline: false },
+        { name: '❗ Razón', value: reason, inline: false },
+        { name: '🕒 Duración / Expiración', value: `${durationStr}${dateStr}`, inline: false }
+      )
+      .setFooter({ 
+        text: 'FACEIT Hub System', 
+        iconURL: playerAvatar 
+      })
+      .setTimestamp();
+
+    await channel.send({ embeds: [embed] });
+    logger.success(`Notificación de baneo del Hub enviada para el jugador ${nickname}.`);
+    await db.addLogEntry('warn', `Notificación de baneo enviada para ${nickname}: ${reason}`, 'bot');
+
+    // Guardar en cache para evitar duplicados en el cron job
+    await db.addHubBanToCache(hubId, userId, {
+      nickname,
+      reason,
+      endsAt: endsAt || null
+    });
+  } catch (err) {
+    logger.error('Error al enviar notificación de baneo del Hub:', err);
+  }
+}
+
+
