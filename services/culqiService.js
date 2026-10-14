@@ -51,11 +51,11 @@ export const culqiService = {
       const data = await response.json();
 
       if (!response.ok) {
-        let errorMsg = data.user_message || data.merchant_message || data.message || 'Error al validar token de Yape en Culqi.';
+        let errorMsg = data.user_message || 'Error al validar token de Yape. Verifica los datos ingresados.';
         if (data.type === 'authentication_error') {
-          errorMsg = 'La Llave Pública de Culqi (pk_test_...) no es válida o tu cuenta en Culqi aún no está activada. Confirma el correo de Culqi o revisa tu panel en Desarrollo > API Keys.';
+          errorMsg = 'Error en las credenciales de la pasarela de pagos. Contacta al administrador del sistema.';
         }
-        logger.error('Error al crear token de Yape en Culqi:', data);
+        logger.error('Error al crear token de Yape:', data);
         throw new Error(errorMsg);
       }
 
@@ -108,11 +108,11 @@ export const culqiService = {
       const data = await response.json();
 
       if (!response.ok) {
-        let errorMsg = data.user_message || data.merchant_message || data.message || 'Error al procesar el cargo con Culqi.';
+        let errorMsg = data.user_message || 'Error al procesar el cargo de Yape.';
         if (data.type === 'authentication_error') {
-          errorMsg = 'La Llave Secreta de Culqi (sk_test_...) no es válida o tu cuenta en Culqi aún no está activada. Revisa tu panel en Desarrollo > API Keys.';
+          errorMsg = 'Error en las credenciales de la pasarela de pagos. Contacta al administrador del sistema.';
         }
-        logger.error('Error en createCharge de Culqi:', data);
+        logger.error('Error en createCharge:', data);
         throw new Error(errorMsg);
       }
 
@@ -172,7 +172,7 @@ export const culqiService = {
         discordId, 
         numAmount, 
         guildId, 
-        `Recarga Yape confirmada por Culqi (ID: ${charge.id})`
+        `Recarga Yape confirmada (ID: ${charge.id})`
       );
       logger.success(`✅ Saldo acreditado con éxito a ${discordId}: +S/ ${numAmount.toFixed(2)} (Nuevo saldo: S/ ${newBalance.toFixed(2)})`);
     }
@@ -231,7 +231,7 @@ export const culqiService = {
         discordId,
         amountInSoles,
         null,
-        `Recarga Yape vía Webhook Culqi (ID: ${chargeId})`
+        `Recarga Yape vía Webhook (ID: ${chargeId})`
       );
 
       logger.success(`✅ Webhook Culqi procesado: +S/ ${amountInSoles.toFixed(2)} para usuario ${discordId}. Nuevo saldo: S/ ${newBalance.toFixed(2)}`);

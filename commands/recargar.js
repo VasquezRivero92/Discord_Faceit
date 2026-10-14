@@ -95,7 +95,7 @@ export async function handleRecargaModalSubmit(interaction, db) {
     const successEmbed = new EmbedBuilder()
       .setTitle('✅ ¡Recarga Exitosa con Yape!')
       .setColor(0x742284) // Color morado característico de Yape
-      .setDescription(`Se ha procesado tu pago de forma segura a través de **Culqi** y acreditado a tu cuenta.`)
+      .setDescription(`Se ha procesado tu pago de forma exitosa y acreditado a tu saldo.`)
       .addFields(
         { name: '💵 Monto Recargado', value: `S/ ${result.amount.toFixed(2)}`, inline: true },
         { name: '💰 Nuevo Saldo', value: `S/ ${result.newBalance.toFixed(2)}`, inline: true },

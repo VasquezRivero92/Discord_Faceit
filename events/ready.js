@@ -389,10 +389,10 @@ export async function checkAndDeployRechargePanel(client, db) {
               '1️⃣ Presiona el botón de abajo **[Recargar con Yape]**.\n' +
               '2️⃣ Ingresa el monto en Soles (PEN), tu número celular de Yape y el código de aprobación de 6 dígitos desde tu app de Yape.\n' +
               '3️⃣ Tu saldo se acreditará inmediatamente en tu perfil y podrás usarlo en cualquier mixton.\n\n' +
-              '🔒 *Pagos 100% seguros y automatizados mediante Culqi.*'
+              '🔒 *Pagos 100% seguros y automatizados.*'
             )
             .setColor(0x742284) // Morado característico de Yape
-            .setFooter({ text: 'Sistema de Pagos y Billetera Mixton • Yape / Culqi' })
+            .setFooter({ text: 'Sistema de Pagos y Billetera Mixton • Yape Oficial' })
             .setTimestamp();
 
           const button = new ButtonBuilder()

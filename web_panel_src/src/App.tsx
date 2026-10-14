@@ -1574,7 +1574,7 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al procesar el pago con Yape.');
 
-      showToast(`¡Pago de S/ ${amount.toFixed(2)} procesado con éxito con Yape (Culqi)!`, 'success');
+      showToast(`¡Pago de S/ ${amount.toFixed(2)} procesado con éxito con Yape!`, 'success');
       setQuickTopUpUser(null);
       setYapePhoneInput('');
       setYapeOtpInput('');
@@ -3401,7 +3401,7 @@ export default function App() {
                     : 'text-neutral-400 hover:text-white'
                 }`}
               >
-                ⚡ Yape Automático (Culqi)
+                ⚡ Yape Automático
               </button>
               <button
                 type="button"
@@ -3496,7 +3496,7 @@ export default function App() {
                   disabled={isSubmittingTopUp}
                   className="px-4 py-1.5 bg-[#742284] hover:bg-[#8B2FA0] border border-[#742284] text-xs font-black text-white uppercase transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                 >
-                  {isSubmittingTopUp ? 'Cobrando con Yape...' : 'Cobrar con Yape (Culqi)'}
+                  {isSubmittingTopUp ? 'Cobrando con Yape...' : 'Cobrar con Yape'}
                 </button>
               ) : (
                 <button
