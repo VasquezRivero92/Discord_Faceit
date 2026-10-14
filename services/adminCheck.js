@@ -1,14 +1,29 @@
-import { env } from '../config/index.js';
+import { PermissionFlagsBits } from 'discord.js';
+import { env, getEffectiveConfigForGuild, getEffectiveConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
 export async function checkIsAdmin(member, guild) {
   if (!member) return false;
 
-  const adminRoleName = env.ADMIN_ROLE_NAME.toUpperCase();
-  const hasAdminRole = member.roles.cache.some(role => role.name.toUpperCase() === adminRoleName);
-  const hasAdminPermission = member.permissions.has('Administrator');
+  // Administrador global de Discord siempre tiene permiso
+  if (member.permissions?.has(PermissionFlagsBits.Administrator)) {
+    return true;
+  }
 
-  return hasAdminRole || hasAdminPermission;
+  const guildId = guild?.id || member.guild?.id;
+  const config = guildId 
+    ? await getEffectiveConfigForGuild(guildId).catch(() => ({}))
+    : await getEffectiveConfig().catch(() => ({}));
+
+  const adminRoleId = config?.adminRoleId || env.ADMIN_ROLE_ID;
+
+  if (!adminRoleId) return false;
+
+  // Verificar si tiene el rol por ID o por nombre como respaldo
+  const hasAdminRole = member.roles?.cache?.has(adminRoleId) ||
+    member.roles?.cache?.some(r => r.id === adminRoleId || (r.name && r.name.toUpperCase() === adminRoleId.toUpperCase()));
+
+  return Boolean(hasAdminRole);
 }
 
 export async function checkDiscordAdmin(client, guildId, userId) {
@@ -21,3 +36,5 @@ export async function checkDiscordAdmin(client, guildId, userId) {
     return false;
   }
 }
+
+

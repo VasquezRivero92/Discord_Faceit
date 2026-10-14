@@ -6,7 +6,10 @@ export function verifyAdminToken(secret) {
   return (req, res, next) => {
     const token = req.cookies?.auth_token || req.cookies?.admin_token;
     if (!token) {
-      logger.warn(`[AUTH] No se encontró token para ${req.method} ${req.url}`);
+      const isSessionProbe = req.method === 'GET' && req.path === '/me';
+      if (!isSessionProbe) {
+        logger.warn(`[AUTH] No se encontró token para ${req.method} ${req.url}`);
+      }
       return res.status(401).json({ error: 'No autenticado' });
     }
 
@@ -54,3 +57,4 @@ export async function checkDiscordAdmin(client, guildId, userId) {
     return false;
   }
 }
+

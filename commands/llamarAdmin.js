@@ -1,8 +1,7 @@
-import { SlashCommandBuilder } from 'discord.js';
-import { EmbedBuilder } from 'discord.js';
+import { EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { isFeatureEnabled } from '../utils/featureFlags.js';
-import { env } from '../config/index.js';
+import { env, getEffectiveConfigForGuild } from '../config/index.js';
 
 export const data = new SlashCommandBuilder()
   .setName('llamar_admin')
@@ -10,10 +9,10 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction, db) {
   if (!(await isFeatureEnabled('adminCallNotifications', interaction.guildId))) {
-    return interaction.reply({ content: '❌ La función de llamada a admin está desactivada.', ephemeral: true });
+    return interaction.reply({ content: '❌ La función de llamada a admin está desactivada.', flags: MessageFlags.Ephemeral });
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
     // 1. Obtener faceit_id del usuario
@@ -34,12 +33,13 @@ export async function execute(interaction, db) {
       return interaction.editReply({ content: '❌ Este comando solo funciona dentro de un servidor.' });
     }
 
-    const adminRoleName = env.ADMIN_ROLE_NAME || 'ADMIN';
-    const adminRole = guild.roles.cache.find(r => r.name.toUpperCase() === adminRoleName.toUpperCase());
+    const config = await getEffectiveConfigForGuild(guild.id).catch(() => ({}));
+    const adminRoleId = config.adminRoleId || env.ADMIN_ROLE_ID;
+    const adminRole = adminRoleId ? (guild.roles.cache.get(adminRoleId) || guild.roles.cache.find(r => r.name.toUpperCase() === adminRoleId.toUpperCase())) : null;
     let admins = adminRole ? adminRole.members : null;
 
     if (!admins || admins.size === 0) {
-      admins = guild.members.cache.filter(m => m.permissions.has('Administrator'));
+      admins = guild.members.cache.filter(m => m.permissions.has(PermissionFlagsBits.Administrator));
     }
 
     if (admins.size === 0) {
@@ -83,3 +83,4 @@ export async function execute(interaction, db) {
     return interaction.editReply({ content: '❌ Error al procesar tu solicitud. Intenta de nuevo.' });
   }
 }
+

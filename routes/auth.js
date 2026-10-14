@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
-import { checkDiscordAdmin } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
 
 export function createAuthRouter(client, db, config) {
@@ -16,8 +15,16 @@ export function createAuthRouter(client, db, config) {
 
   const REDIRECT_URI = `${BASE_URL}/auth/discord/callback`;
 
+  const sanitizeRedirectPath = (value) => {
+    if (typeof value !== 'string') return '/';
+    if (!value.startsWith('/') || value.startsWith('//')) return '/';
+    if (value.includes('\\') || value.length > 300) return '/';
+
+    return value;
+  };
+
   router.get('/discord', (req, res) => {
-    const redirect = req.query.redirect || '/';
+    const redirect = sanitizeRedirectPath(req.query.redirect);
     const url = new URL('https://discord.com/oauth2/authorize');
     url.searchParams.set('client_id', DISCORD_CLIENT_ID);
     url.searchParams.set('redirect_uri', REDIRECT_URI);
@@ -30,7 +37,7 @@ export function createAuthRouter(client, db, config) {
 
   router.get('/discord/callback', async (req, res) => {
     const code = req.query.code;
-    const state = req.query.state || '/';
+    const state = sanitizeRedirectPath(req.query.state);
     if (!code) {
       return res.status(400).send('Código de autorización no proporcionado.');
     }
@@ -73,7 +80,12 @@ export function createAuthRouter(client, db, config) {
       let rol = 'usuario';
       let servidor = null;
 
-      if (user.id === '313886359448453120') {
+      const globalAdminIds = (process.env.GLOBAL_ADMIN_DISCORD_IDS || '')
+        .split(',')
+        .map(id => id.trim())
+        .filter(Boolean);
+
+      if (globalAdminIds.includes(user.id)) {
         rol = 'global_admin';
         await db.setUserRoleAndGuild(user.id, 'global_admin', null);
       } else {
@@ -223,3 +235,4 @@ export function createAuthRouter(client, db, config) {
 
   return router;
 }
+

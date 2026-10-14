@@ -15,15 +15,28 @@ import { onGuildMemberAdd } from './events/guildMemberAdd.js';
 import { onMessageCreate } from './events/messageCreate.js';
 import { onVoiceStateUpdate } from './events/voiceStateUpdate.js';
 import { handleFaceitWebhook } from './webhooks/faceit.js';
+import { handleCulqiWebhook } from './webhooks/culqi.js';
 import rateLimit from 'express-rate-limit';
 import { isFeatureEnabled } from './utils/featureFlags.js';
 import helmet from 'helmet';
 import cors from 'cors';
+import { startSteamBot, steamClient, resolveSteamGuard } from './steamBot.js';
+import { authenticateSteamApiKey, getSteamBotStatus, handleMatchmakingLaunch } from './services/matchmakingApi.js';
+import { fetchLatestSeasonPoints } from './services/faceitApi.js';
 
 dotenv.config();
 
+// Capturar errores no controlados para evitar caídas del bot por librerías de terceros (como play-dl)
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('⚠️ Promesa no controlada rechazada:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  logger.error('❌ Excepción no controlada:', error);
+});
+
 // Validación de configuración
-validateConfig();
+const isDiscordConfigured = validateConfig();
 
 // ---------------------------------------------------------
 // 1. BOT DE DISCORD
@@ -32,6 +45,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildVoiceStates,
   ],
@@ -40,11 +54,45 @@ const client = new Client({
 // Cargar comandos dinámicamente
 const { commands, commandMap } = await loadCommands();
 
-client.once('ready', () => onReady(client, commands, db));
-client.on('interactionCreate', (interaction) => onInteractionCreate(interaction, db, commandMap));
-client.on('guildMemberAdd', (member) => onGuildMemberAdd(member, db));
-client.on('messageCreate', (message) => onMessageCreate(message, client, db));
-client.on('voiceStateUpdate', (oldState, newState) => onVoiceStateUpdate(oldState, newState, db));
+if (isDiscordConfigured && env.DISCORD_TOKEN) {
+  client.once('clientReady', () => onReady(client, commands, db));
+  client.on('interactionCreate', (interaction) => onInteractionCreate(interaction, db, commandMap));
+  client.on('guildMemberAdd', (member) => onGuildMemberAdd(member, db));
+  client.on('messageCreate', (message) => onMessageCreate(message, client, db));
+  client.on('voiceStateUpdate', (oldState, newState) => onVoiceStateUpdate(oldState, newState, db));
+} else {
+  logger.warn('⚠️ El bot de Discord se ejecutará en modo Offline debido a la falta de credenciales de Discord.');
+  client.user = {
+    id: '123456789012345678',
+    username: 'MixtonBotOffline',
+    avatarURL: () => 'https://cdn.discordapp.com/embed/avatars/0.png',
+    displayAvatarURL: () => 'https://cdn.discordapp.com/embed/avatars/0.png'
+  };
+  client.readyAt = null;
+  client.guilds.fetch = async () => ({
+    name: 'Servidor Offline de Desarrollo',
+    id: env.DISCORD_GUILD_ID || '111222333444555666',
+    memberCount: 42,
+    members: {
+      fetch: async () => ({
+        get: () => null,
+        cache: new Map()
+      }),
+      cache: new Map()
+    },
+    channels: {
+      fetch: async () => null,
+      create: async () => ({ id: 'MOCK_VC_ID', name: 'Mock VC', delete: async () => {} })
+    },
+    roles: {
+      cache: {
+        find: () => null
+      }
+    }
+  });
+  client.channels.fetch = async () => null;
+  client.users.fetch = async () => null;
+}
 
 // ---------------------------------------------------------
 // 2. SERVIDOR EXPRESS
@@ -54,8 +102,23 @@ const app = express();
 app.use(helmet({
   contentSecurityPolicy: false,
 }));
+const allowedCorsOrigins = (process.env.CORS_ORIGINS || process.env.ADMIN_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+if (allowedCorsOrigins.length === 0 && process.env.NODE_ENV === 'production' && env.BASE_URL) {
+  allowedCorsOrigins.push(new URL(env.BASE_URL).origin);
+}
+
 app.use(cors({
-  origin: true,
+  origin(origin, callback) {
+    if (!origin || allowedCorsOrigins.length === 0 || allowedCorsOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error('Origen CORS no permitido.'));
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -93,8 +156,17 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Webhook de Faceit con validación de secret
-app.post('/webhook/faceit', webhookLimiter, async (req, res) => {
+// Endpoint de verificación GET (para navegador / pings)
+app.get(['/webhook/faceit', '/webhooks/faceit'], (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Endpoint de Webhook de FACEIT activo. Este endpoint está listo para recibir eventos POST de FACEIT.',
+    endpoint: '/webhook/faceit'
+  });
+});
+
+// Webhook de Faceit con validación de secret (acepta singular /webhook/faceit y plural /webhooks/faceit)
+app.post(['/webhook/faceit', '/webhooks/faceit'], webhookLimiter, async (req, res) => {
   // Validación de secret si está configurado y la flag webhookValidation está activa en Firestore
   const validationEnabled = await isFeatureEnabled('webhookValidation');
   if (validationEnabled && env.FACEIT_WEBHOOK_SECRET) {
@@ -109,6 +181,34 @@ app.post('/webhook/faceit', webhookLimiter, async (req, res) => {
   await handleFaceitWebhook(req.body, client, db);
 });
 
+// Webhook de Culqi (Confirmación automática de pagos Yape)
+app.get(['/webhook/culqi', '/webhooks/culqi'], (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Endpoint de Webhook de Culqi activo y listo para recibir notificaciones.',
+    endpoint: '/webhooks/culqi'
+  });
+});
+
+app.post(['/webhook/culqi', '/webhooks/culqi'], async (req, res) => {
+  res.status(200).json({ received: true });
+  try {
+    await handleCulqiWebhook(req.body, client, db);
+  } catch (err) {
+    logger.error('Error al procesar notificación de webhook Culqi:', err);
+  }
+});
+
+// ---------------------------------------------------------
+// API DE MATCHMAKING (STEAM BOT BRIDGE)
+// ---------------------------------------------------------
+const requireSteamApiKey = authenticateSteamApiKey(logger);
+app.get('/api/matchmaking/status', requireSteamApiKey, (req, res) => {
+  res.json(getSteamBotStatus());
+});
+app.post('/api/matchmaking/launch', requireSteamApiKey, (req, res) => {
+  handleMatchmakingLaunch(req, res, logger);
+});
 // Web Admin
 const BASE_URL = env.BASE_URL;
 app.use('/auth', createAuthRouter(client, db, {
@@ -128,6 +228,55 @@ app.get('/api/ping', (req, res) => {
     protocol: req.protocol,
     timestamp: new Date().toISOString()
   });
+});
+
+// Ruta para resolver Steam Guard remotamente
+app.get('/api/steam/guard', (req, res) => {
+  const { code } = req.query;
+  if (!code) {
+    return res.status(400).json({ error: 'Falta el código de verificación. Ej: /api/steam/guard?code=XXXXX' });
+  }
+  const resolved = resolveSteamGuard(code);
+  if (resolved) {
+    return res.json({ success: true, message: 'Código de Steam Guard recibido correctamente.' });
+  } else {
+    return res.status(400).json({ error: 'El bot no está esperando ningún código de Steam Guard en este momento.' });
+  }
+});
+
+// ---------------------------------------------------------
+// API DE PUNTOS / TABLA DE POSICIONES (ÚLTIMA TEMPORADA)
+// ---------------------------------------------------------
+app.all(['/api/points', '/api/club/points', '/api/leaderboard/points'], async (req, res) => {
+  try {
+    const clubId = req.query.club_id || req.query.clubId || req.body?.club_id || req.body?.clubId;
+    const queueId = req.query.queue_id || req.query.queueId || req.body?.queue_id || req.body?.queueId;
+    const nickname = req.query.nickname || req.query.player || req.body?.nickname || req.body?.player;
+    const playerId = req.query.player_id || req.query.playerId || req.body?.player_id || req.body?.playerId;
+    const limit = req.query.limit || req.body?.limit;
+    const offset = req.query.offset || req.body?.offset;
+
+    if (!clubId && !queueId) {
+      return res.status(400).json({
+        error: 'Debes proporcionar club_id (ID del club) o queue_id (ID de la cola).'
+      });
+    }
+
+    const result = await fetchLatestSeasonPoints(clubId, queueId, {
+      limit,
+      offset,
+      nickname,
+      playerId
+    });
+
+    return res.json(result);
+  } catch (error) {
+    logger.error('Error al consultar puntos de la tabla en API:', error);
+    if (error.message === 'NO_LEADERBOARD_FOUND') {
+      return res.status(404).json({ error: 'No se encontró la tabla de posiciones (leaderboard) para el club_id o queue_id indicado.' });
+    }
+    return res.status(500).json({ error: 'Error interno al consultar la API de Faceit.' });
+  }
 });
 
 const wss = new WebSocketServer({ noServer: true });
@@ -151,6 +300,12 @@ app.get('/admin/*', (req, res) => {
 
 const server = app.listen(env.PORT, '0.0.0.0', () => {
   logger.success(`Servidor Express escuchando en http://0.0.0.0:${env.PORT}`);
+  // Iniciar el Bot de Steam en el mismo proceso
+  if (process.env.DISABLE_STEAM_BOT !== 'true') {
+    startSteamBot();
+  } else {
+    logger.warn('🤖 Bot de Steam: Inicio de sesión desactivado mediante la variable DISABLE_STEAM_BOT en el archivo .env.');
+  }
 });
 
 server.on('upgrade', (request, socket, head) => {
@@ -173,6 +328,15 @@ server.on('upgrade', (request, socket, head) => {
 // ---------------------------------------------------------
 async function shutdown(signal) {
   logger.info(`Recibida señal ${signal}. Cerrando servicios...`);
+
+  try {
+    if (steamClient && steamClient.steamID) {
+      logger.info('🤖 Desconectando bot de Steam...');
+      steamClient.logOff();
+    }
+  } catch (err) {
+    logger.error('Error al desconectar el bot de Steam:', err.message);
+  }
 
   try {
     await client.destroy();
@@ -198,4 +362,11 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // ---------------------------------------------------------
 // 4. LOGIN
 // ---------------------------------------------------------
-client.login(env.DISCORD_TOKEN);
+if (isDiscordConfigured && env.DISCORD_TOKEN) {
+  client.login(env.DISCORD_TOKEN).catch((err) => {
+    logger.error('Error al iniciar sesion en Discord:', err.message);
+  });
+} else {
+  logger.warn('Login de Discord omitido por falta de credenciales. El servidor web seguira disponible en modo offline.');
+}
+

@@ -4,3 +4,11 @@ firebase-service-account.json
 Discord_Faceit.zip
 *.log
 .gemini/
+.agents/
+cookies.txt
+scratch/
+*.exe
+*.exe.*
+*.mp4
+*.webm
+youtube.data.json

@@ -28,7 +28,6 @@ export async function checkAndNotifyHubBans(client, db) {
       // 1. Obtener lista actual de baneos desde FACEIT
       const currentBans = await fetchAllHubBans(hubId);
       if (currentBans === null) {
-        logger.info(`Omitiendo comparación de baneos para el Hub/Club ${hubId} porque el recurso de baneos no está disponible en la API.`);
         continue;
       }
       

@@ -5,8 +5,13 @@ import { verifyUserToken } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
 import { getEffectiveConfig, getEffectiveConfigForGuild } from '../config/index.js';
 import { updateLivePanel } from '../services/matchMessages.js';
+import { updateMixtonReadyPanel } from '../services/mixtonPanel.js';
 import { invalidateSettingsCache } from '../utils/featureFlags.js';
 import { EventEmitter } from 'events';
+import { fetchFaceitPlayerById } from '../services/faceitApi.js';
+import { crearLobbyMatchmaking, steamClient } from '../steamBot.js';
+import { playTTSCountdown } from '../utils/voiceAnnouncer.js';
+import { culqiService } from '../services/culqiService.js';
 
 export const mixtonEvents = new EventEmitter();
 
@@ -230,11 +235,14 @@ export function createLobbyRouter(client, db, config, wss) {
         }
       });
 
+      let sentCount = 0;
       wss.clients.forEach(c => {
         if (c.readyState === 1 && (c.guildId === effectiveGuildId || (!c.guildId && effectiveGuildId === DISCORD_GUILD_ID))) {
           c.send(payload);
+          sentCount++;
         }
       });
+      logger.info(`Estado mixton actualizado en tiempo real para guild ${effectiveGuildId}. Clientes notificados: ${sentCount}.`);
     } catch (err) {
       logger.error('Error al difundir el estado mixton a través de WebSockets:', err);
     }
@@ -243,6 +251,7 @@ export function createLobbyRouter(client, db, config, wss) {
   // Escuchar actualizaciones internas del lobby para relanzar la difusión
   mixtonEvents.on('update', (guildId) => {
     broadcastLobbyState(guildId).catch(() => {});
+    updateMixtonReadyPanel(client, guildId, db).catch(() => {});
   });
 
   if (wss) {
@@ -400,9 +409,31 @@ export function createLobbyRouter(client, db, config, wss) {
       }));
 
       // 1. Canales de voz temporales
-      let parentId = null;
+      let waitingRoomId = null;
       if (effectiveConfig.discordWaitingRoomChannelId) {
-        const waitingRoom = await guild.channels.fetch(effectiveConfig.discordWaitingRoomChannelId).catch(() => null);
+        const ids = effectiveConfig.discordWaitingRoomChannelId.split(',').map(id => id.trim());
+        for (const id of ids) {
+          const ch = await guild.channels.fetch(id).catch(() => null);
+          if (ch && ch.guild.id === guild.id) {
+            waitingRoomId = id;
+            break;
+          }
+        }
+      }
+
+      if (!waitingRoomId) {
+        const channels = await guild.channels.fetch().catch(() => null);
+        if (channels) {
+          const fallbackVC = channels.find(ch => ch.type === 2 && (ch.name.toLowerCase() === 'sala-de-espera' || ch.name.toLowerCase() === 'waiting-room' || ch.name.toLowerCase() === 'general'));
+          if (fallbackVC) {
+            waitingRoomId = fallbackVC.id;
+          }
+        }
+      }
+
+      let parentId = null;
+      if (waitingRoomId) {
+        const waitingRoom = await guild.channels.fetch(waitingRoomId).catch(() => null);
         if (waitingRoom) parentId = waitingRoom.parentId;
       }
 
@@ -415,6 +446,11 @@ export function createLobbyRouter(client, db, config, wss) {
         { id: guild.id, deny: ['Connect'] },
         { id: botId, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
       ];
+
+      if (effectiveConfig?.discordMatchAccessRoleId) {
+        permissionOverwrites1.push({ id: effectiveConfig.discordMatchAccessRoleId, allow: ['ViewChannel', 'Connect', 'Speak'] });
+        permissionOverwrites2.push({ id: effectiveConfig.discordMatchAccessRoleId, allow: ['ViewChannel', 'Connect', 'Speak'] });
+      }
 
       for (const id of teamA) {
         permissionOverwrites1.push({ id, allow: ['Connect', 'Speak'] });
@@ -438,6 +474,16 @@ export function createLobbyRouter(client, db, config, wss) {
         permissionOverwrites: permissionOverwrites2,
         reason: 'Partida manual iniciada desde el Panel Web'
       });
+
+      // A. Reproducir anuncio por voz con IA antes de mover a los jugadores
+      if (waitingRoomId) {
+        const textToSpeak = `La partida entre el Equipo A en contra de el Equipo B iniciará en 5, 4, 3, 2, 1`;
+        try {
+          await playTTSCountdown(guild, waitingRoomId, textToSpeak);
+        } catch (err) {
+          logger.error('Error al reproducir el anuncio de voz en partida manual:', err);
+        }
+      }
 
       // 2. Mover a los jugadores a sus respectivos VCs
       const originalVoiceStates = {};
@@ -566,6 +612,7 @@ export function createLobbyRouter(client, db, config, wss) {
       const rosterB = teamBPlayerData.map(p => ({ player_id: p.faceit_player_id, nickname: p.faceit_nickname, discord_id: p.discordId }));
 
       await db.addActiveMatch(matchId, matchData, vc1.id, vc2.id, messageId, rosterA, rosterB, originalVoiceStates, req.guildId || DISCORD_GUILD_ID);
+      await db.addMatchToHistory(matchId, matchData, 'TBD', 0, 0, rosterA, rosterB, req.guildId || DISCORD_GUILD_ID, 'started').catch(err => logger.error('Error al guardar historial de partida manual:', err));
       
       // 5. Actualizar el panel en vivo
       await updateLivePanel(client, matchesChannelId, db);
@@ -596,6 +643,7 @@ export function createLobbyRouter(client, db, config, wss) {
         currentUser: {
           userId: req.user.userId,
           username: req.user.username,
+          avatar: req.user.avatar || null,
           isAdmin: req.user.role === 'global_admin' || req.user.role === 'admin' || req.user.isAdmin === true
         }
       });
@@ -914,13 +962,160 @@ export function createLobbyRouter(client, db, config, wss) {
     }
   });
 
-  // 8. Crear partida mixton en Discord (Admin)
-  router.post('/mixton-create-match', requireAuth, verifyGuildAdmin, async (req, res) => {
+  // 7.5. Verificar cuotas y saldos de los 10 jugadores antes de lanzar (Apuestas)
+  router.post('/mixton-check-bet-status', requireAuth, verifyGuildAccess, async (req, res) => {
     try {
-      const { teamIdA, teamIdB } = req.body;
+      const { teamIdA, teamIdB, betAmount = 0 } = req.body;
       if (!teamIdA || !teamIdB) {
         return res.status(400).json({ error: 'Debes seleccionar dos equipos.' });
       }
+
+      const state = await db.getMixtonLobbyState(req.guildId);
+      const teamA = state.teams.find(t => t.id === teamIdA);
+      const teamB = state.teams.find(t => t.id === teamIdB);
+
+      if (!teamA || !teamB) {
+        return res.status(404).json({ error: 'Equipos no encontrados.' });
+      }
+
+      if (!teamA.captain || teamA.players.length !== 4 || !teamB.captain || teamB.players.length !== 4) {
+        return res.status(400).json({ error: 'Ambos equipos deben estar completos (5 jugadores c/u).' });
+      }
+
+      const rosterA = [teamA.captain, ...teamA.players];
+      const rosterB = [teamB.captain, ...teamB.players];
+      const parsedBetAmount = Math.max(0, parseFloat(betAmount) || 0);
+
+      let targetGuildId = null;
+      for (const p of [...rosterA, ...rosterB]) {
+        if (p.mixton_guild_id) {
+          targetGuildId = p.mixton_guild_id;
+          break;
+        }
+      }
+      const guildIdToUse = targetGuildId || req.guildId || DISCORD_GUILD_ID;
+
+      const playerStatusList = [];
+
+      for (const p of rosterA) {
+        const balance = await db.getUserBalance(p.discordId, guildIdToUse);
+        playerStatusList.push({
+          discordId: p.discordId,
+          faceit_nickname: p.faceit_nickname,
+          displayName: p.discordUser?.displayName || p.discordUser?.username || p.faceit_nickname,
+          avatarURL: p.discordUser?.avatarURL || null,
+          team: 'A',
+          teamName: teamA.name,
+          isCaptain: p.discordId === teamA.captain.discordId,
+          balance,
+          hasEnough: parsedBetAmount === 0 || balance >= parsedBetAmount,
+          deficit: Math.max(0, parseFloat((parsedBetAmount - balance).toFixed(2)))
+        });
+      }
+
+      for (const p of rosterB) {
+        const balance = await db.getUserBalance(p.discordId, guildIdToUse);
+        playerStatusList.push({
+          discordId: p.discordId,
+          faceit_nickname: p.faceit_nickname,
+          displayName: p.discordUser?.displayName || p.discordUser?.username || p.faceit_nickname,
+          avatarURL: p.discordUser?.avatarURL || null,
+          team: 'B',
+          teamName: teamB.name,
+          isCaptain: p.discordId === teamB.captain.discordId,
+          balance,
+          hasEnough: parsedBetAmount === 0 || balance >= parsedBetAmount,
+          deficit: Math.max(0, parseFloat((parsedBetAmount - balance).toFixed(2)))
+        });
+      }
+
+      const totalPot = parseFloat((parsedBetAmount * 10).toFixed(2));
+      const allReady = playerStatusList.every(p => p.hasEnough);
+
+      res.json({
+        betAmount: parsedBetAmount,
+        totalPot,
+        allReady,
+        teamA: { id: teamA.id, name: teamA.name },
+        teamB: { id: teamB.id, name: teamB.name },
+        players: playerStatusList
+      });
+    } catch (err) {
+      logger.error('Error al verificar estado de apuestas:', err);
+      res.status(500).json({ error: 'Error al verificar saldos de los jugadores.' });
+    }
+  });
+
+  // 7.6. Recarga rápida de saldo manual por admin (ej: pago directo Yape en efectivo)
+  router.post('/quick-add-balance', requireAuth, verifyGuildAdmin, async (req, res) => {
+    try {
+      const { discordId, amount, reason } = req.body;
+      if (!discordId || amount === undefined) {
+        return res.status(400).json({ error: 'Faltan discordId o monto.' });
+      }
+      const numAmount = parseFloat(amount);
+      if (isNaN(numAmount) || numAmount <= 0) {
+        return res.status(400).json({ error: 'El monto debe ser un número positivo.' });
+      }
+
+      const newBalance = await db.updateUserBalance(
+        discordId, 
+        numAmount, 
+        req.guildId, 
+        reason || `Recarga manual por admin ${req.user.username}`
+      );
+
+      res.json({ success: true, discordId, newBalance });
+    } catch (err) {
+      logger.error('Error al recargar saldo manual:', err);
+      res.status(500).json({ error: 'Error al recargar saldo.' });
+    }
+  });
+
+  // 7.7. Recargar saldo con Yape vía Culqi API
+  router.post('/wallet/recharge-yape', requireAuth, async (req, res) => {
+    try {
+      const { phoneNumber, otp, amount, targetDiscordId } = req.body;
+      const discordId = (req.user?.isAdmin && targetDiscordId) ? targetDiscordId : req.user.userId;
+
+      if (!phoneNumber || !otp || !amount) {
+        return res.status(400).json({ error: 'Debes proporcionar tu número de celular Yape, código de aprobación y monto.' });
+      }
+
+      const result = await culqiService.processYapeRecharge({
+        discordId,
+        phoneNumber,
+        otp,
+        amount,
+        email: req.user.email || null,
+        nickname: req.user.username || 'Jugador',
+        guildId: req.guildId,
+        db
+      });
+
+      mixtonEvents.emit('update', req.guildId);
+
+      res.json({
+        success: true,
+        message: `¡Recarga de S/ ${result.amount.toFixed(2)} procesada exitosamente con Yape!`,
+        ...result
+      });
+    } catch (err) {
+      logger.error('Error al procesar recarga con Yape en endpoint:', err.message);
+      res.status(400).json({ error: err.message || 'Error al procesar el pago con Yape.' });
+    }
+  });
+
+  // 8. Crear partida mixton en Discord (Admin)
+  router.post('/mixton-create-match', requireAuth, verifyGuildAdmin, async (req, res) => {
+    try {
+      const { teamIdA, teamIdB, betAmount = 0, manualPaidDiscordIds = [] } = req.body;
+      if (!teamIdA || !teamIdB) {
+        return res.status(400).json({ error: 'Debes seleccionar dos equipos.' });
+      }
+
+      const parsedBetAmount = Math.max(0, parseFloat(betAmount) || 0);
+      const manualPaidSet = new Set(Array.isArray(manualPaidDiscordIds) ? manualPaidDiscordIds : []);
 
       const state = await db.getMixtonLobbyState(req.guildId);
       const teamA = state.teams.find(t => t.id === teamIdA);
@@ -947,6 +1142,48 @@ export function createLobbyRouter(client, db, config, wss) {
       }
 
       const guildIdToUse = targetGuildId || req.guildId || DISCORD_GUILD_ID;
+
+      // Validación estricta de saldo/cuota si hay apuesta
+      const unpaidPlayers = [];
+      const playersToDeduct = [];
+
+      if (parsedBetAmount > 0) {
+        for (const p of [...rosterA, ...rosterB]) {
+          const isManual = manualPaidSet.has(p.discordId);
+          if (isManual) continue;
+
+          const balance = await db.getUserBalance(p.discordId, guildIdToUse);
+          if (balance < parsedBetAmount) {
+            unpaidPlayers.push({
+              discordId: p.discordId,
+              nickname: p.faceit_nickname || p.discordUser?.displayName || 'Jugador',
+              balance,
+              deficit: parseFloat((parsedBetAmount - balance).toFixed(2))
+            });
+          } else {
+            playersToDeduct.push(p.discordId);
+          }
+        }
+
+        if (unpaidPlayers.length > 0) {
+          const names = unpaidPlayers.map(u => `${u.nickname} (Saldo: S/ ${u.balance.toFixed(2)}, Falta: S/ ${u.deficit.toFixed(2)})`).join(', ');
+          return res.status(400).json({ 
+            error: `No se puede lanzar el encuentro: Faltan ${unpaidPlayers.length} jugador(es) por completar su cuota: ${names}`,
+            unpaidPlayers 
+          });
+        }
+
+        // Deducir saldo de los jugadores con balance suficiente
+        for (const discordId of playersToDeduct) {
+          await db.updateUserBalance(
+            discordId, 
+            -parsedBetAmount, 
+            guildIdToUse, 
+            `Entrada cuota de apuesta mixton: ${teamA.name} vs ${teamB.name}`
+          );
+        }
+      }
+
       const effectiveConfig = await getEffectiveConfigForGuild(guildIdToUse);
       const guild = await client.guilds.fetch(guildIdToUse).catch(() => null);
       if (!guild) {
@@ -1024,6 +1261,11 @@ export function createLobbyRouter(client, db, config, wss) {
         { id: botId, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
       ];
 
+      if (effectiveConfig?.discordMatchAccessRoleId) {
+        permissionOverwrites1.push({ id: effectiveConfig.discordMatchAccessRoleId, allow: ['ViewChannel', 'Connect', 'Speak'] });
+        permissionOverwrites2.push({ id: effectiveConfig.discordMatchAccessRoleId, allow: ['ViewChannel', 'Connect', 'Speak'] });
+      }
+
       for (const p of rosterA) {
         permissionOverwrites1.push({ id: p.discordId, allow: ['Connect', 'Speak'] });
       }
@@ -1049,6 +1291,16 @@ export function createLobbyRouter(client, db, config, wss) {
         permissionOverwrites: permissionOverwrites2,
         reason: 'Partida Mixton iniciada desde la web'
       });
+
+      // A. Reproducir anuncio por voz con IA antes de mover a los jugadores
+      if (waitingRoomId) {
+        const textToSpeak = `La partida entre ${capAName} en contra de ${capBName} iniciará en 5, 4, 3, 2, 1`;
+        try {
+          await playTTSCountdown(guild, waitingRoomId, textToSpeak);
+        } catch (err) {
+          logger.error('Error al reproducir el anuncio de voz en Mixton:', err);
+        }
+      }
 
       // 2. Mover a los jugadores a los VCs
       const originalVoiceStates = {};
@@ -1076,20 +1328,58 @@ export function createLobbyRouter(client, db, config, wss) {
       let messageId = null;
 
       if (matchesChannel) {
-        const team1List = rosterA.map(p => `• <@${p.discordId}> [${p.faceit_nickname}] (Lvl ${p.faceit_level})${p.discordId === teamA.captain.discordId ? ' ⭐ **Capitán**' : ''}`).join('\n');
-        const team2List = rosterB.map(p => `• <@${p.discordId}> [${p.faceit_nickname}] (Lvl ${p.faceit_level})${p.discordId === teamB.captain.discordId ? ' ⭐ **Capitán**' : ''}`).join('\n');
+        const getLvlEmoji = (lvl) => {
+          const l = parseInt(lvl) || 1;
+          if (l === 10) return '🔴';
+          if (l >= 8) return 'orange_circle'; // we can use standard discord emojis
+          // Actually standard discord emojis are :red_circle: :orange_circle: :blue_circle: :white_circle:
+          // In raw text: 🔴, 🟠, 🔵, ⚪
+          if (l >= 8) return '🟠';
+          if (l >= 5) return '🔵';
+          return '⚪';
+        };
+
+        const avgEloA = Math.round(rosterA.reduce((sum, p) => sum + (p.faceit_elo || 1000), 0) / rosterA.length);
+        const avgEloB = Math.round(rosterB.reduce((sum, p) => sum + (p.faceit_elo || 1000), 0) / rosterB.length);
+
+        const team1List = rosterA.map(p => {
+          const isCap = p.discordId === teamA.captain.discordId;
+          return `${isCap ? '👑 **Capitán**' : '•'} ${getLvlEmoji(p.faceit_level)} <@${p.discordId}> (\`${p.faceit_nickname}\` - ELO: ${p.faceit_elo || 1000})`;
+        }).join('\n');
+
+        const team2List = rosterB.map(p => {
+          const isCap = p.discordId === teamB.captain.discordId;
+          return `${isCap ? '👑 **Capitán**' : '•'} ${getLvlEmoji(p.faceit_level)} <@${p.discordId}> (\`${p.faceit_nickname}\` - ELO: ${p.faceit_elo || 1000})`;
+        }).join('\n');
+
+        const activeHubId = effectiveConfig.faceitHubId || '52a88f17-1660-42ae-8322-76592f0c6f23';
+        const faceitHubUrl = `https://www.faceit.com/es/hub/${activeHubId}/Mixtones`;
+
+        const embedFields = [
+          { name: '🌐 Modo de Juego', value: 'Mixton Competitivo', inline: true },
+          { name: '🗺️ Mapa', value: '`Elección de Capitanes`', inline: true },
+          { name: '📍 Canales de Voz', value: `🔊 <#${vc1.id}>\n🔊 <#${vc2.id}>`, inline: true }
+        ];
+
+        if (parsedBetAmount > 0) {
+          embedFields.push({
+            name: '💰 Apuesta y Pozo',
+            value: `💵 **Cuota:** S/ ${parsedBetAmount.toFixed(2)} c/u\n🏆 **Pozo Total:** S/ ${(parsedBetAmount * 10).toFixed(2)}`,
+            inline: true
+          });
+        }
+
+        embedFields.push(
+          { name: '🟠 Club Faceit', value: `[Entrar a la cola del Hub](${faceitHubUrl})`, inline: false },
+          { name: `👥 Roster A (${teamA.name}) [Promedio ELO: ${avgEloA}]`, value: team1List, inline: false },
+          { name: `👥 Roster B (${teamB.name}) [Promedio ELO: ${avgEloB}]`, value: team2List, inline: false }
+        );
 
         const startedEmbed = new EmbedBuilder()
-          .setTitle('🎮 ¡Partida Mixton Competitiva!')
-          .setColor(0xFF5500)
+          .setTitle(parsedBetAmount > 0 ? `🎮 ¡Partida Mixton con Apuesta (S/ ${parsedBetAmount.toFixed(2)})!` : '🎮 ¡Partida Mixton Competitiva!')
+          .setColor(parsedBetAmount > 0 ? 0x15C253 : 0xFF5500)
           .setDescription(`Lanzada por el Administrador **${req.user.username}** desde el panel web.`)
-          .addFields(
-            { name: '🌐 Modo de Juego', value: 'Mixton Competitivo', inline: true },
-            { name: '🗺️ Mapa', value: '`Elección de Capitanes`', inline: true },
-            { name: '📍 Canal de Voz A', value: `<#${vc1.id}>`, inline: true },
-            { name: '👥 Roster A (' + teamA.name + ')', value: team1List, inline: false },
-            { name: '👥 Roster B (' + teamB.name + ')', value: team2List, inline: false }
-          )
+          .addFields(embedFields)
           .setFooter({ text: 'Usa los botones para reportar el resultado de la partida' })
           .setTimestamp();
 
@@ -1111,26 +1401,65 @@ export function createLobbyRouter(client, db, config, wss) {
           .setStyle(ButtonStyle.Danger)
           .setEmoji('❌');
 
-        const row = new ActionRowBuilder().addComponents(winA, winB, cancel);
+        const faceitBtn = new ButtonBuilder()
+          .setLabel('Cola en Faceit')
+          .setStyle(ButtonStyle.Link)
+          .setURL(faceitHubUrl)
+          .setEmoji('🟠');
 
-        const msg = await matchesChannel.send({ embeds: [startedEmbed], components: [row] }).catch(err => logger.error('Error enviando anuncio mixton:', err));
+        const row = new ActionRowBuilder().addComponents(winA, winB, cancel, faceitBtn);
+
+        const playerPings = [...rosterA, ...rosterB].map(p => `<@${p.discordId}>`).join(' ');
+        const msg = await matchesChannel.send({ 
+          content: `📢 **¡Partida Mixtón Iniciada!**\nJugadores: ${playerPings}`,
+          embeds: [startedEmbed], 
+          components: [row] 
+        }).catch(err => logger.error('Error enviando anuncio mixton:', err));
         if (msg) messageId = msg.id;
       }
+
+      const activeHubId = effectiveConfig.faceitHubId || '52a88f17-1660-42ae-8322-76592f0c6f23';
+      const faceitHubUrl = `https://www.faceit.com/es/hub/${activeHubId}/Mixtones`;
 
       if (messageId) {
         const messageUrl = `https://discord.com/channels/${guild.id}/${matchesChannelId}/${messageId}`;
 
+        // Notificaciones personalizadas para Roster A
         for (const p of rosterA) {
           try {
-            const dmEmbed = new EmbedBuilder()
-              .setTitle('🎮 ¡Tu mixton competitivo ha comenzado!')
-              .setDescription(`Has sido asignado a **${teamA.name}** para este encuentro mixton.`)
-              .setColor(0x15C253)
-              .addFields(
-                { name: '🔊 Canal de Voz', value: `<#${vc1.id}>`, inline: true },
-                { name: '🔗 Anuncio en Discord', value: `[Ir al canal](${messageUrl})`, inline: true }
-              )
-              .setTimestamp();
+            const isCap = (p.discordId === teamA.captain?.discordId);
+            let dmEmbed;
+
+            if (isCap) {
+              const matesList = (teamA.players || []).map(t => `• [${t.faceit_nickname || 'Jugador'}](https://www.faceit.com/es/players/${t.faceit_nickname || ''}) (<@${t.discordId}>)`).join('\n') || 'Sin compañeros asignados';
+              dmEmbed = new EmbedBuilder()
+                .setTitle('👑 ¡Eres el Capitán y Líder de Grupo en Faceit!')
+                .setDescription(`Has sido elegido Capitán de **${teamA.name}**.\n\n👉 **Invita a tus 4 compañeros a tu Grupo (Party) en FACEIT** y luego dale a **JUGAR** en la cola del Hub:`)
+                .setColor(0xFF5500)
+                .addFields(
+                  { name: '👥 Tus Compañeros (Haz clic para invitar en Faceit)', value: matesList, inline: false },
+                  { name: '🔊 Tu Canal de Voz', value: `<#${vc1.id}>`, inline: true },
+                  { name: '🔗 Anuncio en Discord', value: `[Ir al canal](${messageUrl})`, inline: true },
+                  { name: '🟠 Cola del Hub Faceit', value: `[Abrir Hub para Jugar](${faceitHubUrl})`, inline: false }
+                )
+                .setFooter({ text: 'Asegúrate de que los 5 estén en el grupo antes de darle a Jugar' })
+                .setTimestamp();
+            } else {
+              const capNick = teamA.captain?.faceit_nickname || 'Capitán';
+              const capUrl = `https://www.faceit.com/es/players/${capNick}`;
+              dmEmbed = new EmbedBuilder()
+                .setTitle('🎮 ¡Invitación de Equipo Mixton!')
+                .setDescription(`Has sido asignado a **${teamA.name}**.\n\n👑 Tu Capitán y líder de grupo en Faceit es: **[${capNick}](${capUrl})** (<@${teamA.captain?.discordId}>).\n\n👉 **Acepta la invitación de grupo de tu Capitán en Faceit** o agrégalo como amigo para unirte a su grupo antes de iniciar la partida.`)
+                .setColor(0x15C253)
+                .addFields(
+                  { name: '👑 Tu Capitán en Faceit', value: `[Perfil de ${capNick}](${capUrl})`, inline: true },
+                  { name: '🔊 Canal de Voz', value: `<#${vc1.id}>`, inline: true },
+                  { name: '🟠 Hub Mixtones', value: `[Ir al Hub](${faceitHubUrl})`, inline: true }
+                )
+                .setFooter({ text: 'Ten abierto Faceit y el Anti-Cheat' })
+                .setTimestamp();
+            }
+
             const member = await guild.members.fetch(p.discordId).catch(() => null);
             if (member) await member.send({ embeds: [dmEmbed] }).catch(() => {});
           } catch (e) {
@@ -1138,17 +1467,42 @@ export function createLobbyRouter(client, db, config, wss) {
           }
         }
 
+        // Notificaciones personalizadas para Roster B
         for (const p of rosterB) {
           try {
-            const dmEmbed = new EmbedBuilder()
-              .setTitle('🎮 ¡Tu mixton competitivo ha comenzado!')
-              .setDescription(`Has sido asignado a **${teamB.name}** para este encuentro mixton.`)
-              .setColor(0xFF3E3E)
-              .addFields(
-                { name: '🔊 Canal de Voz', value: `<#${vc2.id}>`, inline: true },
-                { name: '🔗 Anuncio en Discord', value: `[Ir al canal](${messageUrl})`, inline: true }
-              )
-              .setTimestamp();
+            const isCap = (p.discordId === teamB.captain?.discordId);
+            let dmEmbed;
+
+            if (isCap) {
+              const matesList = (teamB.players || []).map(t => `• [${t.faceit_nickname || 'Jugador'}](https://www.faceit.com/es/players/${t.faceit_nickname || ''}) (<@${t.discordId}>)`).join('\n') || 'Sin compañeros asignados';
+              dmEmbed = new EmbedBuilder()
+                .setTitle('👑 ¡Eres el Capitán y Líder de Grupo en Faceit!')
+                .setDescription(`Has sido elegido Capitán de **${teamB.name}**.\n\n👉 **Invita a tus 4 compañeros a tu Grupo (Party) en FACEIT** y luego dale a **JUGAR** en la cola del Hub:`)
+                .setColor(0xFF5500)
+                .addFields(
+                  { name: '👥 Tus Compañeros (Haz clic para invitar en Faceit)', value: matesList, inline: false },
+                  { name: '🔊 Tu Canal de Voz', value: `<#${vc2.id}>`, inline: true },
+                  { name: '🔗 Anuncio en Discord', value: `[Ir al canal](${messageUrl})`, inline: true },
+                  { name: '🟠 Cola del Hub Faceit', value: `[Abrir Hub para Jugar](${faceitHubUrl})`, inline: false }
+                )
+                .setFooter({ text: 'Asegúrate de que los 5 estén en el grupo antes de darle a Jugar' })
+                .setTimestamp();
+            } else {
+              const capNick = teamB.captain?.faceit_nickname || 'Capitán';
+              const capUrl = `https://www.faceit.com/es/players/${capNick}`;
+              dmEmbed = new EmbedBuilder()
+                .setTitle('🎮 ¡Invitación de Equipo Mixton!')
+                .setDescription(`Has sido asignado a **${teamB.name}**.\n\n👑 Tu Capitán y líder de grupo en Faceit es: **[${capNick}](${capUrl})** (<@${teamB.captain?.discordId}>).\n\n👉 **Acepta la invitación de grupo de tu Capitán en Faceit** o agrégalo como amigo para unirte a su grupo antes de iniciar la partida.`)
+                .setColor(0xFF3E3E)
+                .addFields(
+                  { name: '👑 Tu Capitán en Faceit', value: `[Perfil de ${capNick}](${capUrl})`, inline: true },
+                  { name: '🔊 Canal de Voz', value: `<#${vc2.id}>`, inline: true },
+                  { name: '🟠 Hub Mixtones', value: `[Ir al Hub](${faceitHubUrl})`, inline: true }
+                )
+                .setFooter({ text: 'Ten abierto Faceit y el Anti-Cheat' })
+                .setTimestamp();
+            }
+
             const member = await guild.members.fetch(p.discordId).catch(() => null);
             if (member) await member.send({ embeds: [dmEmbed] }).catch(() => {});
           } catch (e) {
@@ -1159,11 +1513,14 @@ export function createLobbyRouter(client, db, config, wss) {
 
       // Guardar partida activa
       const matchData = {
-        entity_custom_name: 'Mixton / Web',
+        entity_custom_name: parsedBetAmount > 0 ? `Mixton Apuesta (S/ ${parsedBetAmount.toFixed(2)})` : 'Mixton / Web',
         game: 'cs2',
         voting: { map: { pick: ['Mixton'] }, location: { pick: ['Mixton'] } },
         teams: { faction1: { name: teamA.name }, faction2: { name: teamB.name } },
-        creator_id: req.user.userId
+        creator_id: req.user.userId,
+        bet_amount_per_player: parsedBetAmount,
+        total_pot: parseFloat((parsedBetAmount * 10).toFixed(2)),
+        manual_paid_players: Array.from(manualPaidSet)
       };
 
       const dbRosterA = rosterA.map(p => ({ player_id: p.faceit_player_id, nickname: p.faceit_nickname, discord_id: p.discordId }));
@@ -1190,7 +1547,56 @@ export function createLobbyRouter(client, db, config, wss) {
       mixtonEvents.emit('update', guildIdToUse);
 
       logger.success(`Partida mixton ${matchId} iniciada desde web por ${req.user.username}`);
-      res.json({ success: true, matchId });
+      res.json({ success: true, matchId, faceitHubUrl });
+
+      // Ejecutar el envío de invitaciones de Steam en segundo plano
+      (async () => {
+        try {
+          const allPlayers = [...rosterA, ...rosterB];
+          logger.info(`🤖 Steam Bot: Obteniendo SteamID64 para ${allPlayers.length} jugadores desde Faceit...`);
+          
+          const steamIDs = await Promise.all(
+            allPlayers.map(async (p) => {
+              try {
+                if (!p.faceit_player_id) return null;
+                const profile = await fetchFaceitPlayerById(p.faceit_player_id);
+                const steamId = profile.steam_id_64 || profile.platforms?.steam;
+                if (steamId) {
+                  logger.info(`🔍 Steam ID encontrado para ${p.faceit_nickname}: ${steamId}`);
+                } else {
+                  logger.warn(`⚠️ No se encontró Steam ID para ${p.faceit_nickname}`);
+                }
+                return steamId;
+              } catch (err) {
+                logger.error(`Error al consultar perfil de Faceit para ${p.faceit_nickname}: ${err.message}`);
+                return null;
+              }
+            })
+          );
+
+          const validSteamIDs = [...new Set(steamIDs.filter(Boolean))];
+          if (!steamClient.steamID) {
+            logger.warn('Steam Bot: se omitieron invitaciones porque Steam no tiene una sesion activa. La partida mixton ya fue creada en Discord.');
+            return;
+          }
+
+          if (validSteamIDs.length !== 10) {
+            logger.warn(`Steam Bot: se omitieron invitaciones porque se requieren 10 SteamID64 unicos y se obtuvieron ${validSteamIDs.length}. La partida mixton ya fue creada en Discord.`);
+            return;
+          }
+
+          const serverIp = process.env.MIXTON_SERVER_IP;
+          if (!serverIp) {
+            logger.warn('Steam Bot: MIXTON_SERVER_IP no esta configurado. Se omitieron invitaciones automaticas.');
+            return;
+          }
+
+          logger.info(`Steam Bot: iniciando invitaciones del lobby CS2 para el servidor ${serverIp}...`);
+          await crearLobbyMatchmaking(validSteamIDs, serverIp);
+        } catch (steamErr) {
+          logger.error('❌ Error al procesar invitaciones automáticas de Steam:', steamErr);
+        }
+      })();
     } catch (err) {
       logger.error('Error al crear partida mixton desde web:', err);
       res.status(500).json({ error: 'Error al iniciar la partida en el servidor.' });
@@ -1388,25 +1794,47 @@ export function createLobbyRouter(client, db, config, wss) {
     }
   });
 
-  // Quitar a un jugador específico de la cola de listos (Admin)
+  // Quitar a un jugador de la cola de listos o de un equipo (Admin)
   router.post('/mixton-remove-player', requireAuth, verifyGuildAdmin, async (req, res) => {
     try {
-      const { discordId } = req.body;
+      const { teamId, discordId } = req.body;
       if (!discordId) {
         return res.status(400).json({ error: 'Falta el discordId del jugador.' });
       }
 
-      const success = await db.setPlayerReadyStatus(discordId, false, req.guildId);
-      if (success) {
-        logger.success(`El administrador ${req.user.username} removió al jugador ${discordId} de la cola de listos.`);
-        await db.addLogEntry('info', `El administrador ${req.user.username} removió al jugador con Discord ID ${discordId} de la cola de listos.`, 'system');
+      if (teamId) {
+        // Lógica de quitar de un equipo
+        const state = await db.getMixtonLobbyState(req.guildId);
+        const team = state.teams.find(t => t.id === teamId);
+        if (!team) {
+          return res.status(404).json({ error: 'Equipo no encontrado.' });
+        }
+
+        if (team.players) {
+          team.players = team.players.filter(p => p.discordId !== discordId);
+        }
+
+        await db.saveMixtonLobbyState(state, req.guildId);
         mixtonEvents.emit('update', req.guildId);
-        res.json({ success: true });
+
+        logger.success(`Administrador ${req.user.username} removió al jugador ${discordId} del equipo ${team.name}`);
+        await db.addLogEntry('info', `El administrador ${req.user.username} removió a un jugador del equipo ${team.name}.`, 'system');
+
+        return res.json({ success: true, state });
       } else {
-        res.status(500).json({ error: 'No se pudo remover al jugador.' });
+        // Lógica de quitar de la cola de listos
+        const success = await db.setPlayerReadyStatus(discordId, false, req.guildId);
+        if (success) {
+          logger.success(`El administrador ${req.user.username} removió al jugador ${discordId} de la cola de listos.`);
+          await db.addLogEntry('info', `El administrador ${req.user.username} removió al jugador con Discord ID ${discordId} de la cola de listos.`, 'system');
+          mixtonEvents.emit('update', req.guildId);
+          return res.json({ success: true });
+        } else {
+          return res.status(500).json({ error: 'No se pudo remover al jugador.' });
+        }
       }
     } catch (err) {
-      logger.error('Error al remover jugador listo:', err);
+      logger.error('Error al remover jugador:', err);
       res.status(500).json({ error: 'Error al remover al jugador en el servidor.' });
     }
   });
@@ -1539,36 +1967,8 @@ export function createLobbyRouter(client, db, config, wss) {
     }
   });
 
-  // 13. Quitar un jugador de un equipo (Admin)
-  router.post('/mixton-remove-player', requireAuth, verifyGuildAdmin, async (req, res) => {
-    try {
-      const { teamId, discordId } = req.body;
-      if (!teamId || !discordId) {
-        return res.status(400).json({ error: 'Faltan parámetros (teamId, discordId).' });
-      }
 
-      const state = await db.getMixtonLobbyState(req.guildId);
-      const team = state.teams.find(t => t.id === teamId);
-      if (!team) {
-        return res.status(404).json({ error: 'Equipo no encontrado.' });
-      }
-
-      if (team.players) {
-        team.players = team.players.filter(p => p.discordId !== discordId);
-      }
-
-      await db.saveMixtonLobbyState(state, req.guildId);
-      mixtonEvents.emit('update', req.guildId);
-
-      logger.success(`Administrador ${req.user.username} removió al jugador ${discordId} del equipo ${team.name}`);
-      await db.addLogEntry('info', `El administrador ${req.user.username} removió a un jugador del equipo ${team.name}.`, 'system');
-
-      res.json({ success: true, state });
-    } catch (err) {
-      logger.error('Error al remover jugador manualmente:', err);
-      res.status(500).json({ error: 'Error al remover jugador.' });
-    }
-  });
 
   return router;
 }
+

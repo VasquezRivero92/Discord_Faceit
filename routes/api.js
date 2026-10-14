@@ -1,15 +1,17 @@
 import { Router } from 'express';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import fs from 'fs';
 import path from 'path';
 import admin from 'firebase-admin';
 import { verifyAdminToken } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
 import { getSettings, invalidateSettingsCache } from '../utils/featureFlags.js';
-import { syncMemberLevelRole, getOrCreateSpecialRole, getOrCreateLevelRole, getPlayerSkillLevel } from '../services/roles.js';
+import { syncMemberLevelRole, getOrCreateSpecialRole, getOrCreateLevelRole, getPlayerSkillLevel, syncMemberNickname } from '../services/roles.js';
 import { fetchFaceitPlayer, fetchFaceitPlayerById } from '../services/faceitApi.js';
 import { updateLivePanel } from '../services/matchMessages.js';
+import { cleanupVoiceChannel } from '../services/voice.js';
 import { env } from '../config/index.js';
-import { fetchFaceitStats, fetchPlayerHistory, fetchHubInfo, fetchLeaderboard } from '../services/faceitApi.js';
+import { fetchFaceitStats, fetchPlayerHistory, fetchHubInfo, fetchLeaderboard, fetchLatestSeasonPoints, fetchCurrentHubSeason } from '../services/faceitApi.js';
 import { getEffectiveConfig, getEffectiveConfigForGuild, CLUB_ROLES_MAP } from '../config/index.js';
 
 export function createApiRouter(client, db, config) {
@@ -28,6 +30,83 @@ export function createApiRouter(client, db, config) {
       return req.user.servidor;
     }
     return req.guildId || null;
+  };
+
+  const getHistoryMatchById = async (matchId, guildId = null) => {
+    let query = db._firestore.collection('faceit_matches_history').where('id', '==', matchId);
+    if (guildId) query = query.where('guild_id', '==', guildId);
+    const snapshot = await query.limit(1).get();
+    return snapshot.empty ? null : snapshot.docs[0].data();
+  };
+
+  const resolveMatchesChannel = async (guildId) => {
+    const effectiveConfig = guildId ? await getEffectiveConfigForGuild(guildId) : await getEffectiveConfig();
+    const channelIds = (effectiveConfig.discordMatchesChannelId || '')
+      .split(',')
+      .map(id => id.trim())
+      .filter(Boolean);
+
+    for (const channelId of channelIds) {
+      const channel = await client.channels.fetch(channelId).catch(() => null);
+      if (channel && (!guildId || channel.guild?.id === guildId)) {
+        return { channel, channelId };
+      }
+    }
+
+    return { channel: null, channelId: null };
+  };
+
+  const rosterLine = (player, index) => {
+    const mention = player.discord_id ? `<@${player.discord_id}>` : `\`${player.nickname || `Jugador ${index + 1}`}\``;
+    return `${index + 1}. ${mention}${player.nickname ? ` (${player.nickname})` : ''}`;
+  };
+
+  const buildMixtonAnnouncement = (match, { includeResultButtons = true } = {}) => {
+    const rosterA = match.faction1_roster || [];
+    const rosterB = match.faction2_roster || [];
+    const isMixton = typeof match.id === 'string' && match.id.startsWith('mixton_');
+    const title = isMixton ? 'Partida Mixton Iniciada' : 'Partida Manual Iniciada';
+
+    const embed = new EmbedBuilder()
+      .setTitle(title)
+      .setColor(isMixton ? 0xFF5500 : 0x00FF55)
+      .setDescription('Anuncio enviado manualmente desde el panel admin.')
+      .addFields(
+        { name: 'Modo', value: `\`${match.entity_custom_name || (isMixton ? 'Mixton / Web' : 'Manual / Web')}\``, inline: true },
+        { name: 'Mapa', value: `\`${match.map || 'Mixton'}\``, inline: true },
+        { name: 'Servidor', value: `\`${match.location || 'Mixton'}\``, inline: true },
+        { name: match.faction1_name || 'Equipo A', value: rosterA.map(rosterLine).join('\n') || 'Sin jugadores', inline: false },
+        { name: match.faction2_name || 'Equipo B', value: rosterB.map(rosterLine).join('\n') || 'Sin jugadores', inline: false }
+      )
+      .setFooter({ text: includeResultButtons ? 'Usa los botones para reportar el resultado de la partida' : 'Partida ya registrada en historial' })
+      .setTimestamp();
+
+    if (!includeResultButtons) {
+      const winnerName = match.winner === 'faction1'
+        ? match.faction1_name
+        : match.winner === 'faction2'
+          ? match.faction2_name
+          : 'Sin ganador registrado';
+      embed.addFields({ name: 'Resultado', value: `${match.faction1_score ?? '-'} - ${match.faction2_score ?? '-'} | Ganador: **${winnerName}**`, inline: false });
+      return { embed, components: [] };
+    }
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`manual_match_win_a_${match.id}`)
+        .setLabel(`Gano ${match.faction1_name || 'Equipo A'}`.slice(0, 80))
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`manual_match_win_b_${match.id}`)
+        .setLabel(`Gano ${match.faction2_name || 'Equipo B'}`.slice(0, 80))
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`manual_match_cancel_${match.id}`)
+        .setLabel('Cancelar')
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    return { embed, components: [row] };
   };
 
   // --- Información del usuario logueado ---
@@ -189,19 +268,25 @@ export function createApiRouter(client, db, config) {
   // --- Sincronizar todos los usuarios globalmente ---
   router.post('/users/sync-all', requireAuth, async (req, res) => {
     try {
+      const targetGuildId = resolveTargetGuildId(req);
       const snapshot = await db._firestore.collection('faceit_users').get();
       const users = [];
       snapshot.forEach(doc => {
-        users.push({ discordId: doc.id, ...doc.data() });
+        const data = doc.data();
+        const userGuild = data.guild_id || data.servidor || data.mixton_guild_id || null;
+        if (targetGuildId && userGuild !== targetGuildId) {
+          return;
+        }
+        users.push({ discordId: data.discordId || doc.id, ...data });
       });
 
       if (users.length === 0) {
         return res.json({ success: true, message: 'No hay usuarios para sincronizar.' });
       }
 
-      res.json({ success: true, message: `Sincronización global iniciada en segundo plano para ${users.length} usuarios.` });
+      const syncGuildId = targetGuildId || DISCORD_GUILD_ID;
+      res.json({ success: true, message: `Sincronización iniciada en segundo plano para ${users.length} usuarios.` });
 
-      const syncGuildId = resolveTargetGuildId(req) || DISCORD_GUILD_ID;
       (async () => {
         logger.info(`Iniciando sincronización de roles para ${users.length} usuarios en guild ${syncGuildId}...`);
         const guild = await client.guilds.fetch(syncGuildId).catch(() => null);
@@ -213,6 +298,9 @@ export function createApiRouter(client, db, config) {
         let successCount = 0;
         let errorCount = 0;
 
+        const effectiveConfig = await getEffectiveConfigForGuild(targetGuildId);
+        const currentSeason = await fetchCurrentHubSeason(effectiveConfig.faceitLeaderboardId || effectiveConfig.faceitHubId).catch(() => null);
+
         for (const user of users) {
           try {
             await new Promise(resolve => setTimeout(resolve, 150)); // 150ms delay to respect API limits
@@ -220,19 +308,25 @@ export function createApiRouter(client, db, config) {
             if (!user.faceit_player_id) continue;
             const playerData = await fetchFaceitPlayerById(user.faceit_player_id);
             const currentLevel = getPlayerSkillLevel(playerData);
+            const elo = playerData.games?.cs2?.faceit_elo || playerData.games?.csgo?.faceit_elo || 0;
 
             if (currentLevel) {
               await syncMemberLevelRole(guild, user.discordId, currentLevel);
-              successCount++;
+              await db.updatePlayerStats(user.discordId, currentLevel, elo, targetGuildId, currentSeason);
             }
+            const faceitNick = playerData.nickname || user.faceit_nickname || user.nickname;
+            if (faceitNick) {
+              await syncMemberNickname(guild, user.discordId, faceitNick);
+            }
+            successCount++;
           } catch (err) {
             errorCount++;
             logger.error(`Error al sincronizar usuario ${user.faceit_nickname} (${user.discordId}) en sync-all:`, err.message);
           }
         }
 
-        logger.success(`Sincronización global completada. Éxito: ${successCount}, Errores: ${errorCount}`);
-        await db.addLogEntry('success', `Sincronización global completada. Éxito: ${successCount}, Errores: ${errorCount}`, 'system');
+        logger.success(`Sincronización completada. Éxito: ${successCount}, Errores: ${errorCount}`);
+        await db.addLogEntry('success', `Sincronización completada. Éxito: ${successCount}, Errores: ${errorCount}`, 'system', targetGuildId);
       })();
     } catch (err) {
       logger.error('Error en POST /users/sync-all:', err);
@@ -242,15 +336,111 @@ export function createApiRouter(client, db, config) {
     }
   });
 
-  // --- Exportar copia de seguridad de usuarios ---
-  router.get('/users/backup', requireAuth, async (req, res) => {
+  // --- Sincronizar únicamente apodos de todos los usuarios ---
+  router.post('/users/sync-nicks', requireAuth, async (req, res) => {
     try {
+      const targetGuildId = resolveTargetGuildId(req);
       const snapshot = await db._firestore.collection('faceit_users').get();
       const users = [];
       snapshot.forEach(doc => {
+        const data = doc.data();
+        const userGuild = data.guild_id || data.servidor || data.mixton_guild_id || null;
+        if (targetGuildId && userGuild !== targetGuildId) {
+          return;
+        }
+        users.push({ discordId: data.discordId || doc.id, ...data });
+      });
+
+      if (users.length === 0) {
+        return res.json({ success: true, message: 'No hay usuarios para sincronizar.' });
+      }
+
+      const syncGuildId = targetGuildId || DISCORD_GUILD_ID;
+      res.json({ success: true, message: `Sincronización de apodos iniciada en segundo plano para ${users.length} usuarios.` });
+
+      (async () => {
+        logger.info(`Iniciando sincronización de apodos para ${users.length} usuarios en guild ${syncGuildId}...`);
+        const guild = await client.guilds.fetch(syncGuildId).catch(() => null);
+        if (!guild) {
+          logger.error(`No se pudo obtener la guild ${syncGuildId} para la sincronización de apodos.`);
+          return;
+        }
+
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (const user of users) {
+          try {
+            await new Promise(resolve => setTimeout(resolve, 150));
+            const faceitNick = user.faceit_nickname || user.nickname;
+            if (faceitNick) {
+              const ok = await syncMemberNickname(guild, user.discordId, faceitNick);
+              if (ok) successCount++;
+              else errorCount++;
+            }
+          } catch (err) {
+            errorCount++;
+            logger.error(`Error al sincronizar apodo para ${user.faceit_nickname || user.discordId}:`, err.message);
+          }
+        }
+
+        logger.success(`Sincronización de apodos completada. Éxito: ${successCount}, Errores: ${errorCount}`);
+        await db.addLogEntry('success', `Sincronización de apodos completada. Éxito: ${successCount}, Errores: ${errorCount}`, 'system', targetGuildId);
+      })();
+    } catch (err) {
+      logger.error('Error en POST /users/sync-nicks:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Error al iniciar la sincronización de apodos' });
+      }
+    }
+  });
+
+  // --- Sincronizar apodo de un usuario específico ---
+  router.post('/users/:id/sync-nick', requireAuth, async (req, res) => {
+    try {
+      const discordId = req.params.id;
+      const user = await db.getFullUser(discordId);
+      if (!user || (!user.faceit_nickname && !user.nickname)) {
+        return res.status(404).json({ error: 'Usuario no encontrado o sin apodo de Faceit vinculado.' });
+      }
+
+      const targetGuildId = resolveTargetGuildId(req);
+      const guildIdToUse = targetGuildId || user.guild_id || user.servidor || DISCORD_GUILD_ID;
+      const guild = await client.guilds.fetch(guildIdToUse).catch(() => null);
+
+      if (!guild) {
+        return res.status(500).json({ error: 'No se pudo acceder al servidor de Discord.' });
+      }
+
+      const faceitNick = user.faceit_nickname || user.nickname;
+      const success = await syncMemberNickname(guild, discordId, faceitNick);
+
+      if (success) {
+        return res.json({ success: true, message: `Apodo de <@${discordId}> sincronizado a '${faceitNick}'` });
+      } else {
+        return res.status(400).json({ error: 'No se pudo actualizar el apodo. Verifica que el bot tenga permisos superiores al usuario.' });
+      }
+    } catch (err) {
+      logger.error('Error en POST /users/:id/sync-nick:', err);
+      res.status(500).json({ error: 'Error al sincronizar apodo' });
+    }
+  });
+
+  // --- Exportar copia de seguridad de usuarios ---
+  router.get('/users/backup', requireAuth, async (req, res) => {
+    try {
+      const targetGuildId = resolveTargetGuildId(req);
+      const snapshot = await db._firestore.collection('faceit_users').get();
+      const users = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const userGuild = data.guild_id || data.servidor || data.mixton_guild_id || null;
+        if (targetGuildId && userGuild !== targetGuildId) {
+          return;
+        }
         users.push({
-          discordId: doc.id,
-          ...doc.data()
+          discordId: data.discordId || doc.id,
+          ...data
         });
       });
       res.json(users);
@@ -268,14 +458,29 @@ export function createApiRouter(client, db, config) {
         return res.status(400).json({ error: 'El formato de datos de backup no es válido' });
       }
 
+      const targetGuildId = resolveTargetGuildId(req);
       const batch = db._firestore.batch();
       const usersCol = db._firestore.collection('faceit_users');
+      let restoredCount = 0;
 
       for (const u of users) {
         if (!u.discordId) continue;
-        const docRef = usersCol.doc(u.discordId);
+        
+        const rawDiscordId = u.discordId.includes('_') ? u.discordId.split('_').pop() : u.discordId;
+        let docId;
         const data = { ...u };
         delete data.discordId;
+
+        if (targetGuildId) {
+          docId = `${targetGuildId}_${rawDiscordId}`;
+          data.guild_id = targetGuildId;
+          if (data.servidor) data.servidor = targetGuildId;
+          if (data.mixton_guild_id) data.mixton_guild_id = targetGuildId;
+        } else {
+          docId = u.discordId;
+        }
+
+        const docRef = usersCol.doc(docId);
 
         // Convertir strings de tiempo o estructuras serializadas a timestamp de Firestore
         if (data.linkedAt && data.linkedAt._seconds) {
@@ -285,11 +490,12 @@ export function createApiRouter(client, db, config) {
         }
         
         batch.set(docRef, data, { merge: true });
+        restoredCount++;
       }
 
       await batch.commit();
-      await db.addLogEntry('info', `Backup de usuarios importado: ${users.length} vinculaciones actualizadas.`, 'system');
-      res.json({ success: true, message: `Backup importado con éxito: ${users.length} vinculaciones restauradas.` });
+      await db.addLogEntry('info', `Backup de usuarios importado: ${restoredCount} vinculaciones actualizadas.`, 'system', targetGuildId);
+      res.json({ success: true, message: `Backup importado con éxito: ${restoredCount} vinculaciones restauradas.` });
     } catch (err) {
       logger.error('Error al restaurar backup:', err);
       res.status(500).json({ error: 'Error al restaurar backup' });
@@ -313,15 +519,20 @@ export function createApiRouter(client, db, config) {
 
       const skillLevel = player.games?.cs2?.skill_level || player.games?.csgo?.skill_level || null;
       const elo = player.games?.cs2?.faceit_elo || player.games?.csgo?.faceit_elo || 0;
-      await db.linkAccounts(discordId, player.player_id, player.nickname, skillLevel, elo, targetGuildId || req.guildId);
+      const effectiveConfig = await getEffectiveConfigForGuild(targetGuildId || req.guildId);
+      const currentSeason = await fetchCurrentHubSeason(effectiveConfig.faceitLeaderboardId || effectiveConfig.faceitHubId).catch(() => null);
+      await db.linkAccounts(discordId, player.player_id, player.nickname, skillLevel, elo, targetGuildId || req.guildId, currentSeason);
       
       // Asignar el servidor y rol por defecto 'usuario'
       await db.setUserRoleAndGuild(discordId, 'usuario', targetGuildId);
 
       const guildIdToUse = targetGuildId || (env.DISCORD_GUILD_ID || DISCORD_GUILD_ID);
       const guild = guildIdToUse ? await client.guilds.fetch(guildIdToUse).catch(() => null) : null;
-      if (skillLevel && guild) {
-        await syncMemberLevelRole(guild, discordId, skillLevel);
+      if (guild) {
+        if (skillLevel) {
+          await syncMemberLevelRole(guild, discordId, skillLevel);
+        }
+        await syncMemberNickname(guild, discordId, player.nickname);
       }
 
       res.json({ success: true, player: { id: player.player_id, nickname: player.nickname, level: skillLevel } });
@@ -370,6 +581,29 @@ export function createApiRouter(client, db, config) {
     } catch (err) {
       logger.error('Error en /users/:id/roles:', err);
       res.status(500).json({ error: 'Error al asignar rol' });
+    }
+  });
+
+  // --- Listar roles del servidor de Discord ---
+  router.get('/discord/roles', requireAuth, async (req, res) => {
+    try {
+      const targetGuildId = resolveTargetGuildId(req);
+      const guildIdToUse = targetGuildId || (env.DISCORD_GUILD_ID || DISCORD_GUILD_ID);
+      const guild = guildIdToUse ? await client.guilds.fetch(guildIdToUse).catch(() => null) : null;
+      if (!guild) return res.json({ roles: [] });
+      await guild.roles.fetch().catch(() => null);
+      const roles = guild.roles.cache
+        .filter(r => r.name !== '@everyone')
+        .map(r => ({
+          id: r.id,
+          name: r.name,
+          color: r.hexColor
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      res.json({ roles });
+    } catch (err) {
+      logger.error('Error al listar roles de Discord:', err);
+      res.status(500).json({ error: 'Error al obtener roles de Discord' });
     }
   });
 
@@ -488,6 +722,64 @@ export function createApiRouter(client, db, config) {
     }
   });
 
+  router.post('/matches/:id/announce-mixton', requireAuth, async (req, res) => {
+    try {
+      const matchId = req.params.id;
+      const targetGuildId = resolveTargetGuildId(req);
+      let match = await db.getActiveMatch(matchId);
+      let isActive = true;
+
+      if (!match) {
+        match = await getHistoryMatchById(matchId, targetGuildId);
+        isActive = false;
+      }
+
+      if (!match) {
+        return res.status(404).json({ error: 'No se encontro la partida en activas ni en historial.' });
+      }
+
+      const matchGuildId = match.guild_id || targetGuildId || DISCORD_GUILD_ID;
+      if (targetGuildId && match.guild_id && match.guild_id !== targetGuildId) {
+        return res.status(403).json({ error: 'No autorizado para anunciar partidas de otros servidores.' });
+      }
+
+      if (!String(match.id || matchId).startsWith('mixton_') && !String(match.id || matchId).startsWith('manual_')) {
+        return res.status(400).json({ error: 'Esta accion solo aplica a partidas mixton o manuales.' });
+      }
+
+      const { channel, channelId } = await resolveMatchesChannel(matchGuildId);
+      if (!channel) {
+        return res.status(400).json({ error: 'No se encontro un canal de partidas configurado para este servidor.' });
+      }
+
+      const { embed, components } = buildMixtonAnnouncement(match, { includeResultButtons: isActive });
+      const mentions = [...(match.faction1_roster || []), ...(match.faction2_roster || [])]
+        .map(p => p.discord_id ? `<@${p.discord_id}>` : null)
+        .filter(Boolean)
+        .join(' ');
+      const content = isActive
+        ? `Partida mixton iniciada. ${mentions}`.trim()
+        : `Resumen de partida mixton registrada en historial.`;
+
+      const msg = await channel.send({ content, embeds: [embed], components });
+      if (isActive) {
+        await db.updateActiveMatchVoiceAndMessage(
+          match.id,
+          match.faction1_vc_id || null,
+          match.faction2_vc_id || null,
+          msg.id
+        ).catch(err => logger.warn('No se pudo actualizar message_id de la partida anunciada:', err.message));
+        await updateLivePanel(client, channelId, db).catch(err => logger.warn('No se pudo refrescar panel tras anuncio manual:', err.message));
+      }
+
+      await db.addLogEntry('info', `Anuncio manual de partida ${match.id || matchId} enviado desde panel admin por ${req.user?.username}.`, 'system', matchGuildId);
+      return res.json({ success: true, messageId: msg.id, channelId, isActive });
+    } catch (err) {
+      logger.error('Error en POST /matches/:id/announce-mixton:', err);
+      return res.status(500).json({ error: 'Error al enviar el anuncio manual de mixton.' });
+    }
+  });
+
   // --- Forzar cleanup de una partida ---
   router.post('/matches/:id/cleanup', requireAuth, async (req, res) => {
     try {
@@ -503,30 +795,15 @@ export function createApiRouter(client, db, config) {
       const guild = await client.guilds.fetch(guildIdToUse);
 
       if (match) {
+        await db.removeActiveMatch(matchId);
+        const effectiveConfig = await getEffectiveConfigForGuild(guildIdToUse);
+        const waitingRoomId = effectiveConfig.discordWaitingRoomChannelId;
+        const originalStates = match.original_voice_states || {};
         for (const vcId of [match.faction1_vc_id, match.faction2_vc_id]) {
           if (vcId) {
-            try {
-              const vc = await guild.channels.fetch(vcId);
-              if (vc) {
-                const waitingRoomId = process.env.DISCORD_WAITING_ROOM_CHANNEL_ID;
-                if (waitingRoomId && !waitingRoomId.startsWith('ID_')) {
-                  const waitingRoom = await guild.channels.fetch(waitingRoomId).catch(() => null);
-                  if (waitingRoom) {
-                    for (const [_, member] of vc.members) {
-                      try {
-                        await member.voice.setChannel(waitingRoom, 'Cleanup forzado desde Admin Panel');
-                      } catch (e) { /* ignore */ }
-                    }
-                  }
-                }
-                await vc.delete('Cleanup forzado desde Admin Panel');
-              }
-            } catch (e) {
-              logger.warn('No se pudo limpiar VC:', e.message);
-            }
+            await cleanupVoiceChannel(guild, vcId, waitingRoomId, originalStates, 'Cleanup forzado desde Admin Panel', true);
           }
         }
-        await db.removeActiveMatch(matchId);
       }
 
       res.json({ success: true });
@@ -573,6 +850,37 @@ export function createApiRouter(client, db, config) {
     } catch (err) {
       logger.error('Error en /leaderboard:', err);
       res.status(500).json({ error: 'Error al obtener leaderboard' });
+    }
+  });
+
+  router.all(['/points', '/club/points'], async (req, res) => {
+    try {
+      const targetGuildId = resolveTargetGuildId(req);
+      const effectiveConfig = targetGuildId
+        ? await getEffectiveConfigForGuild(targetGuildId)
+        : await getEffectiveConfig();
+
+      const clubId = req.query.club_id || req.query.clubId || req.body?.club_id || req.body?.clubId || effectiveConfig.faceitHubId || env.FACEIT_HUB_ID;
+      const queueId = req.query.queue_id || req.query.queueId || req.body?.queue_id || req.body?.queueId || effectiveConfig.faceitLeaderboardId || env.FACEIT_LEADERBOARD_ID;
+      const nickname = req.query.nickname || req.query.player || req.body?.nickname || req.body?.player;
+      const playerId = req.query.player_id || req.query.playerId || req.body?.player_id || req.body?.playerId;
+      const limit = req.query.limit || req.body?.limit;
+      const offset = req.query.offset || req.body?.offset;
+
+      const result = await fetchLatestSeasonPoints(clubId, queueId, {
+        limit,
+        offset,
+        nickname,
+        playerId
+      });
+
+      res.json(result);
+    } catch (err) {
+      logger.error('Error en GET /api/admin/points:', err);
+      if (err.message === 'NO_LEADERBOARD_FOUND') {
+        return res.status(404).json({ error: 'No se encontró la tabla de posiciones para la última temporada.' });
+      }
+      res.status(500).json({ error: 'Error al consultar los puntos de la tabla.' });
     }
   });
 
@@ -634,15 +942,22 @@ export function createApiRouter(client, db, config) {
         ...settings,
         discordLinkChannelId: settings.discordLinkChannelId || process.env.DISCORD_LINK_CHANNEL_ID || env.DISCORD_LINK_CHANNEL_ID,
         discordMatchesChannelId: settings.discordMatchesChannelId || process.env.DISCORD_MATCHES_CHANNEL_ID || env.DISCORD_MATCHES_CHANNEL_ID,
+        discordMixtonChannelId: settings.discordMixtonChannelId || process.env.DISCORD_MIXTON_CHANNEL_ID || env.DISCORD_MIXTON_CHANNEL_ID || '',
         discordRolesChannelId: settings.discordRolesChannelId || process.env.DISCORD_ROLES_CHANNEL_ID || env.DISCORD_ROLES_CHANNEL_ID,
         discordStatusChannelId: settings.discordStatusChannelId || process.env.DISCORD_STATUS_CHANNEL_ID || env.DISCORD_STATUS_CHANNEL_ID,
         discordWaitingRoomChannelId: settings.discordWaitingRoomChannelId || process.env.DISCORD_WAITING_ROOM_CHANNEL_ID || env.DISCORD_WAITING_ROOM_CHANNEL_ID,
         discordAdminAlertsChannelId: settings.discordAdminAlertsChannelId || process.env.DISCORD_ADMIN_ALERTS_CHANNEL_ID || env.DISCORD_ADMIN_ALERTS_CHANNEL_ID || '',
+        discordSanctionsChannelId: settings.discordSanctionsChannelId || process.env.DISCORD_SANCTIONS_CHANNEL_ID || env.DISCORD_SANCTIONS_CHANNEL_ID || '',
         discordSupportChannelId: settings.discordSupportChannelId || process.env.DISCORD_SUPPORT_CHANNEL_ID || env.DISCORD_SUPPORT_CHANNEL_ID || '',
+        discordMusicChannelId: settings.discordMusicChannelId || process.env.DISCORD_MUSIC_CHANNEL_ID || env.DISCORD_MUSIC_CHANNEL_ID || '',
+        discordMatchAccessRoleId: settings.discordMatchAccessRoleId || process.env.DISCORD_MATCH_ACCESS_ROLE_ID || env.DISCORD_MATCH_ACCESS_ROLE_ID || '',
+        hubRoleId: settings.hubRoleId || process.env.FACEIT_HUB_ROLE_ID || env.FACEIT_HUB_ROLE_ID || '',
+        discordHubRoleId: settings.discordHubRoleId || process.env.DISCORD_HUB_ROLE_ID || env.DISCORD_HUB_ROLE_ID || '',
         faceitHubId: settings.faceitHubId || process.env.FACEIT_HUB_ID || env.FACEIT_HUB_ID,
         faceitLeaderboardId: settings.faceitLeaderboardId || process.env.FACEIT_LEADERBOARD_ID || env.FACEIT_LEADERBOARD_ID || '',
-        adminRoleName: settings.adminRoleName || process.env.ADMIN_ROLE_NAME || env.ADMIN_ROLE_NAME,
+        adminRoleId: settings.adminRoleId || settings.adminRoleName || process.env.ADMIN_ROLE_ID || env.ADMIN_ROLE_ID || '',
         matchTimeoutMinutes: settings.matchTimeoutMinutes || parseInt(process.env.MATCH_TIMEOUT_MINUTES || '120', 10),
+        queues: settings.queues || [],
       };
       res.json({ settings: effectiveSettings });
     } catch (err) {
@@ -667,14 +982,20 @@ export function createApiRouter(client, db, config) {
         DISCORD_GUILD_ID: newSettings.discordGuildId,
         DISCORD_LINK_CHANNEL_ID: newSettings.discordLinkChannelId,
         DISCORD_MATCHES_CHANNEL_ID: newSettings.discordMatchesChannelId,
+        DISCORD_MIXTON_CHANNEL_ID: newSettings.discordMixtonChannelId,
         DISCORD_ROLES_CHANNEL_ID: newSettings.discordRolesChannelId,
         DISCORD_STATUS_CHANNEL_ID: newSettings.discordStatusChannelId,
         DISCORD_WAITING_ROOM_CHANNEL_ID: newSettings.discordWaitingRoomChannelId,
         DISCORD_ADMIN_ALERTS_CHANNEL_ID: newSettings.discordAdminAlertsChannelId,
+        DISCORD_SANCTIONS_CHANNEL_ID: newSettings.discordSanctionsChannelId,
         DISCORD_SUPPORT_CHANNEL_ID: newSettings.discordSupportChannelId,
+        DISCORD_MUSIC_CHANNEL_ID: newSettings.discordMusicChannelId,
+        DISCORD_MATCH_ACCESS_ROLE_ID: newSettings.discordMatchAccessRoleId,
+        FACEIT_HUB_ROLE_ID: newSettings.hubRoleId,
+        DISCORD_HUB_ROLE_ID: newSettings.discordHubRoleId,
         FACEIT_HUB_ID: newSettings.faceitHubId,
         FACEIT_LEADERBOARD_ID: newSettings.faceitLeaderboardId,
-        ADMIN_ROLE_NAME: newSettings.adminRoleName,
+        ADMIN_ROLE_ID: newSettings.adminRoleId ?? newSettings.adminRoleName,
         MATCH_TIMEOUT_MINUTES: newSettings.matchTimeoutMinutes,
       };
 
@@ -692,7 +1013,20 @@ export function createApiRouter(client, db, config) {
       }
 
       fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf8');
-      await db.addLogEntry('info', 'La configuración del bot (.env) fue actualizada desde el panel web.', 'system');
+
+      const firestoreUpdates = {};
+      if (newSettings.queues !== undefined) firestoreUpdates.queues = newSettings.queues;
+      if (newSettings.hubRoleId !== undefined) firestoreUpdates.hubRoleId = newSettings.hubRoleId;
+      if (newSettings.discordHubRoleId !== undefined) firestoreUpdates.discordHubRoleId = newSettings.discordHubRoleId;
+      if (newSettings.discordMatchAccessRoleId !== undefined) firestoreUpdates.discordMatchAccessRoleId = newSettings.discordMatchAccessRoleId;
+
+      if (Object.keys(firestoreUpdates).length > 0) {
+        await db.setSettings(firestoreUpdates);
+        db.invalidateSettingsCache();
+        invalidateSettingsCache();
+      }
+
+      await db.addLogEntry('info', 'La configuración del bot (.env y queues) fue actualizada desde el panel web.', 'system');
 
       try {
         const { checkAndDeploySupportPanel } = await import('../events/ready.js');
@@ -720,6 +1054,8 @@ export function createApiRouter(client, db, config) {
         const guildSettings = await db.getGuildSettings(targetGuildId);
         guildSettings[key] = enabled === true;
         await db.setGuildSettings(targetGuildId, guildSettings);
+        db.invalidateSettingsCache();
+        invalidateSettingsCache();
         const statusStr = guildSettings[key] ? 'activado' : 'desactivado';
         await db.addLogEntry(guildSettings[key] ? 'success' : 'warn', `El servicio "${key}" fue ${statusStr} para el servidor ${targetGuildId} desde el panel web.`, 'system', targetGuildId);
         res.json({ success: true, key, enabled: guildSettings[key] });
@@ -731,6 +1067,7 @@ export function createApiRouter(client, db, config) {
         const settings = await getSettings(true);
         settings[key] = enabled === true;
         await db.setSettings(settings);
+        db.invalidateSettingsCache();
         invalidateSettingsCache();
         const statusStr = settings[key] ? 'activado' : 'desactivado';
         await db.addLogEntry(settings[key] ? 'success' : 'warn', `El servicio "${key}" fue ${statusStr} desde el panel web.`, 'system');
@@ -746,12 +1083,81 @@ export function createApiRouter(client, db, config) {
   router.get('/matches/history', requireAuth, async (req, res) => {
     try {
       const limit = parseInt(req.query.limit) || 20;
-      const targetGuildId = (req.user?.role === 'admin') ? req.user.servidor : null;
+      const targetGuildId = resolveTargetGuildId(req);
       const history = await db.getMatchHistory(limit, targetGuildId);
       res.json({ history });
     } catch (err) {
       logger.error('Error en GET /matches/history:', err);
       res.status(500).json({ error: 'Error al obtener el historial de partidas' });
+    }
+  });
+
+  router.delete('/matches/history/:id', requireAuth, async (req, res) => {
+    try {
+      const matchId = req.params.id;
+      const success = await db.deleteMatchFromHistory(matchId);
+      if (success) {
+        await db.addLogEntry('info', `La partida ${matchId} fue eliminada del historial desde el panel.`, 'system');
+        res.json({ success: true, message: 'Partida eliminada del historial con éxito' });
+      } else {
+        res.status(404).json({ error: 'No se encontró la partida en el historial o no pudo eliminarse' });
+      }
+    } catch (err) {
+      logger.error('Error en DELETE /matches/history/:id:', err);
+      res.status(500).json({ error: 'Error al eliminar la partida del historial' });
+    }
+  });
+
+  router.get('/matches/:id/demo', requireAuth, async (req, res) => {
+    try {
+      const matchId = req.params.id;
+      if (matchId.startsWith('mixton_') || matchId.startsWith('manual_')) {
+        const match = await db.getActiveMatch(matchId);
+        return res.json({ demo_url: match?.demo_url || null });
+      }
+
+      if (env.FACEIT_API_KEY) {
+        const fRes = await fetch(`https://open.faceit.com/data/v4/matches/${matchId}`, {
+          headers: {
+            Authorization: `Bearer ${env.FACEIT_API_KEY}`,
+            Accept: 'application/json',
+          },
+        });
+        if (fRes.ok) {
+          const data = await fRes.json();
+          const demoUrl = Array.isArray(data.demo_url) ? data.demo_url[0] : (data.demo_url || null);
+          return res.json({
+            demo_url: demoUrl,
+            faceit_url: data.faceit_url || `https://www.faceit.com/en/cs2/room/${matchId}`
+          });
+        }
+      }
+      res.json({ demo_url: null });
+    } catch (err) {
+      logger.error('Error en GET /matches/:id/demo:', err);
+      res.status(500).json({ error: 'Error al obtener la demo de la partida' });
+    }
+  });
+
+  router.get('/matches/:id/stats', requireAuth, async (req, res) => {
+    try {
+      const matchId = req.params.id;
+      if (!matchId.startsWith('mixton_') && !matchId.startsWith('manual_') && env.FACEIT_API_KEY) {
+        const fRes = await fetch(`https://open.faceit.com/data/v4/matches/${matchId}/stats`, {
+          headers: {
+            Authorization: `Bearer ${env.FACEIT_API_KEY}`,
+            Accept: 'application/json',
+          },
+        });
+        if (fRes.ok) {
+          const statsData = await fRes.json();
+          return res.json({ success: true, stats: statsData });
+        }
+      }
+      res.json({ success: false, stats: null });
+    } catch (err) {
+      logger.error('Error en GET /matches/:id/stats:', err);
+      res.status(500).json({ error: 'Error al obtener estadísticas de la partida' });
     }
   });
 
@@ -780,7 +1186,7 @@ export function createApiRouter(client, db, config) {
   router.get('/logs', requireAuth, async (req, res) => {
     try {
       const limit = parseInt(req.query.limit) || 50;
-      const targetGuildId = (req.user?.role === 'admin') ? req.user.servidor : null;
+      const targetGuildId = resolveTargetGuildId(req);
       const logs = await db.getRecentLogs(limit, targetGuildId);
       res.json({ logs });
     } catch (err) {
@@ -796,10 +1202,10 @@ export function createApiRouter(client, db, config) {
       let channelId;
       if (targetGuildId) {
         const guildConfig = await getEffectiveConfigForGuild(targetGuildId);
-        channelId = guildConfig.discordMatchesChannelId;
+        channelId = guildConfig.discordMixtonChannelId || guildConfig.discordMatchesChannelId;
       } else {
         const settings = await getSettings();
-        channelId = settings.discordMatchesChannelId || process.env.DISCORD_MATCHES_CHANNEL_ID;
+        channelId = settings.discordMixtonChannelId || process.env.DISCORD_MIXTON_CHANNEL_ID || settings.discordMatchesChannelId || process.env.DISCORD_MATCHES_CHANNEL_ID;
       }
       if (channelId) {
         await updateLivePanel(client, channelId, db);
@@ -837,9 +1243,17 @@ export function createApiRouter(client, db, config) {
       return res.status(403).json({ error: 'Solo el administrador global tiene acceso a esta acción.' });
     }
     try {
-      const { message, discordId } = req.body;
+      const { message, discordId, imageUrl } = req.body;
       if (!message || message.trim() === '') {
         return res.status(400).json({ error: 'El mensaje no puede estar vacío.' });
+      }
+
+      // Preparar objeto de envío
+      const sendOptions = { content: message };
+      if (imageUrl && imageUrl.trim() !== '') {
+        sendOptions.embeds = [{
+          image: { url: imageUrl.trim() }
+        }];
       }
 
       // --- Envío individual ---
@@ -849,11 +1263,11 @@ export function createApiRouter(client, db, config) {
           if (!user) {
             return res.status(404).json({ error: 'No se encontró el usuario de Discord.' });
           }
-          await user.send(message);
+          await user.send(sendOptions);
           await db.addLogEntry('info', `Mensaje directo enviado al usuario ${discordId}.`, 'bot');
           return res.json({ success: true, message: `Mensaje enviado correctamente a ${user.username}.` });
         } catch (e) {
-          return res.status(500).json({ error: 'No se pudo enviar el mensaje. El usuario puede tener los DMs desactivados.' });
+          return res.status(500).json({ error: 'No se pudo enviar el mensaje. El usuario puede tener los DMs desactivados o el formato de imagen es incorrecto.' });
         }
       }
 
@@ -874,7 +1288,7 @@ export function createApiRouter(client, db, config) {
           try {
             const user = await client.users.fetch(id).catch(() => null);
             if (user) {
-              await user.send(message);
+              await user.send(sendOptions);
               sentCount++;
             } else {
               failedCount++;
@@ -884,7 +1298,7 @@ export function createApiRouter(client, db, config) {
           }
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
-        await db.addLogEntry('info', `Broadcast finalizado. Enviados: ${sentCount}, Fallidos: ${failedCount}`, 'bot');
+        await db.addLogEntry('info', `Broadcast finalizado con imágenes. Enviados: ${sentCount}, Fallidos: ${failedCount}`, 'bot');
       })();
 
     } catch (err) {
@@ -898,7 +1312,7 @@ export function createApiRouter(client, db, config) {
   // --- Llamadas de soporte ---
   router.get('/support-calls', requireAuth, async (req, res) => {
     try {
-      const targetGuildId = (req.user?.role === 'admin') ? req.user.servidor : null;
+      const targetGuildId = resolveTargetGuildId(req);
       const calls = await db.getSupportCalls(50, targetGuildId);
       res.json({ calls });
     } catch (err) {
@@ -1042,7 +1456,9 @@ export function createApiRouter(client, db, config) {
       
       const success = await db.setGuildSettings(guildId, newSettings);
       if (success) {
-        await db.addLogEntry('info', `Configuración del servidor ${guildId} actualizada desde el panel web.`, 'system');
+        db.invalidateSettingsCache();
+        invalidateSettingsCache();
+        await db.addLogEntry('info', `Configuración del servidor ${guildId} actualizada desde el panel web.`, 'system', guildId);
         res.json({ success: true, settings: newSettings });
       } else {
         res.status(500).json({ error: 'No se pudo guardar la configuración del servidor' });
@@ -1055,3 +1471,4 @@ export function createApiRouter(client, db, config) {
 
   return router;
 }
+

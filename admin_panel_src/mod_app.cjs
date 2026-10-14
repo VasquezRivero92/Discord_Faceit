@@ -60,6 +60,7 @@ const loadDataEffect = `
           const features = [
             { key: 'autoWelcomeDm', name: 'Welcome DM', desc: 'Enviar mensaje de bienvenida', enabled: s.autoWelcomeDm === true },
             { key: 'autoRoleSync', name: 'Role Sync', desc: 'Sincronizar roles', enabled: s.autoRoleSync === true },
+            { key: 'autoNickSync', name: 'Nick Sync', desc: 'Sincronizar apodos al iniciar partida', enabled: s.autoNickSync !== false },
             { key: 'autoVoiceChannels', name: 'Voice Channels', desc: 'Crear canales de voz', enabled: s.autoVoiceChannels === true },
             { key: 'autoMovePlayers', name: 'Auto Move', desc: 'Mover jugadores', enabled: s.autoMovePlayers === true },
             { key: 'matchAnnouncements', name: 'Match Announcements', desc: 'Anunciar partidas', enabled: s.matchAnnouncements === true },

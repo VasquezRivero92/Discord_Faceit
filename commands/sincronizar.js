@@ -1,9 +1,9 @@
-import { SlashCommandBuilder } from 'discord.js';
-import { fetchFaceitPlayerById } from '../services/faceitApi.js';
-import { syncMemberLevelRole, getPlayerSkillLevel } from '../services/roles.js';
+import { SlashCommandBuilder, MessageFlags } from 'discord.js';
+import { fetchFaceitPlayerById, fetchCurrentHubSeason } from '../services/faceitApi.js';
+import { syncMemberLevelRole, getPlayerSkillLevel, syncMemberNickname } from '../services/roles.js';
 import { logger } from '../utils/logger.js';
 import { playerCache } from '../utils/cache.js';
-import { env } from '../config/index.js';
+import { env, getEffectiveConfigForGuild } from '../config/index.js';
 import { isFeatureEnabled } from '../utils/featureFlags.js';
 
 export const data = new SlashCommandBuilder()
@@ -13,10 +13,10 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction, db) {
   const isEnabled = await isFeatureEnabled('command_sincronizar', interaction.guildId);
   if (isEnabled === false) {
-    return interaction.reply({ content: '❌ Este comando está desactivado por el administrador.', ephemeral: true });
+    return interaction.reply({ content: '❌ Este comando está desactivado por el administrador.', flags: MessageFlags.Ephemeral });
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const discordId = interaction.user.id;
 
@@ -43,12 +43,22 @@ export async function execute(interaction, db) {
       return interaction.editReply(`❌ No se pudo encontrar un nivel activo en Faceit para el perfil **${faceitNickname}**.`);
     }
 
-    // 3. Sincronizar roles en Discord
+    // 3. Sincronizar roles y apodo en Discord
     if (interaction.guild) {
       await syncMemberLevelRole(interaction.guild, discordId, skillLevel);
+      await syncMemberNickname(interaction.guild, discordId, player.nickname || faceitNickname);
     }
 
-    // 4. Actualizar cache en memoria
+    // 4. Actualizar base de datos con stats y season actual
+    try {
+      const guildConfig = await getEffectiveConfigForGuild(interaction.guildId);
+      const currentSeason = await fetchCurrentHubSeason(guildConfig.faceitLeaderboardId || guildConfig.faceitHubId).catch(() => null);
+      await db.updatePlayerStats(discordId, skillLevel, elo, interaction.guildId, currentSeason);
+    } catch (dbErr) {
+      logger.error('Error al actualizar stats y season en DB durante sincronización:', dbErr.message);
+    }
+
+    // 5. Actualizar cache en memoria
     playerCache.set(discordId, { faceitId: faceitPlayerId, nickname: faceitNickname, level: skillLevel });
 
     // 5. Enviar respuesta exitosa

@@ -12,15 +12,17 @@ const URL = process.env.BASE_URL
 const MOCK_MATCH_ID = "1-mock-match-id-12345";
 
 // Mock de configuring (Lobby Creado)
-const getMockMatchConfiguring = (clubId) => ({
+const getMockMatchConfiguring = (clubId, queueId = null, matchId = MOCK_MATCH_ID) => ({
   event: "match_status_configuring",
   entity: {
-    id: clubId,
-    type: "clan"
+    id: queueId || clubId,
+    type: "hub"
   },
   payload: {
-    id: MOCK_MATCH_ID,
-    entity_custom_name: "Club de Prueba Latam",
+    id: matchId,
+    competition_id: clubId,
+    queue_id: queueId,
+    entity_custom_name: queueId ? `Club Test (${queueId})` : "Club de Prueba Latam",
     game: "cs2",
     teams: {
       faction1: { name: "Team_Alegria", roster: [] },
@@ -30,15 +32,17 @@ const getMockMatchConfiguring = (clubId) => ({
 });
 
 // Mock de starting (Partida Iniciada)
-const getMockMatchStarting = (clubId) => ({
+const getMockMatchStarting = (clubId, queueId = null, matchId = MOCK_MATCH_ID) => ({
   event: "match_status_starting",
   entity: {
-    id: clubId,
-    type: "clan"
+    id: queueId || clubId,
+    type: "hub"
   },
   payload: {
-    id: MOCK_MATCH_ID,
-    entity_custom_name: "Club de Prueba Latam",
+    id: matchId,
+    competition_id: clubId,
+    queue_id: queueId,
+    entity_custom_name: queueId ? `Club Test (${queueId})` : "Club de Prueba Latam",
     game: "cs2",
     voting: {
       map: {
@@ -68,15 +72,17 @@ const getMockMatchStarting = (clubId) => ({
 });
 
 // Mock de finished (Partida Finalizada)
-const getMockMatchFinished = (clubId) => ({
+const getMockMatchFinished = (clubId, queueId = null, matchId = MOCK_MATCH_ID) => ({
   event: "match_status_finished",
   entity: {
-    id: clubId,
-    type: "clan"
+    id: queueId || clubId,
+    type: "hub"
   },
   payload: {
-    id: MOCK_MATCH_ID,
-    entity_custom_name: "Club de Prueba Latam",
+    id: matchId,
+    competition_id: clubId,
+    queue_id: queueId,
+    entity_custom_name: queueId ? `Club Test (${queueId})` : "Club de Prueba Latam",
     game: "cs2",
     voting: {
       map: {

@@ -29,7 +29,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Check,
-  ShieldAlert
+  ShieldAlert,
+  Download,
+  Eye,
+  ExternalLink,
+  X
 } from 'lucide-react';
 import { LinkedUser, LiveMatch, SystemLog, BotConfig, FeatureFlag, PlayerStats } from './types';
 import {
@@ -86,11 +90,9 @@ export default function App() {
             apiFetch('/api/admin/guilds').then(guildsRes => {
               if (guildsRes.ok) {
                 guildsRes.json().then(guildsData => {
-                  if (guildsData.guilds && guildsData.guilds.length > 0) {
-                    setGuilds(guildsData.guilds);
-                    const userGuildId = userProfile.role === 'admin' ? userProfile.servidor : (localStorage.getItem('admin_selected_guild') || guildsData.guilds[0].id);
-                    setSelectedGuildId(userGuildId || '');
-                  }
+                  setGuilds(guildsData.guilds || []);
+                  const userGuildId = userProfile.role === 'admin' ? userProfile.servidor : (localStorage.getItem('admin_selected_guild') || '');
+                  setSelectedGuildId(userGuildId);
                 });
               }
             });
@@ -117,6 +119,7 @@ export default function App() {
   const [featureFlags, setFeatureFlags] = useState<FeatureFlag[]>([]);
 
   const [config, setConfig] = useState<BotConfig>(initialConfig);
+  const [availableDiscordRoles, setAvailableDiscordRoles] = useState<{ id: string; name: string; color: string }[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [supportCalls, setSupportCalls] = useState<any[]>([]);
   const [messageTemplates, setMessageTemplates] = useState<{
@@ -159,16 +162,17 @@ export default function App() {
 
     try {
       const guildQuery = selectedGuildId ? `?guildId=${selectedGuildId}` : '';
-      const [usersRes, matchesRes, logsRes, settingsRes, leaderboardRes, systemRes, supportRes, messagesRes, historyRes] = await Promise.all([
+      const [usersRes, matchesRes, logsRes, settingsRes, leaderboardRes, systemRes, supportRes, messagesRes, historyRes, rolesRes] = await Promise.all([
         safeFetch(`/api/admin/users${guildQuery}`),
         safeFetch(`/api/admin/matches${guildQuery}`),
         safeFetch(`/api/admin/logs${guildQuery}`),
-        safeFetch(`/api/admin/guilds/${selectedGuildId}/settings`),
+        safeFetch(selectedGuildId ? `/api/admin/guilds/${selectedGuildId}/settings` : '/api/admin/settings'),
         safeFetch(`/api/admin/leaderboard${guildQuery}`),
         safeFetch(`/api/admin/system${guildQuery}`),
         safeFetch(`/api/admin/support-calls${guildQuery}`),
         safeFetch(`/api/admin/messages${guildQuery}`),
-        safeFetch(`/api/admin/matches/history${guildQuery}`)
+        safeFetch(`/api/admin/matches/history${guildQuery}`),
+        safeFetch(`/api/admin/discord/roles${guildQuery}`)
       ]);
 
       if (!usersRes && !matchesRes && !logsRes && !settingsRes && !leaderboardRes && !systemRes) {
@@ -190,13 +194,16 @@ export default function App() {
             }
             
             return {
+              ...u,
               discordId: u.discordId || u.discord_id || '',
               faceitNickname: u.faceitNickname || u.faceit_nickname || '',
               faceitPlayerId: u.faceitPlayerId || u.faceit_id || u.faceit_player_id || '',
               status: u.status || 'Verificado',
               linkedAt: parsedDate,
               roleType: u.roleType || u.role_type,
-              roleValue: u.roleValue || u.role_value
+              roleValue: u.roleValue || u.role_value,
+              faceit_level: u.faceit_level || u.level,
+              faceit_level_season: u.faceit_level_season
             };
           }));
         } catch (err) {
@@ -240,19 +247,25 @@ export default function App() {
           const s = (await settingsRes.json()).settings || {};
           setConfig(s);
           const features = [
-            { key: 'autoWelcomeDm', name: 'Welcome DM', desc: 'Enviar mensaje de bienvenida', enabled: s.autoWelcomeDm === true },
-            { key: 'autoRoleSync', name: 'Role Sync', desc: 'Sincronizar roles', enabled: s.autoRoleSync === true },
-            { key: 'autoVoiceChannels', name: 'Voice Channels', desc: 'Crear canales de voz', enabled: s.autoVoiceChannels === true },
-            { key: 'autoMovePlayers', name: 'Auto Move', desc: 'Mover jugadores', enabled: s.autoMovePlayers === true },
-            { key: 'matchAnnouncements', name: 'Match Announcements', desc: 'Anunciar partidas', enabled: s.matchAnnouncements === true },
-            { key: 'liveMatchPanel', name: 'Live Panel', desc: 'Panel en vivo', enabled: s.liveMatchPanel === true },
-            { key: 'command_verificar', name: 'Cmd /verificar_fc', desc: 'Comando verificar', enabled: s.command_verificar !== false },
-            { key: 'command_desvincular', name: 'Cmd /desvincular_fc', desc: 'Comando desvincular', enabled: s.command_desvincular !== false },
-            { key: 'command_leaderboard', name: 'Cmd /leaderboard', desc: 'Comando leaderboard', enabled: s.command_leaderboard !== false },
-            { key: 'command_stats', name: 'Cmd /stats', desc: 'Comando stats', enabled: s.command_stats !== false },
-            { key: 'command_info', name: 'Cmd /info', desc: 'Comando info', enabled: s.command_info !== false },
-            { key: 'command_sincronizar', name: 'Cmd /sincronizar_fc', desc: 'Comando sincronizar', enabled: s.command_sincronizar !== false },
-            { key: 'command_partidas', name: 'Cmd /partidas', desc: 'Comando partidas', enabled: s.command_partidas !== false }
+            { key: 'autoWelcomeDm', name: 'Welcome DM', desc: 'Enviar mensaje de bienvenida por DM a nuevos miembros', enabled: s.autoWelcomeDm !== false },
+            { key: 'autoRoleSync', name: 'Role Sync', desc: 'Sincronizar roles de nivel y club automáticamente', enabled: s.autoRoleSync !== false },
+            { key: 'autoNickSync', name: 'Nick Sync', desc: 'Sincronizar apodos de Discord al iniciar partida de Faceit', enabled: s.autoNickSync !== false },
+            { key: 'autoVoiceChannels', name: 'Voice Channels', desc: 'Crear canales de voz temporales para partidas', enabled: s.autoVoiceChannels !== false },
+            { key: 'autoMovePlayers', name: 'Auto Move', desc: 'Mover jugadores a sus canales de voz al iniciar partida', enabled: s.autoMovePlayers !== false },
+            { key: 'matchAnnouncements', name: 'Match Announcements', desc: 'Anunciar partidas en Discord', enabled: s.matchAnnouncements !== false },
+            { key: 'serverStatusAnnouncements', name: 'Server Status', desc: 'Anunciar estado de servidores LATAM', enabled: s.serverStatusAnnouncements !== false },
+            { key: 'liveMatchPanel', name: 'Live Panel', desc: 'Panel de partidas en vivo fijado', enabled: s.liveMatchPanel !== false },
+            { key: 'webhookValidation', name: 'Webhook Validation', desc: 'Validar firma de webhooks de Faceit', enabled: s.webhookValidation === true },
+            { key: 'adminCallNotifications', name: 'Admin Call Notifications', desc: 'Notificar alertas cuando un usuario llama a soporte', enabled: s.adminCallNotifications !== false },
+            { key: 'command_verificar', name: 'Cmd /verificar_fc', desc: 'Comando verificar perfil de Faceit', enabled: s.command_verificar !== false },
+            { key: 'command_desvincular', name: 'Cmd /desvincular_fc', desc: 'Comando desvincular perfil de Faceit', enabled: s.command_desvincular !== false },
+            { key: 'command_leaderboard', name: 'Cmd /leaderboard', desc: 'Comando ver tabla de posiciones', enabled: s.command_leaderboard !== false },
+            { key: 'command_stats', name: 'Cmd /stats', desc: 'Comando ver estadísticas de jugador', enabled: s.command_stats !== false },
+            { key: 'command_info', name: 'Cmd /info', desc: 'Comando ver información del bot y servidores', enabled: s.command_info !== false },
+            { key: 'command_sincronizar', name: 'Cmd /sincronizar_fc', desc: 'Comando sincronizar roles manualmente', enabled: s.command_sincronizar !== false },
+            { key: 'command_partidas', name: 'Cmd /partidas', desc: 'Comando ver partidas activas', enabled: s.command_partidas !== false },
+            { key: 'command_mixton_listo', name: 'Cmd /listo', desc: 'Comando marcar listo en mixton', enabled: s.command_mixton_listo !== false },
+            { key: 'command_mixton_no_listo', name: 'Cmd /nolisto', desc: 'Comando marcar no listo en mixton', enabled: s.command_mixton_no_listo !== false }
           ];
           setFeatureFlags(features);
         } catch (err) {
@@ -304,16 +317,23 @@ export default function App() {
           console.error('Error parsing match history:', err);
         }
       }
+
+      if (rolesRes) {
+        try {
+          const rData = await rolesRes.json();
+          setAvailableDiscordRoles(rData.roles || []);
+        } catch (err) {
+          console.error('Error parsing discord roles:', err);
+        }
+      }
     } catch (err) {
       console.error('Error loading data:', err);
     }
   };
 
   useEffect(() => {
-    if (!isLoggedIn || !selectedGuildId) return;
+    if (!isLoggedIn) return;
     loadData();
-    const interval = setInterval(loadData, 30000);
-    return () => clearInterval(interval);
   }, [isLoggedIn, selectedGuildId]);
 
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -336,6 +356,10 @@ export default function App() {
   const [usersFilter, setUsersFilter] = useState<string>('all');
   const [logsFilter, setLogsFilter] = useState<string>('all');
   const [statsSearch, setStatsSearch] = useState<string>('');
+  const [featuresSearch, setFeaturesSearch] = useState<string>('');
+  const [featuresCategory, setFeaturesCategory] = useState<'all' | 'modules' | 'commands'>('all');
+  const [togglingFeatureKey, setTogglingFeatureKey] = useState<string | null>(null);
+  const [refreshingFeatures, setRefreshingFeatures] = useState<boolean>(false);
   
   // Pagination & Simulation States
   const [usersPage, setUsersPage] = useState<number>(1);
@@ -350,6 +374,7 @@ export default function App() {
   const [simulatingWebhook, setSimulatingWebhook] = useState<boolean>(false);
   const [matchHistory, setMatchHistory] = useState<any[]>([]);
   const [broadcastMessage, setBroadcastMessage] = useState<string>('');
+  const [broadcastImageUrl, setBroadcastImageUrl] = useState<string>('');
   const [broadcastTarget, setBroadcastTarget] = useState<{ discordId: string; faceitNickname: string } | null>(null);
   const [broadcastTargetSearch, setBroadcastTargetSearch] = useState<string>('');
   const [broadcastStatus, setBroadcastStatus] = useState<{ status: 'idle' | 'sending' | 'success' | 'error'; msg: string }>({ status: 'idle', msg: '' });
@@ -374,12 +399,19 @@ export default function App() {
   const [assignRoleType, setAssignRoleType] = useState<'level' | 'special'>('level');
   const [assignRoleValue, setAssignRoleValue] = useState<string>('');
 
+  // Match History Action States
+  const [selectedMatchStatsModal, setSelectedMatchStatsModal] = useState<any | null>(null);
+  const [matchStatsDetails, setMatchStatsDetails] = useState<any | null>(null);
+  const [loadingMatchStats, setLoadingMatchStats] = useState<boolean>(false);
+  const [downloadingDemoId, setDownloadingDemoId] = useState<string | null>(null);
+  const [matchToDelete, setMatchToDelete] = useState<any | null>(null);
+  const [deletingMatchId, setDeletingMatchId] = useState<string | null>(null);
+
   // Reset users table pagination to page 1 when search or filters change
   useEffect(() => {
     setUsersPage(1);
   }, [usersSearch, usersFilter]);
 
-  // Poll logs more frequently (every 4 seconds) when activeTab is 'logs'
   useEffect(() => {
     if (!isLoggedIn || activeTab !== 'logs') return;
     const fetchLogs = async () => {
@@ -394,8 +426,6 @@ export default function App() {
       }
     };
     fetchLogs();
-    const interval = setInterval(fetchLogs, 4000);
-    return () => clearInterval(interval);
   }, [isLoggedIn, activeTab, selectedGuildId]);
 
 
@@ -411,10 +441,12 @@ export default function App() {
 
 
   // Trigger Sincronizar Data Real
+  const [syncingNicks, setSyncingNicks] = useState(false);
+
   const handleSyncData = async () => {
     if (syncing) return;
     setSyncing(true);
-    showToast('Sincronizando todos los usuarios con Faceit y actualizando roles...', 'info');
+    showToast('Sincronizando todos los usuarios con Faceit (roles y apodos)...', 'info');
     try {
       const guildQuery = selectedGuildId ? `?guildId=${selectedGuildId}` : '';
       const res = await apiFetch(`/api/admin/users/sync-all${guildQuery}`, {
@@ -431,6 +463,46 @@ export default function App() {
       showToast('Error de red al sincronizar.', 'error');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleSyncAllNicks = async () => {
+    if (syncingNicks) return;
+    setSyncingNicks(true);
+    showToast('Sincronizando apodos de Discord para todos los usuarios...', 'info');
+    try {
+      const guildQuery = selectedGuildId ? `?guildId=${selectedGuildId}` : '';
+      const res = await apiFetch(`/api/admin/users/sync-nicks${guildQuery}`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message || 'Sincronización de apodos iniciada correctamente.', 'success');
+      } else {
+        showToast(data.error || 'Error al sincronizar apodos.', 'error');
+      }
+    } catch (err) {
+      showToast('Error de red al sincronizar apodos.', 'error');
+    } finally {
+      setSyncingNicks(false);
+    }
+  };
+
+  const handleSyncUserNick = async (discordId: string, nickname: string) => {
+    showToast(`Sincronizando apodo de ${nickname}...`, 'info');
+    try {
+      const guildQuery = selectedGuildId ? `?guildId=${selectedGuildId}` : '';
+      const res = await apiFetch(`/api/admin/users/${discordId}/sync-nick${guildQuery}`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message || 'Apodo sincronizado con éxito.', 'success');
+      } else {
+        showToast(data.error || 'No se pudo actualizar el apodo.', 'error');
+      }
+    } catch (err) {
+      showToast('Error de red al sincronizar apodo.', 'error');
     }
   };
 
@@ -621,6 +693,23 @@ export default function App() {
     }
   };
 
+  const handleAnnounceMixtonMatch = async (matchId: string) => {
+    try {
+      const res = await apiFetch(`/api/admin/matches/${matchId}/announce-mixton`, {
+        method: 'POST'
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        showToast(data.isActive ? 'Anuncio enviado con botones de resultado.' : 'Resumen de historial enviado.', 'success');
+        await loadData();
+      } else {
+        showToast(data.error || 'No se pudo enviar el anuncio.', 'error');
+      }
+    } catch {
+      showToast('Error de red al enviar anuncio.', 'error');
+    }
+  };
+
   // Cleanup active live match
   const handleCleanupMatch = async (matchId: string) => {
     if (window.confirm(`¿Seguro que deseas forzar la limpieza de la partida ${matchId}?`)) {
@@ -641,33 +730,202 @@ export default function App() {
     }
   };
 
+  // Handlers para acciones del Historial de Partidas
+  const handleDownloadMatchDemo = async (m: any) => {
+    if (m.demo_url) {
+      window.open(m.demo_url, '_blank');
+      return;
+    }
+    setDownloadingDemoId(m.id);
+    showToast('Obteniendo enlace de descarga de la partida...', 'info');
+    try {
+      const res = await apiFetch(`/api/admin/matches/${m.id}/demo`);
+      const data = await res.json();
+      if (res.ok && data.demo_url) {
+        window.open(data.demo_url, '_blank');
+        showToast('Iniciando descarga de la demo.', 'success');
+      } else if (data.faceit_url) {
+        showToast('Demo en proceso o no lista. Abriendo sala en Faceit.', 'info');
+        window.open(data.faceit_url, '_blank');
+      } else {
+        showToast('Esta partida no cuenta con archivo de demo disponible.', 'info');
+      }
+    } catch (err) {
+      showToast('Error de red al intentar descargar la demo.', 'error');
+    } finally {
+      setDownloadingDemoId(null);
+    }
+  };
+
+  const handleViewMatchStats = async (m: any) => {
+    setSelectedMatchStatsModal(m);
+    setMatchStatsDetails(null);
+    setLoadingMatchStats(true);
+
+    if (!m.id.startsWith('mixton_') && !m.id.startsWith('manual_')) {
+      try {
+        const res = await apiFetch(`/api/admin/matches/${m.id}/stats`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.stats) {
+            setMatchStatsDetails(data.stats);
+          }
+        }
+      } catch (err) {
+        console.error('Error al obtener estadísticas detalladas:', err);
+      }
+    }
+    setLoadingMatchStats(false);
+  };
+
+  const handleDeleteMatchHistory = async () => {
+    if (!matchToDelete) return;
+    const matchId = matchToDelete.id;
+    setDeletingMatchId(matchId);
+    try {
+      const res = await apiFetch(`/api/admin/matches/history/${matchId}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMatchHistory(prev => prev.filter(m => m.id !== matchId));
+        showToast(`Partida ${matchId} eliminada del historial con éxito.`, 'success');
+        setMatchToDelete(null);
+      } else {
+        showToast(data.error || 'Error al eliminar partida del historial.', 'error');
+      }
+    } catch (err) {
+      showToast('Error de red al eliminar partida del historial.', 'error');
+    } finally {
+      setDeletingMatchId(null);
+    }
+  };
+
+  // Filtered Feature Flags
+  const filteredFeatureFlags = useMemo(() => {
+    return featureFlags.filter(flag => {
+      if (featuresCategory === 'modules' && flag.key.startsWith('command_')) return false;
+      if (featuresCategory === 'commands' && !flag.key.startsWith('command_')) return false;
+      if (featuresSearch.trim()) {
+        const query = featuresSearch.toLowerCase();
+        return flag.name.toLowerCase().includes(query) ||
+               flag.desc.toLowerCase().includes(query) ||
+               flag.key.toLowerCase().includes(query);
+      }
+      return true;
+    });
+  }, [featureFlags, featuresCategory, featuresSearch]);
+
   // Update Feature Toggle States
   const handleToggleFeature = async (key: string) => {
+    if (togglingFeatureKey) return;
     const flag = featureFlags.find(f => f.key === key);
     if (!flag) return;
     const nextState = !flag.enabled;
+    setTogglingFeatureKey(key);
     try {
       const guildQuery = selectedGuildId ? `?guildId=${selectedGuildId}` : '';
       const res = await apiFetch(`/api/admin/features/${key}${guildQuery}`, {
         method: 'POST',
         body: JSON.stringify({ enabled: nextState }),
       });
-      if (res.ok) {
-        setFeatureFlags(prev => prev.map(f => f.key === key ? { ...f, enabled: nextState } : f));
-        showToast(`Servicio "${flag.name}" ${nextState ? 'activado' : 'desactivado'}.`, 'success');
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        const resolvedState = data.enabled !== undefined ? data.enabled : nextState;
+        setFeatureFlags(prev => prev.map(f => f.key === key ? { ...f, enabled: resolvedState } : f));
+        setConfig(prev => ({ ...prev, [key]: resolvedState }));
+        showToast(`Servicio "${flag.name}" ${resolvedState ? 'activado' : 'desactivado'}.`, 'success');
       } else {
-        showToast('Error al cambiar el servicio.', 'error');
+        showToast(data.error || 'Error al cambiar el servicio.', 'error');
       }
     } catch {
-      showToast('Error de conexión.', 'error');
+      showToast('Error de conexión al cambiar el servicio.', 'error');
+    } finally {
+      setTogglingFeatureKey(null);
     }
+  };
+
+  // Re-sincronizar y verificar estado de servicios en vivo desde la base de datos
+  const handleRefreshFeatures = async () => {
+    if (refreshingFeatures) return;
+    setRefreshingFeatures(true);
+    try {
+      const url = selectedGuildId ? `/api/admin/guilds/${selectedGuildId}/settings` : '/api/admin/settings';
+      const res = await apiFetch(url);
+      if (res.ok) {
+        const s = (await res.json()).settings || {};
+        setConfig(s);
+        const features = [
+          { key: 'autoWelcomeDm', name: 'Welcome DM', desc: 'Enviar mensaje de bienvenida por DM a nuevos miembros', enabled: s.autoWelcomeDm !== false },
+          { key: 'autoRoleSync', name: 'Role Sync', desc: 'Sincronizar roles de nivel y club automáticamente', enabled: s.autoRoleSync !== false },
+          { key: 'autoNickSync', name: 'Nick Sync', desc: 'Sincronizar apodos de Discord al iniciar partida de Faceit', enabled: s.autoNickSync !== false },
+          { key: 'autoVoiceChannels', name: 'Voice Channels', desc: 'Crear canales de voz temporales para partidas', enabled: s.autoVoiceChannels !== false },
+          { key: 'autoMovePlayers', name: 'Auto Move', desc: 'Mover jugadores a sus canales de voz al iniciar partida', enabled: s.autoMovePlayers !== false },
+          { key: 'matchAnnouncements', name: 'Match Announcements', desc: 'Anunciar partidas en Discord', enabled: s.matchAnnouncements !== false },
+          { key: 'serverStatusAnnouncements', name: 'Server Status', desc: 'Anunciar estado de servidores LATAM', enabled: s.serverStatusAnnouncements !== false },
+          { key: 'liveMatchPanel', name: 'Live Panel', desc: 'Panel de partidas en vivo fijado', enabled: s.liveMatchPanel !== false },
+          { key: 'webhookValidation', name: 'Webhook Validation', desc: 'Validar firma de webhooks de Faceit', enabled: s.webhookValidation === true },
+          { key: 'adminCallNotifications', name: 'Admin Call Notifications', desc: 'Notificar alertas cuando un usuario llama a soporte', enabled: s.adminCallNotifications !== false },
+          { key: 'command_verificar', name: 'Cmd /verificar_fc', desc: 'Comando verificar perfil de Faceit', enabled: s.command_verificar !== false },
+          { key: 'command_desvincular', name: 'Cmd /desvincular_fc', desc: 'Comando desvincular perfil de Faceit', enabled: s.command_desvincular !== false },
+          { key: 'command_leaderboard', name: 'Cmd /leaderboard', desc: 'Comando ver tabla de posiciones', enabled: s.command_leaderboard !== false },
+          { key: 'command_stats', name: 'Cmd /stats', desc: 'Comando ver estadísticas de jugador', enabled: s.command_stats !== false },
+          { key: 'command_info', name: 'Cmd /info', desc: 'Comando ver información del bot y servidores', enabled: s.command_info !== false },
+          { key: 'command_sincronizar', name: 'Cmd /sincronizar_fc', desc: 'Comando sincronizar roles manualmente', enabled: s.command_sincronizar !== false },
+          { key: 'command_partidas', name: 'Cmd /partidas', desc: 'Comando ver partidas activas', enabled: s.command_partidas !== false },
+          { key: 'command_mixton_listo', name: 'Cmd /listo', desc: 'Comando marcar listo en mixton', enabled: s.command_mixton_listo !== false },
+          { key: 'command_mixton_no_listo', name: 'Cmd /nolisto', desc: 'Comando marcar no listo en mixton', enabled: s.command_mixton_no_listo !== false }
+        ];
+        setFeatureFlags(features);
+        showToast('Servicios sincronizados correctamente con la base de datos.', 'success');
+      } else {
+        showToast('Error al consultar configuración de servicios en la base de datos.', 'error');
+      }
+    } catch {
+      showToast('Error de conexión al sincronizar servicios.', 'error');
+    } finally {
+      setRefreshingFeatures(false);
+    }
+  };
+
+  // Handlers para Multi-Cola Faceit
+  const handleAddQueue = () => {
+    const currentQueues = config.queues || [];
+    const newQueue = {
+      id: `queue-${Date.now()}`,
+      queueId: '',
+      name: `Cola ${currentQueues.length + 1}`,
+      discordMatchesChannelId: '',
+      discordWaitingRoomChannelId: '',
+      discordMixtonChannelId: '',
+      discordMatchAccessRoleId: '',
+      hubRoleId: '',
+      discordHubRoleId: '',
+    };
+    setConfig({ ...config, queues: [...currentQueues, newQueue] });
+  };
+
+  const handleUpdateQueue = (index: number, field: string, value: string) => {
+    const currentQueues = [...(config.queues || [])];
+    if (currentQueues[index]) {
+      currentQueues[index] = { ...currentQueues[index], [field]: value };
+      if (field === 'queueId' && !currentQueues[index].id) {
+        currentQueues[index].id = value;
+      }
+      setConfig({ ...config, queues: currentQueues });
+    }
+  };
+
+  const handleRemoveQueue = (index: number) => {
+    const currentQueues = (config.queues || []).filter((_, i) => i !== index);
+    setConfig({ ...config, queues: currentQueues });
   };
 
   // Handle Save Configuration
   const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const url = `/api/admin/guilds/${selectedGuildId}/settings`;
+      const url = selectedGuildId ? `/api/admin/guilds/${selectedGuildId}/settings` : '/api/admin/settings';
       const res = await apiFetch(url, {
         method: 'POST',
         body: JSON.stringify(config),
@@ -825,7 +1083,10 @@ export default function App() {
 
     setBroadcastStatus({ status: 'sending', msg: isMass ? 'Iniciando envío masivo en background...' : `Enviando a ${broadcastTarget!.faceitNickname}...` });
     try {
-      const body: any = { message: broadcastMessage };
+      const body: any = { 
+        message: broadcastMessage,
+        imageUrl: broadcastImageUrl.trim()
+      };
       if (broadcastTarget) body.discordId = broadcastTarget.discordId;
 
       const res = await apiFetch('/api/admin/broadcast', {
@@ -836,6 +1097,7 @@ export default function App() {
       if (res.ok) {
         setBroadcastStatus({ status: 'success', msg: data.message || 'Enviado correctamente.' });
         setBroadcastMessage('');
+        setBroadcastImageUrl('');
         if (!isMass) setBroadcastTarget(null);
         showToast(isMass ? 'Mensajes masivos iniciados' : `Mensaje enviado a ${broadcastTarget!.faceitNickname}`, 'success');
         setTimeout(() => setBroadcastStatus({ status: 'idle', msg: '' }), 5000);
@@ -1013,20 +1275,19 @@ export default function App() {
 
                 {/* Guild Selector / Status Label */}
                 {currentUser?.role === 'global_admin' ? (
-                  guilds.length > 0 && (
-                    <select
-                      value={selectedGuildId}
-                      onChange={(e) => {
-                        setSelectedGuildId(e.target.value);
-                        localStorage.setItem('admin_selected_guild', e.target.value);
-                      }}
-                      className="bg-[#0A0A0A] text-xs font-mono font-bold text-white border border-white/20 rounded-none px-3 py-1.5 outline-none cursor-pointer hover:border-white focus:border-white transition-colors uppercase"
-                    >
-                      {guilds.map(g => (
-                        <option key={g.id} value={g.id}>{g.name}</option>
-                      ))}
-                    </select>
-                  )
+                   <select
+                     value={selectedGuildId}
+                     onChange={(e) => {
+                       setSelectedGuildId(e.target.value);
+                       localStorage.setItem('admin_selected_guild', e.target.value);
+                     }}
+                     className="bg-[#0A0A0A] text-xs font-mono font-bold text-white border border-white/20 rounded-none px-3 py-1.5 outline-none cursor-pointer hover:border-white focus:border-white transition-colors uppercase"
+                   >
+                     <option value="">⚙️ CONFIGURACIÓN GLOBAL</option>
+                     {guilds.map(g => (
+                       <option key={g.id} value={g.id}>🛡️ {g.name}</option>
+                     ))}
+                   </select>
                 ) : (
                   selectedGuildId && guilds.length > 0 && (
                     <span className="text-xs font-mono font-bold text-neutral-400 uppercase">
@@ -1250,6 +1511,17 @@ export default function App() {
                         <span>Añadir Verificación Manual</span>
                       </button>
 
+                      {/* Sync All Nicknames Button */}
+                      <button
+                        onClick={handleSyncAllNicks}
+                        disabled={syncingNicks}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-[#FF5500] text-white hover:bg-[#ff661a] text-xs font-black uppercase tracking-tighter rounded-none cursor-pointer"
+                        title="Sincronizar apodos de Discord con Faceit para todos los usuarios"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${syncingNicks ? 'animate-spin' : ''}`} />
+                        <span>Sincronizar Apodos</span>
+                      </button>
+
                       {/* Export Backup Button */}
                       <button
                         onClick={handleExportBackup}
@@ -1314,7 +1586,21 @@ export default function App() {
                             paginatedUsers.map(user => (
                               <tr key={user.discordId} className="hover:bg-white/[0.02] border-b border-white/5 transition-colors group">
                                 <td className="py-4 px-6 font-mono text-xs font-black text-white">{user.discordId}</td>
-                                <td className="py-4 px-6 font-black text-white uppercase tracking-tight">{user.faceitNickname}</td>
+                                <td className="py-4 px-6 font-black text-white uppercase tracking-tight">
+                                  <div className="flex items-center gap-2">
+                                    <span>{user.faceitNickname}</span>
+                                    {user.faceit_level && (
+                                      <span className="text-[10px] font-mono px-1.5 py-0.5 bg-neutral-800 text-neutral-300 border border-white/10" title={`Nivel ${user.faceit_level}`}>
+                                        LVL {user.faceit_level}
+                                      </span>
+                                    )}
+                                    {user.faceit_level_season && (
+                                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" title={`Actualizado en Season ${user.faceit_level_season}`}>
+                                        S{user.faceit_level_season}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="py-4 px-6 font-mono text-neutral-400">{user.faceitPlayerId}</td>
                                 <td className="py-4 px-6">
                                   <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-none font-mono text-[9px] font-black uppercase border ${
@@ -1364,6 +1650,14 @@ export default function App() {
                                       className="px-3 py-1.5 text-[9px] font-mono font-black uppercase tracking-wider bg-[#FF5500]/20 text-[#FF5500] hover:bg-[#FF5500] hover:text-white rounded-none border border-[#FF5500]/30 transition-colors cursor-pointer"
                                     >
                                       Estadísticas
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleSyncUserNick(user.discordId, user.faceitNickname)}
+                                      className="px-3 py-1.5 text-[9px] font-mono font-black uppercase tracking-wider bg-emerald-950/20 text-emerald-400 hover:bg-emerald-600 hover:text-white rounded-none border border-emerald-500/20 transition-colors cursor-pointer"
+                                      title="Sincronizar apodo de este usuario en Discord"
+                                    >
+                                      Sync Nick
                                     </button>
 
                                     {(currentUser?.role === 'global_admin' || currentUser?.role === 'admin') && (
@@ -1550,6 +1844,15 @@ export default function App() {
                                       >
                                         Ver Room <ArrowUpRight className="w-3 h-3" />
                                       </a>
+                                      {(m.id.startsWith('mixton_') || m.id.startsWith('manual_')) && (
+                                        <button
+                                          onClick={() => handleAnnounceMixtonMatch(m.id)}
+                                          className="px-3 py-1.5 rounded-none font-mono text-[9px] font-black uppercase transition-colors cursor-pointer whitespace-nowrap border border-[#FF5500]/30 bg-[#FF5500]/20 text-[#FF5500] hover:bg-[#FF5500] hover:text-white flex items-center gap-1"
+                                          title="Enviar anuncio de mixton iniciado con botones de resultado"
+                                        >
+                                          Enviar Anuncio
+                                        </button>
+                                      )}
                                       <button
                                         onClick={() => handleCleanupMatch(m.id)}
                                         className={`px-3 py-1.5 rounded-none font-mono text-[9px] font-black uppercase transition-colors cursor-pointer whitespace-nowrap border ${
@@ -1578,8 +1881,8 @@ export default function App() {
                 <div className="space-y-6 animate-fade-in">
                   <div className="bg-[#111] border-2 border-white/10 p-8 flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-none">
                     <div>
-                      <h3 className="text-xl font-black text-white uppercase tracking-tighter italic mb-1">HISTORIAL DE PARTIDAS FINALIZADAS</h3>
-                      <p className="text-xs text-neutral-400 uppercase tracking-tight font-mono">Registro histórico de partidas completadas en el club.</p>
+                      <h3 className="text-xl font-black text-white uppercase tracking-tighter italic mb-1">HISTORIAL DE PARTIDAS</h3>
+                      <p className="text-xs text-neutral-400 uppercase tracking-tight font-mono">Registro histórico de partidas en el club (en configuración, en juego, finalizadas y canceladas).</p>
                     </div>
                   </div>
 
@@ -1590,15 +1893,17 @@ export default function App() {
                           <tr className="bg-neutral-900 border-b border-white/10 text-neutral-400 font-bold">
                             <th className="py-4 px-6 text-[10px] font-black uppercase tracking-widest w-40">FECHA/HORA</th>
                             <th className="py-4 px-6 text-[10px] font-black uppercase tracking-widest w-44">ID PARTIDA</th>
+                            <th className="py-4 px-6 text-[10px] font-black uppercase tracking-widest w-32">ESTADO</th>
                             <th className="py-4 px-6 text-[10px] font-black uppercase tracking-widest">ENFRENTAMIENTO Y MARCADOR</th>
                             <th className="py-4 px-6 text-[10px] font-black uppercase tracking-widest w-32">MAPA</th>
                             <th className="py-4 px-6 text-[10px] font-black uppercase tracking-widest w-36">SERVIDOR</th>
+                            <th className="py-4 px-6 text-[10px] font-black uppercase tracking-widest w-40 text-right">ACCIÓN</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5 text-white/90 font-mono">
                           {matchHistory.length === 0 ? (
                             <tr>
-                              <td colSpan={5} className="py-8 text-center text-neutral-500 uppercase tracking-widest text-[10px] font-bold">
+                              <td colSpan={7} className="py-8 text-center text-neutral-500 uppercase tracking-widest text-[10px] font-bold">
                                 No hay partidas registradas en el historial.
                               </td>
                             </tr>
@@ -1613,6 +1918,24 @@ export default function App() {
                               
                               const isWinnerA = m.winner === 'faction1';
                               const isWinnerB = m.winner === 'faction2';
+                              const statusLower = (m.status || '').toLowerCase();
+
+                              let statusBadge = (
+                                <span className="px-2 py-0.5 text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded font-mono font-bold">FINALIZADA</span>
+                              );
+                              if (statusLower === 'configuring') {
+                                statusBadge = (
+                                  <span className="px-2 py-0.5 text-[9px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded font-mono font-bold">CONFIGURANDO</span>
+                                );
+                              } else if (statusLower === 'started' || statusLower === 'starting') {
+                                statusBadge = (
+                                  <span className="px-2 py-0.5 text-[9px] bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded font-mono font-bold animate-pulse">EN JUEGO</span>
+                                );
+                              } else if (statusLower === 'cancelled' || m.winner === 'CANCELLED') {
+                                statusBadge = (
+                                  <span className="px-2 py-0.5 text-[9px] bg-red-500/20 text-red-400 border border-red-500/30 rounded font-mono font-bold">CANCELADA</span>
+                                );
+                              }
 
                               return (
                                 <tr key={m.id} className="hover:bg-white/5 transition-colors">
@@ -1626,6 +1949,7 @@ export default function App() {
                                       </a>
                                     )}
                                   </td>
+                                  <td className="py-4 px-6 whitespace-nowrap">{statusBadge}</td>
                                   <td className="py-4 px-6">
                                     <div className="flex items-center gap-1">
                                       <span className={isWinnerA ? 'text-green-400 font-bold' : ''}>{m.faction1_name}</span>
@@ -1647,6 +1971,52 @@ export default function App() {
                                   </td>
                                   <td className="py-4 px-6 uppercase">{m.map}</td>
                                   <td className="py-4 px-6 uppercase text-neutral-400">{m.location}</td>
+                                  <td className="py-4 px-6 text-right whitespace-nowrap">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      {/* 1. Descargar partida / demo */}
+                                      <button
+                                        onClick={() => handleDownloadMatchDemo(m)}
+                                        disabled={downloadingDemoId === m.id}
+                                        className="p-1.5 rounded-none border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-bold"
+                                        title="Descargar Demo / Partida"
+                                      >
+                                        <Download className={`w-3.5 h-3.5 ${downloadingDemoId === m.id ? 'animate-bounce' : ''}`} />
+                                        <span className="hidden xl:inline">Demo</span>
+                                      </button>
+
+                                      {/* 2. Ver estadísticas de la partida */}
+                                      <button
+                                        onClick={() => handleViewMatchStats(m)}
+                                        className="p-1.5 rounded-none border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-bold"
+                                        title="Ver estadísticas de la partida"
+                                      >
+                                        <BarChart3 className="w-3.5 h-3.5" />
+                                        <span className="hidden xl:inline">Stats</span>
+                                      </button>
+
+                                      {/* 3. Reenviar Resumen (si es mixton) */}
+                                      {(m.id.startsWith('mixton_') || m.id.startsWith('manual_')) && (
+                                        <button
+                                          onClick={() => handleAnnounceMixtonMatch(m.id)}
+                                          className="p-1.5 rounded-none border border-white/10 bg-[#1C1C1C] text-neutral-300 hover:bg-white hover:text-black transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-bold"
+                                          title="Reenviar resumen al canal de Discord"
+                                        >
+                                          <RefreshCw className="w-3.5 h-3.5" />
+                                          <span className="hidden xl:inline">Resumen</span>
+                                        </button>
+                                      )}
+
+                                      {/* 4. Eliminar la partida del historial */}
+                                      <button
+                                        onClick={() => setMatchToDelete(m)}
+                                        className="p-1.5 rounded-none border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-bold"
+                                        title="Eliminar partida del historial"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        <span className="hidden xl:inline">Eliminar</span>
+                                      </button>
+                                    </div>
+                                  </td>
                                 </tr>
                               );
                             })
@@ -1706,6 +2076,11 @@ export default function App() {
       <div className="flex items-center gap-2">
         <span className={`w-2 h-2 rounded-full ${u.faceit_level >= 10 ? 'bg-red-500' : u.faceit_level >= 8 ? 'bg-yellow-500' : 'bg-neutral-500'}`}></span>
         <span className="text-white">LVL {u.faceit_level}</span>
+        {u.faceit_level_season && (
+          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" title={`Actualizado en Season ${u.faceit_level_season}`}>
+            S{u.faceit_level_season}
+          </span>
+        )}
       </div>
     </td>
     <td className="py-4 px-6 font-bold text-white">{u.faceit_elo}</td>
@@ -1873,6 +2248,13 @@ export default function App() {
                   </div>
 
                   <form onSubmit={handleSaveConfig} className="space-y-8">
+                    <datalist id="available-discord-roles-list">
+                      {availableDiscordRoles.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          @{r.name} ({r.id})
+                        </option>
+                      ))}
+                    </datalist>
                     
                     {/* Canales de Discord */}
                     <div className="bg-[#111] border-2 border-[#5865F2]/20 p-8 shadow-[8px_8px_0px_rgba(88,101,242,0.15)] rounded-none relative">
@@ -1887,8 +2269,12 @@ export default function App() {
                           <input type="text" value={config.discordLinkChannelId} onChange={(e) => setConfig({ ...config, discordLinkChannelId: e.target.value })} className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-[#5865F2]/50 transition-colors" />
                         </div>
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#5865F2]/80">ID Canal de Partidas</label>
+                          <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#5865F2]/80">ID Canal Anuncios de Partidas (No Limpia Historial)</label>
                           <input type="text" value={config.discordMatchesChannelId} onChange={(e) => setConfig({ ...config, discordMatchesChannelId: e.target.value })} className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-[#5865F2]/50 transition-colors" />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#5865F2]/80">ID Canal Botón Mixton / Panel (Limpia Historial)</label>
+                          <input type="text" value={config.discordMixtonChannelId || ''} onChange={(e) => setConfig({ ...config, discordMixtonChannelId: e.target.value })} className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-[#5865F2]/50 transition-colors" />
                         </div>
                         <div className="flex flex-col gap-1.5">
                           <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#5865F2]/80">ID Canal Sincronización de Roles</label>
@@ -1906,9 +2292,40 @@ export default function App() {
                           <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#5865F2]/80">ID Canal de Alertas de Admin</label>
                           <input type="text" value={config.discordAdminAlertsChannelId || ''} onChange={(e) => setConfig({ ...config, discordAdminAlertsChannelId: e.target.value })} className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-[#5865F2]/50 transition-colors" />
                         </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#5865F2]/80">ID Canal Alertas de Sanciones (Baneos)</label>
+                          <input type="text" value={config.discordSanctionsChannelId || ''} onChange={(e) => setConfig({ ...config, discordSanctionsChannelId: e.target.value })} className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-[#5865F2]/50 transition-colors" />
+                        </div>
                         <div className="flex flex-col gap-1.5 md:col-span-2">
                           <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#5865F2]/80">ID Canal de Soporte Público (Autodespliegue)</label>
                           <input type="text" value={config.discordSupportChannelId || ''} onChange={(e) => setConfig({ ...config, discordSupportChannelId: e.target.value })} className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-[#5865F2]/50 transition-colors" />
+                        </div>
+                        <div className="flex flex-col gap-1.5 md:col-span-2">
+                          <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#5865F2]/80">ID Canal de Música (/cs2_play)</label>
+                          <input type="text" value={config.discordMusicChannelId || ''} onChange={(e) => setConfig({ ...config, discordMusicChannelId: e.target.value })} className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-[#5865F2]/50 transition-colors" />
+                        </div>
+                        <div className="flex flex-col gap-1.5 md:col-span-2">
+                          <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#5865F2]/80">ID Rol Acceso a Salas de Partida (Espectador / Staff)</label>
+                          <input type="text" value={config.discordMatchAccessRoleId || ''} onChange={(e) => setConfig({ ...config, discordMatchAccessRoleId: e.target.value })} className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-[#5865F2]/50 transition-colors" placeholder="Ej: 123456789012345678" />
+                        </div>
+                        <div className="flex flex-col gap-1.5 md:col-span-2">
+                          <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#5865F2] flex items-center justify-between">
+                            <span>ID Rol de Discord para Season (1ra Partida General - Fallback)</span>
+                            <span className="text-[9px] text-emerald-400 font-bold normal-case">Rol en tu Servidor de Discord</span>
+                          </label>
+                          <input
+                            type="text"
+                            list="available-discord-roles-list"
+                            value={config.discordHubRoleId || ''}
+                            onChange={(e) => setConfig({ ...config, discordHubRoleId: e.target.value })}
+                            className="bg-[#0A0A0A] border-2 border-[#5865F2]/40 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-[#5865F2] transition-colors"
+                            placeholder="Pega el ID del rol de Discord o escribe para buscar"
+                          />
+                          <span className="text-[10px] font-mono text-neutral-400">
+                            {availableDiscordRoles.find(r => r.id === config.discordHubRoleId)
+                              ? `✓ Rol detectado: @${availableDiscordRoles.find(r => r.id === config.discordHubRoleId)?.name}`
+                              : 'ID del rol de Discord que se otorga al jugar su primera partida de la season en cualquier cola (si la cola no tiene rol específico).'}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1925,7 +2342,166 @@ export default function App() {
                           <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#FF5500]/80">ID Cola / Leaderboard</label>
                           <input type="text" value={config.faceitLeaderboardId || ''} onChange={(e) => setConfig({ ...config, faceitLeaderboardId: e.target.value })} className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-[#FF5500]/50 transition-colors" />
                         </div>
+                        <div className="flex flex-col gap-1.5 md:col-span-2">
+                          <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#FF5500]/80">ID Rol del Hub Faceit (Default / Fallback)</label>
+                          <input type="text" value={config.hubRoleId || ''} onChange={(e) => setConfig({ ...config, hubRoleId: e.target.value })} className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-[#FF5500]/50 transition-colors" placeholder="ID o nombre del rol en el Hub de Faceit" />
+                        </div>
                       </div>
+                    </div>
+
+                    {/* Multi-Colas del Hub */}
+                    <div className="bg-[#111] border-2 border-emerald-500/30 p-8 shadow-[8px_8px_0px_rgba(16,185,129,0.15)] rounded-none relative space-y-6">
+                      <div className="absolute -top-3 -left-3 bg-emerald-500 text-black text-[10px] font-black px-3 py-1 uppercase tracking-widest border border-white/10">
+                        Multi-Cola del Hub (Paralelas)
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <p className="text-xs text-neutral-400 font-mono">
+                          Configura las colas independientes del Hub (5v5 Principal, 5v5 Secundaria, etc.) con sus respectivos canales de Discord.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleAddQueue}
+                          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black text-[11px] font-black uppercase tracking-wider rounded-none transition-colors flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          AÑADIR COLA
+                        </button>
+                      </div>
+
+                      {(!config.queues || config.queues.length === 0) ? (
+                        <div className="bg-[#0A0A0A] border border-dashed border-white/15 p-6 text-center text-xs text-neutral-500 font-mono">
+                          No hay colas secundarias configuradas. Si dejas esto vacío, el bot usará los canales de Discord generales configurados arriba.
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          {config.queues.map((q, idx) => (
+                            <div key={q.id || idx} className="bg-[#0A0A0A] border-2 border-white/10 p-5 relative space-y-4">
+                              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                                <span className="text-xs font-black uppercase tracking-wider text-emerald-400 font-mono">
+                                  🎯 COLA #{idx + 1}: {q.name || 'Sin Nombre'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveQueue(idx)}
+                                  className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 font-mono uppercase tracking-wider transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Nombre de la Cola (Discord)</label>
+                                  <input
+                                    type="text"
+                                    value={q.name || ''}
+                                    placeholder="Ej: 5v5 Principal"
+                                    onChange={(e) => handleUpdateQueue(idx, 'name', e.target.value)}
+                                    className="bg-[#111] border border-white/15 text-xs font-mono text-white px-3 py-2 outline-none focus:border-emerald-500 transition-colors"
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[10px] font-mono font-black uppercase tracking-widest text-emerald-400/80">ID de la Cola FACEIT (queue_id)</label>
+                                  <input
+                                    type="text"
+                                    value={q.queueId || q.id || ''}
+                                    placeholder="UUID de la cola en Faceit"
+                                    onChange={(e) => handleUpdateQueue(idx, 'queueId', e.target.value)}
+                                    className="bg-[#111] border border-white/15 text-xs font-mono text-white px-3 py-2 outline-none focus:border-emerald-500 transition-colors"
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">ID Canal Anuncios de Partidas (Texto)</label>
+                                  <input
+                                    type="text"
+                                    value={q.discordMatchesChannelId || ''}
+                                    placeholder="ID canal de texto de esta cola"
+                                    onChange={(e) => handleUpdateQueue(idx, 'discordMatchesChannelId', e.target.value)}
+                                    className="bg-[#111] border border-white/15 text-xs font-mono text-white px-3 py-2 outline-none focus:border-emerald-500 transition-colors"
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">ID Sala de Espera de Voz (Voz)</label>
+                                  <input
+                                    type="text"
+                                    value={q.discordWaitingRoomChannelId || ''}
+                                    placeholder="ID canal de voz de espera de esta cola"
+                                    onChange={(e) => handleUpdateQueue(idx, 'discordWaitingRoomChannelId', e.target.value)}
+                                    className="bg-[#111] border border-white/15 text-xs font-mono text-white px-3 py-2 outline-none focus:border-emerald-500 transition-colors"
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">ID Canal Panel Mixton (Opcional)</label>
+                                  <input
+                                    type="text"
+                                    value={q.discordMixtonChannelId || ''}
+                                    placeholder="ID canal panel en vivo"
+                                    onChange={(e) => handleUpdateQueue(idx, 'discordMixtonChannelId', e.target.value)}
+                                    className="bg-[#111] border border-white/15 text-xs font-mono text-white px-3 py-2 outline-none focus:border-emerald-500 transition-colors"
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">ID Rol Acceso Salas (Opcional)</label>
+                                  <input
+                                    type="text"
+                                    value={q.discordMatchAccessRoleId || ''}
+                                    placeholder="ID rol acceso a salas de esta cola"
+                                    onChange={(e) => handleUpdateQueue(idx, 'discordMatchAccessRoleId', e.target.value)}
+                                    className="bg-[#111] border border-white/15 text-xs font-mono text-white px-3 py-2 outline-none focus:border-emerald-500 transition-colors"
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1 bg-[#141414] p-3 border border-[#FF5500]/40">
+                                  <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#FF5500] flex items-center justify-between">
+                                    <span className="flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full bg-[#FF5500] inline-block"></span>
+                                      ID ROL DEL HUB (FACEIT)
+                                    </span>
+                                    <span className="text-[9px] text-[#FF5500] font-bold normal-case">Faceit Hub</span>
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={q.hubRoleId || ''}
+                                    placeholder="ID o nombre del rol en Faceit Hub"
+                                    onChange={(e) => handleUpdateQueue(idx, 'hubRoleId', e.target.value)}
+                                    className="bg-[#111] border border-[#FF5500]/50 text-xs font-mono text-white px-3 py-2 outline-none focus:border-[#FF5500] transition-colors"
+                                  />
+                                  <span className="text-[10px] font-mono text-neutral-400 mt-0.5">
+                                    ID o nombre del rol interno configurado en Faceit Hub para esta cola.
+                                  </span>
+                                </div>
+
+                                <div className="flex flex-col gap-1 bg-[#141414] p-3 border border-[#5865F2]/50">
+                                  <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#5865F2] flex items-center justify-between">
+                                    <span className="flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full bg-[#5865F2] inline-block"></span>
+                                      ID ROL DE DISCORD (SEASON / 1RA PARTIDA)
+                                    </span>
+                                    <span className="text-[9px] text-emerald-400 font-bold normal-case">Servidor Discord</span>
+                                  </label>
+                                  <input
+                                    type="text"
+                                    list="available-discord-roles-list"
+                                    value={q.discordHubRoleId || ''}
+                                    placeholder="Pega el ID del rol de Discord o selecciónalo"
+                                    onChange={(e) => handleUpdateQueue(idx, 'discordHubRoleId', e.target.value)}
+                                    className="bg-[#111] border border-[#5865F2]/60 text-xs font-mono text-white px-3 py-2 outline-none focus:border-[#5865F2] transition-colors"
+                                  />
+                                  <span className="text-[10px] font-mono text-neutral-400 mt-0.5">
+                                    {availableDiscordRoles.find(r => r.id === q.discordHubRoleId) ? (
+                                      <span className="text-emerald-400 font-bold">
+                                        ✓ Rol detectado en Discord: @{availableDiscordRoles.find(r => r.id === q.discordHubRoleId)?.name}
+                                      </span>
+                                    ) : (
+                                      'ID del rol de Discord asignado automáticamente al jugador en su 1ra partida de la Season.'
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Sistema */}
@@ -1933,8 +2509,8 @@ export default function App() {
                       <div className="absolute -top-3 -left-3 bg-white text-black text-[10px] font-black px-3 py-1 uppercase tracking-widest border border-white/10">Sistema</div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Nombre Rol Admin</label>
-                          <input type="text" value={config.adminRoleName} onChange={(e) => setConfig({ ...config, adminRoleName: e.target.value })} className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-white transition-colors" />
+                          <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">ID Rol Admin</label>
+                          <input type="text" value={config.adminRoleId || ''} onChange={(e) => setConfig({ ...config, adminRoleId: e.target.value })} placeholder="Ej: 123456789012345678" className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-white transition-colors" />
                         </div>
                         <div className="flex flex-col gap-1.5">
                           <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Timeout Partidas (Mins)</label>
@@ -1958,31 +2534,128 @@ export default function App() {
                 <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
                   
                   <div className="bg-[#111] border-2 border-white/10 p-8 rounded-none">
-                    <h3 className="text-xl font-black text-white uppercase tracking-tighter italic mb-1">SERVICIOS ACTIVOS</h3>
-                    <p className="text-xs text-neutral-400 uppercase tracking-tight font-mono">Control maestro en tiempo real de los módulos lógicos activos en el Bot.</p>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-3 mb-1">
+                          <h3 className="text-xl font-black text-white uppercase tracking-tighter italic">SERVICIOS ACTIVOS</h3>
+                          <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            EN LÍNEA
+                          </span>
+                        </div>
+                        <p className="text-xs text-neutral-400 uppercase tracking-tight font-mono">
+                          Control maestro en tiempo real de los módulos lógicos y comandos del Bot.
+                        </p>
+                        <div className="mt-3 flex items-center gap-2">
+                          <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest font-black">ÁMBITO:</span>
+                          <span className="text-[10px] font-mono font-black text-white bg-white/10 px-2.5 py-0.5 border border-white/20 uppercase">
+                            {selectedGuildId 
+                              ? `Servidor: ${guilds.find(g => g.id === selectedGuildId)?.name || selectedGuildId}`
+                              : 'Configuración Global (Valores por defecto)'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handleRefreshFeatures}
+                        disabled={refreshingFeatures}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-white text-black hover:bg-neutral-200 text-xs font-black uppercase tracking-tighter rounded-none cursor-pointer self-start md:self-auto transition-all active:translate-y-[1px] shrink-0"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${refreshingFeatures ? 'animate-spin' : ''}`} />
+                        <span>{refreshingFeatures ? 'Sincronizando...' : 'Verificar Sincronización'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Barra de Filtro y Búsqueda */}
+                  <div className="bg-[#111] border-2 border-white/10 p-4 flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <button
+                        onClick={() => setFeaturesCategory('all')}
+                        className={`px-3 py-1.5 text-[10px] font-black uppercase border transition-colors cursor-pointer ${
+                          featuresCategory === 'all'
+                            ? 'bg-white text-black border-white'
+                            : 'bg-[#151515] text-neutral-400 border-white/10 hover:border-white/30'
+                        }`}
+                      >
+                        Todos ({featureFlags.length})
+                      </button>
+                      <button
+                        onClick={() => setFeaturesCategory('modules')}
+                        className={`px-3 py-1.5 text-[10px] font-black uppercase border transition-colors cursor-pointer ${
+                          featuresCategory === 'modules'
+                            ? 'bg-white text-black border-white'
+                            : 'bg-[#151515] text-neutral-400 border-white/10 hover:border-white/30'
+                        }`}
+                      >
+                        Módulos ({featureFlags.filter(f => !f.key.startsWith('command_')).length})
+                      </button>
+                      <button
+                        onClick={() => setFeaturesCategory('commands')}
+                        className={`px-3 py-1.5 text-[10px] font-black uppercase border transition-colors cursor-pointer ${
+                          featuresCategory === 'commands'
+                            ? 'bg-white text-black border-white'
+                            : 'bg-[#151515] text-neutral-400 border-white/10 hover:border-white/30'
+                        }`}
+                      >
+                        Comandos ({featureFlags.filter(f => f.key.startsWith('command_')).length})
+                      </button>
+                    </div>
+
+                    <div className="relative w-full sm:w-64">
+                      <input
+                        type="text"
+                        value={featuresSearch}
+                        onChange={(e) => setFeaturesSearch(e.target.value)}
+                        placeholder="Buscar servicio..."
+                        className="w-full bg-[#0A0A0A] border border-white/20 text-xs text-white px-3 py-1.5 outline-none focus:border-white font-mono uppercase"
+                      />
+                      {featuresSearch && (
+                        <button
+                          onClick={() => setFeaturesSearch('')}
+                          className="absolute right-2 top-1.5 text-neutral-500 hover:text-white text-xs cursor-pointer"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="bg-[#111] border-2 border-white/10 overflow-hidden shadow-[10px_10px_0px_rgba(0,0,0,0.5)] rounded-none">
                     <div className="divide-y divide-white/5 font-mono">
-                      {featureFlags.map(flag => (
-                        <div key={flag.key} className="p-6 flex items-center justify-between hover:bg-white/[0.02] border-b border-white/5 transition-colors">
-                          <div className="space-y-1 pr-4">
-                            <h4 className="text-xs font-black uppercase tracking-tight text-white">{flag.name}</h4>
-                            <p className="text-[11px] text-neutral-400 uppercase">{flag.desc}</p>
-                          </div>
+                      {filteredFeatureFlags.map(flag => {
+                        const isToggling = togglingFeatureKey === flag.key;
+                        return (
+                          <div key={flag.key} className="p-6 flex items-center justify-between hover:bg-white/[0.02] border-b border-white/5 transition-colors">
+                            <div className="space-y-1 pr-4">
+                              <div className="flex items-center gap-2">
+                                <h4 className="text-xs font-black uppercase tracking-tight text-white">{flag.name}</h4>
+                                <span className="text-[9px] text-neutral-500 font-mono">({flag.key})</span>
+                              </div>
+                              <p className="text-[11px] text-neutral-400 uppercase">{flag.desc}</p>
+                            </div>
 
-                          <button
-                            onClick={() => handleToggleFeature(flag.key)}
-                            className={`px-4 py-2 border text-[9px] font-mono font-black uppercase rounded-none transition-colors cursor-pointer ${
-                              flag.enabled 
-                                ? 'bg-white text-black border-white' 
-                                : 'bg-neutral-800 text-neutral-500 border-white/10 hover:bg-neutral-700'
-                            }`}
-                          >
-                            {flag.enabled ? 'ACTIVO' : 'STANDBY'}
-                          </button>
+                            <button
+                              onClick={() => handleToggleFeature(flag.key)}
+                              disabled={isToggling}
+                              className={`px-4 py-2 border text-[9px] font-mono font-black uppercase rounded-none transition-colors cursor-pointer flex items-center gap-2 ${
+                                isToggling
+                                  ? 'bg-neutral-800 text-neutral-400 border-white/20 cursor-wait'
+                                  : flag.enabled 
+                                    ? 'bg-white text-black border-white hover:bg-neutral-200' 
+                                    : 'bg-neutral-800 text-neutral-500 border-white/10 hover:bg-neutral-700'
+                              }`}
+                            >
+                              {isToggling && <RefreshCw className="w-3 h-3 animate-spin" />}
+                              <span>{isToggling ? 'GUARDANDO...' : flag.enabled ? 'ACTIVO' : 'STANDBY'}</span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {filteredFeatureFlags.length === 0 && (
+                        <div className="p-8 text-center text-xs text-neutral-500 uppercase font-mono">
+                          No se encontraron servicios que coincidan con la búsqueda.
                         </div>
-                      ))}
+                      )}
                     </div>
                   </div>
 
@@ -2057,6 +2730,20 @@ export default function App() {
                         onChange={(e) => setBroadcastMessage(e.target.value)}
                         placeholder="Escribe el mensaje aquí..."
                         className="bg-[#0A0A0A] border-2 border-white/10 text-sm font-mono text-white rounded-none px-4 py-3.5 outline-none focus:border-white transition-colors h-40 resize-none"
+                      />
+                    </div>
+
+                    {/* URL de la Imagen */}
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">
+                        URL de la Imagen <span className="text-neutral-600 normal-case">(opcional — ej: enlace directo a un archivo png/jpg/gif)</span>
+                      </label>
+                      <input
+                        type="url"
+                        value={broadcastImageUrl}
+                        onChange={(e) => setBroadcastImageUrl(e.target.value)}
+                        placeholder="https://ejemplo.com/imagen.png"
+                        className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono text-white rounded-none px-4 py-3.5 outline-none focus:border-white transition-colors"
                       />
                     </div>
 
@@ -2223,21 +2910,42 @@ export default function App() {
                       <p className="text-xs text-neutral-400 uppercase tracking-tight font-mono">Historial detallado de eventos de Discord y Faceit API.</p>
                     </div>
 
-                    {/* Filter buttons */}
-                    <div className="flex flex-wrap gap-1.5 p-1 bg-[#0A0A0A] border-2 border-white/10 rounded-none">
-                      {['all', 'info', 'warn', 'error', 'success'].map(level => (
-                        <button
-                          key={level}
-                          onClick={() => setLogsFilter(level)}
-                          className={`px-3 py-1.5 rounded-none text-[9px] font-mono font-black uppercase cursor-pointer transition-colors border ${
-                            logsFilter === level
-                              ? 'bg-white text-black border-white'
-                              : 'text-neutral-400 border-transparent hover:text-white hover:bg-white/5'
-                          }`}
-                        >
-                          {level === 'all' ? 'TODOS' : level}
-                        </button>
-                      ))}
+                    <div className="flex flex-wrap items-center gap-4">
+                      <button
+                        onClick={async () => {
+                          showToast('Refrescando logs...', 'info');
+                          try {
+                            const guildQuery = selectedGuildId ? `?guildId=${selectedGuildId}` : '';
+                            const res = await apiFetch(`/api/admin/logs${guildQuery}`);
+                            if (res.ok) {
+                              setLogs((await res.json()).logs || []);
+                            }
+                          } catch (e) {
+                            showToast('Error al refrescar logs.', 'error');
+                          }
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-neutral-200 text-[10px] font-mono font-black uppercase rounded-none cursor-pointer border border-white"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Actualizar Logs</span>
+                      </button>
+
+                      {/* Filter buttons */}
+                      <div className="flex flex-wrap gap-1.5 p-1 bg-[#0A0A0A] border-2 border-white/10 rounded-none">
+                        {['all', 'info', 'warn', 'error', 'success'].map(level => (
+                          <button
+                            key={level}
+                            onClick={() => setLogsFilter(level)}
+                            className={`px-3 py-1.5 rounded-none text-[9px] font-mono font-black uppercase cursor-pointer transition-colors border ${
+                              logsFilter === level
+                                ? 'bg-white text-black border-white'
+                                : 'text-neutral-400 border-transparent hover:text-white hover:bg-white/5'
+                            }`}
+                          >
+                            {level === 'all' ? 'TODOS' : level}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
@@ -2712,9 +3420,281 @@ export default function App() {
             </div>
           )}
 
+          {/* Modal 4: VER ESTADÍSTICAS DE LA PARTIDA */}
+          {selectedMatchStatsModal && (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+              <div onClick={() => setSelectedMatchStatsModal(null)} className="absolute inset-0 bg-black/90 backdrop-blur-sm" />
+              <div className="relative bg-[#111] border-2 border-white/10 w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 text-white font-mono shadow-[15px_15px_0px_rgba(0,0,0,0.8)] z-10 animate-fade-in space-y-6">
+                
+                {/* Header Modal */}
+                <div className="flex items-start justify-between border-b border-white/10 pb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Trophy className="w-5 h-5 text-[#FF5500]" />
+                      <h3 className="text-lg font-black uppercase tracking-tight italic">
+                        ESTADÍSTICAS DE LA PARTIDA
+                      </h3>
+                    </div>
+                    <p className="text-xs text-neutral-400 font-mono mt-0.5">
+                      ID: <span className="text-[#FF5500] font-bold">{selectedMatchStatsModal.id}</span> • {selectedMatchStatsModal.entity_custom_name || 'Club'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedMatchStatsModal(null)}
+                    className="p-1 text-neutral-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Match Overview Banner */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-[#181818] p-4 border border-white/10">
+                  <div className="text-center md:text-left">
+                    <span className="text-[10px] text-neutral-500 uppercase font-bold block">MAPA & LUGAR</span>
+                    <span className="text-sm font-black text-white uppercase">{selectedMatchStatsModal.map || 'DESCONOCIDO'}</span>
+                    <span className="text-xs text-neutral-400 block uppercase">{selectedMatchStatsModal.location || 'DESCONOCIDO'}</span>
+                  </div>
+
+                  {/* Score Display */}
+                  <div className="flex flex-col items-center justify-center border-y md:border-y-0 md:border-x border-white/10 py-2 md:py-0">
+                    <span className="text-[10px] text-neutral-500 uppercase font-bold">MARCADOR FINAL</span>
+                    <div className="flex items-center gap-3 text-xl font-black mt-0.5">
+                      <span className={selectedMatchStatsModal.winner === 'faction1' ? 'text-emerald-400' : 'text-white'}>
+                        {selectedMatchStatsModal.faction1_score ?? 0}
+                      </span>
+                      <span className="text-neutral-600 text-sm">VS</span>
+                      <span className={selectedMatchStatsModal.winner === 'faction2' ? 'text-emerald-400' : 'text-white'}>
+                        {selectedMatchStatsModal.faction2_score ?? 0}
+                      </span>
+                    </div>
+                    <span className="text-[9px] text-emerald-400 uppercase font-bold mt-1">
+                      {selectedMatchStatsModal.winner === 'faction1' ? `Ganador: ${selectedMatchStatsModal.faction1_name}` : (selectedMatchStatsModal.winner === 'faction2' ? `Ganador: ${selectedMatchStatsModal.faction2_name}` : 'Finalizada')}
+                    </span>
+                  </div>
+
+                  <div className="text-center md:text-right flex flex-col justify-center items-center md:items-end">
+                    <span className="text-[10px] text-neutral-500 uppercase font-bold block">ESTADO</span>
+                    <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 border border-emerald-500/20 uppercase mt-0.5">
+                      {selectedMatchStatsModal.status || 'FINALIZADA'}
+                    </span>
+                    <button
+                      onClick={() => handleDownloadMatchDemo(selectedMatchStatsModal)}
+                      className="mt-2 text-[10px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 underline cursor-pointer"
+                    >
+                      <Download className="w-3 h-3" /> Descargar Demo / Partida
+                    </button>
+                  </div>
+                </div>
+
+                {/* Loading state for detailed stats */}
+                {loadingMatchStats && (
+                  <div className="py-8 text-center text-neutral-400 text-xs animate-pulse font-mono">
+                    Cargando estadísticas detalladas desde la API de Faceit...
+                  </div>
+                )}
+
+                {/* Rosters / Player Stats tables */}
+                <div className="space-y-6">
+                  {/* Faction 1 */}
+                  <div className="border border-white/10 bg-[#141414] overflow-hidden">
+                    <div className="bg-neutral-900 px-4 py-2.5 border-b border-white/10 flex justify-between items-center">
+                      <span className={`font-black text-xs uppercase ${selectedMatchStatsModal.winner === 'faction1' ? 'text-emerald-400' : 'text-white'}`}>
+                        {selectedMatchStatsModal.faction1_name || 'EQUIPO A'} ({selectedMatchStatsModal.faction1_score ?? 0})
+                      </span>
+                      {selectedMatchStatsModal.winner === 'faction1' && (
+                        <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 font-bold uppercase border border-emerald-500/30">
+                          GANADOR
+                        </span>
+                      )}
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-neutral-900/50 text-neutral-400 text-[10px] uppercase font-bold border-b border-white/5">
+                          <tr>
+                            <th className="py-2 px-4">Jugador</th>
+                            <th className="py-2 px-4 text-center">Kills</th>
+                            <th className="py-2 px-4 text-center">Deaths</th>
+                            <th className="py-2 px-4 text-center">K/D</th>
+                            <th className="py-2 px-4 text-center">HS%</th>
+                            <th className="py-2 px-4 text-center">MVP</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5 font-mono text-[11px]">
+                          {(selectedMatchStatsModal.faction1_roster || []).length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="py-3 px-4 text-neutral-500 text-center">Sin datos de jugadores registrados</td>
+                            </tr>
+                          ) : (
+                            (selectedMatchStatsModal.faction1_roster || []).map((p: any, idx: number) => {
+                              let pStats: any = null;
+                              if (matchStatsDetails?.rounds?.[0]?.teams) {
+                                const team = matchStatsDetails.rounds[0].teams.find((t: any) => t.team_id === 'faction1' || t.premade_id === 'faction1');
+                                if (team && team.players) {
+                                  pStats = team.players.find((pl: any) => pl.player_id === p.id || pl.nickname === p.nickname)?.player_stats;
+                                }
+                              }
+                              const kills = pStats?.Kills ?? '-';
+                              const deaths = pStats?.Deaths ?? '-';
+                              const kd = pStats?.['K/D Ratio'] ?? (pStats && deaths > 0 ? (kills / deaths).toFixed(2) : '-');
+                              const hs = pStats?.['Headshots %'] ? `${pStats['Headshots %']}%` : '-';
+                              const mvps = pStats?.MVPs ?? '-';
+
+                              return (
+                                <tr key={p.id || idx} className="hover:bg-white/5">
+                                  <td className="py-2.5 px-4 font-bold text-white flex items-center gap-2">
+                                    <span className="text-neutral-400 font-mono text-[10px]">#{idx + 1}</span>
+                                    {p.nickname}
+                                  </td>
+                                  <td className="py-2.5 px-4 text-center text-emerald-400 font-bold">{kills}</td>
+                                  <td className="py-2.5 px-4 text-center text-red-400">{deaths}</td>
+                                  <td className="py-2.5 px-4 text-center font-bold">{kd}</td>
+                                  <td className="py-2.5 px-4 text-center text-neutral-400">{hs}</td>
+                                  <td className="py-2.5 px-4 text-center text-yellow-400">{mvps}</td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Faction 2 */}
+                  <div className="border border-white/10 bg-[#141414] overflow-hidden">
+                    <div className="bg-neutral-900 px-4 py-2.5 border-b border-white/10 flex justify-between items-center">
+                      <span className={`font-black text-xs uppercase ${selectedMatchStatsModal.winner === 'faction2' ? 'text-emerald-400' : 'text-white'}`}>
+                        {selectedMatchStatsModal.faction2_name || 'EQUIPO B'} ({selectedMatchStatsModal.faction2_score ?? 0})
+                      </span>
+                      {selectedMatchStatsModal.winner === 'faction2' && (
+                        <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 font-bold uppercase border border-emerald-500/30">
+                          GANADOR
+                        </span>
+                      )}
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-neutral-900/50 text-neutral-400 text-[10px] uppercase font-bold border-b border-white/5">
+                          <tr>
+                            <th className="py-2 px-4">Jugador</th>
+                            <th className="py-2 px-4 text-center">Kills</th>
+                            <th className="py-2 px-4 text-center">Deaths</th>
+                            <th className="py-2 px-4 text-center">K/D</th>
+                            <th className="py-2 px-4 text-center">HS%</th>
+                            <th className="py-2 px-4 text-center">MVP</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5 font-mono text-[11px]">
+                          {(selectedMatchStatsModal.faction2_roster || []).length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="py-3 px-4 text-neutral-500 text-center">Sin datos de jugadores registrados</td>
+                            </tr>
+                          ) : (
+                            (selectedMatchStatsModal.faction2_roster || []).map((p: any, idx: number) => {
+                              let pStats: any = null;
+                              if (matchStatsDetails?.rounds?.[0]?.teams) {
+                                const team = matchStatsDetails.rounds[0].teams.find((t: any) => t.team_id === 'faction2' || t.premade_id === 'faction2');
+                                if (team && team.players) {
+                                  pStats = team.players.find((pl: any) => pl.player_id === p.id || pl.nickname === p.nickname)?.player_stats;
+                                }
+                              }
+                              const kills = pStats?.Kills ?? '-';
+                              const deaths = pStats?.Deaths ?? '-';
+                              const kd = pStats?.['K/D Ratio'] ?? (pStats && deaths > 0 ? (kills / deaths).toFixed(2) : '-');
+                              const hs = pStats?.['Headshots %'] ? `${pStats['Headshots %']}%` : '-';
+                              const mvps = pStats?.MVPs ?? '-';
+
+                              return (
+                                <tr key={p.id || idx} className="hover:bg-white/5">
+                                  <td className="py-2.5 px-4 font-bold text-white flex items-center gap-2">
+                                    <span className="text-neutral-400 font-mono text-[10px]">#{idx + 1}</span>
+                                    {p.nickname}
+                                  </td>
+                                  <td className="py-2.5 px-4 text-center text-emerald-400 font-bold">{kills}</td>
+                                  <td className="py-2.5 px-4 text-center text-red-400">{deaths}</td>
+                                  <td className="py-2.5 px-4 text-center font-bold">{kd}</td>
+                                  <td className="py-2.5 px-4 text-center text-neutral-400">{hs}</td>
+                                  <td className="py-2.5 px-4 text-center text-yellow-400">{mvps}</td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="flex justify-between items-center border-t border-white/10 pt-4 text-xs font-mono">
+                  {!selectedMatchStatsModal.id.startsWith('mixton_') && !selectedMatchStatsModal.id.startsWith('manual_') && (
+                    <a
+                      href={`https://www.faceit.com/en/cs2/room/${selectedMatchStatsModal.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#FF5500] hover:underline flex items-center gap-1 font-bold"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Abrir Sala en Faceit.com
+                    </a>
+                  )}
+                  <button
+                    onClick={() => setSelectedMatchStatsModal(null)}
+                    className="ml-auto px-4 py-2 bg-[#222] hover:bg-white hover:text-black font-bold uppercase transition-colors cursor-pointer"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* Modal 5: CONFIRMAR ELIMINAR PARTIDA DEL HISTORIAL */}
+          {matchToDelete && (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+              <div onClick={() => setMatchToDelete(null)} className="absolute inset-0 bg-black/90 backdrop-blur-sm" />
+              <div className="relative bg-[#111] border-2 border-red-500/50 w-full max-w-md p-6 text-white font-mono shadow-[15px_15px_0px_rgba(0,0,0,0.8)] z-10 animate-fade-in space-y-4">
+                <div className="flex items-center gap-3 text-red-400">
+                  <ShieldAlert className="w-6 h-6" />
+                  <h3 className="text-base font-black uppercase tracking-tight italic">
+                    ELIMINAR PARTIDA DEL HISTORIAL
+                  </h3>
+                </div>
+
+                <p className="text-xs text-neutral-300 leading-relaxed font-mono">
+                  ¿Estás seguro de que deseas eliminar permanentemente la partida <span className="text-red-400 font-bold">{matchToDelete.id}</span> del historial de Firestore?
+                </p>
+
+                <div className="bg-[#1A1A1A] p-3 border border-white/10 text-[11px] space-y-1 text-neutral-400 font-mono">
+                  <div><strong className="text-white">Enfrentamiento:</strong> {matchToDelete.faction1_name} vs {matchToDelete.faction2_name}</div>
+                  <div><strong className="text-white">Mapa:</strong> {matchToDelete.map || 'N/A'}</div>
+                  <div><strong className="text-white">Marcador:</strong> {matchToDelete.faction1_score} - {matchToDelete.faction2_score}</div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    onClick={() => setMatchToDelete(null)}
+                    disabled={!!deletingMatchId}
+                    className="px-4 py-2 bg-[#222] hover:bg-white hover:text-black text-xs font-bold uppercase transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleDeleteMatchHistory}
+                    disabled={!!deletingMatchId}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {deletingMatchId ? 'Eliminando...' : 'Eliminar Partida'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       )}
 
     </div>
   );
 }
+

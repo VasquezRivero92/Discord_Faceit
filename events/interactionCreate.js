@@ -1,7 +1,8 @@
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { env } from '../config/index.js';
+import { env, getEffectiveConfigForGuild } from '../config/index.js';
 import { isFeatureEnabled } from '../utils/featureFlags.js';
+import { checkIsAdmin } from '../services/adminCheck.js';
 
 /**
  * Carga todos los comandos desde la carpeta commands/
@@ -24,6 +25,10 @@ export async function loadCommands() {
     await import('../commands/crearSala.js'),
     await import('../commands/mixtonListo.js'),
     await import('../commands/mixtonNoListo.js'),
+    await import('../commands/sancionar.js'),
+    await import('../commands/desancionar.js'),
+    await import('../commands/say.js'),
+    await import('../commands/recargar.js'),
   ];
 
   for (const mod of commandFiles) {
@@ -49,7 +54,7 @@ export async function onInteractionCreate(interaction, db, commandMap) {
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply({ content: '❌ Error interno al ejecutar el comando.' }).catch(() => {});
       } else {
-        await interaction.reply({ content: '❌ Error interno al ejecutar el comando.', ephemeral: true }).catch(() => {});
+        await interaction.reply({ content: '❌ Error interno al ejecutar el comando.', flags: MessageFlags.Ephemeral }).catch(() => {});
       }
     }
     return;
@@ -59,14 +64,61 @@ export async function onInteractionCreate(interaction, db, commandMap) {
   if (interaction.isModalSubmit()) {
     const { customId } = interaction;
 
+    if (customId === 'verificar_modal') {
+      const nickname = interaction.fields.getTextInputValue('faceit_nickname');
+      try {
+        const { processVerification } = await import('../commands/verificar.js');
+        await processVerification(interaction, db, nickname);
+      } catch (err) {
+        logger.error('Error al procesar verificación desde modal:', err);
+        if (interaction.deferred || interaction.replied) {
+          await interaction.editReply({ content: '❌ Error al procesar tu verificación.' }).catch(() => {});
+        } else {
+          await interaction.reply({ content: '❌ Error al procesar tu verificación.', flags: MessageFlags.Ephemeral }).catch(() => {});
+        }
+      }
+      return;
+    }
+
+    if (customId === 'recargar_yape_modal') {
+      try {
+        const { handleRecargaModalSubmit } = await import('../commands/recargar.js');
+        await handleRecargaModalSubmit(interaction, db);
+      } catch (err) {
+        logger.error('Error al procesar modal de recarga Yape:', err);
+        if (interaction.deferred || interaction.replied) {
+          await interaction.editReply({ content: '❌ Ocurrió un error inesperado al procesar tu recarga.' }).catch(() => {});
+        } else {
+          await interaction.reply({ content: '❌ Ocurrió un error inesperado al procesar tu recarga.', flags: MessageFlags.Ephemeral }).catch(() => {});
+        }
+      }
+      return;
+    }
+
+    if (customId === 'music_modal') {
+      const link = interaction.fields.getTextInputValue('music_link_input');
+      try {
+        const { playMusicFromInteraction } = await import('../commands/cs2_play.js');
+        await playMusicFromInteraction(interaction, link);
+      } catch (err) {
+        logger.error('Error al procesar reproducción de música desde modal:', err);
+        if (interaction.deferred || interaction.replied) {
+          await interaction.editReply({ content: '❌ Error al intentar reproducir la música.' }).catch(() => {});
+        } else {
+          await interaction.reply({ content: '❌ Error al intentar reproducir la música.', flags: MessageFlags.Ephemeral }).catch(() => {});
+        }
+      }
+      return;
+    }
+
     if (customId.startsWith('support_call_modal_')) {
       const matchId = customId.replace('support_call_modal_', '');
       const description = interaction.fields.getTextInputValue('problem_description');
 
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       try {
-        if (!(await isFeatureEnabled('adminCallNotifications'))) {
+        if (!(await isFeatureEnabled('adminCallNotifications', interaction.guildId))) {
           return interaction.editReply({ content: '❌ La función de llamada a admin está desactivada.' });
         }
 
@@ -123,9 +175,10 @@ export async function onInteractionCreate(interaction, db, commandMap) {
 
         const row = new ActionRowBuilder().addComponents(claimButton);
 
-        const adminRoleName = env.ADMIN_ROLE_NAME || 'ADMIN';
-        const adminRole = interaction.guild?.roles?.cache?.find(r => r.name.toUpperCase() === adminRoleName.toUpperCase());
-        const pingMention = adminRole ? `<@&${adminRole.id}>` : '@here';
+        const config = await getEffectiveConfigForGuild(interaction.guildId).catch(() => ({}));
+        const adminRoleId = config.adminRoleId || env.ADMIN_ROLE_ID;
+        const adminRole = adminRoleId ? (interaction.guild?.roles?.cache?.get(adminRoleId) || interaction.guild?.roles?.cache?.find(r => r.name.toUpperCase() === adminRoleId.toUpperCase())) : null;
+        const pingMention = adminRole ? `<@&${adminRole.id}>` : (adminRoleId ? `<@&${adminRoleId}>` : '@here');
 
         await alertsChannel.send({
           content: `⚠️ Atención ${pingMention}`,
@@ -154,33 +207,126 @@ export async function onInteractionCreate(interaction, db, commandMap) {
       return interaction.reply({
         content: '❌ Este botón y el método de código en la biografía ya no son necesarios.\n\n' +
           'Ahora puedes vincular tu cuenta directamente ejecutando nuevamente el comando: `/verificar_fc` con tu nickname.',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
+    }
+
+    // --- Botones de Mixton (Listo / No Listo) ---
+    if (customId === 'mixton_listo_btn') {
+      try {
+        const { execute: executeListo } = await import('../commands/mixtonListo.js');
+        await executeListo(interaction, db);
+      } catch (err) {
+        logger.error('Error al procesar botón mixton_listo:', err);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({ content: '❌ Error al procesar tu solicitud.', flags: MessageFlags.Ephemeral }).catch(() => {});
+        }
+      }
+      return;
+    }
+
+    if (customId === 'mixton_no_listo_btn') {
+      try {
+        const { execute: executeNoListo } = await import('../commands/mixtonNoListo.js');
+        await executeNoListo(interaction, db);
+      } catch (err) {
+        logger.error('Error al procesar botón mixton_no_listo:', err);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({ content: '❌ Error al procesar tu solicitud.', flags: MessageFlags.Ephemeral }).catch(() => {});
+        }
+      }
+      return;
+    }
+
+    // --- Botón de Iniciar Verificación ---
+    if (customId === 'iniciar_verificacion_btn') {
+      try {
+        const modal = new ModalBuilder()
+          .setCustomId('verificar_modal')
+          .setTitle('Vincular Cuenta de Faceit');
+
+        const nicknameInput = new TextInputBuilder()
+          .setCustomId('faceit_nickname')
+          .setLabel('Nickname exacto de Faceit')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('Ej: Eloiky (Tu usuario de Faceit)')
+          .setMinLength(2)
+          .setMaxLength(50)
+          .setRequired(true);
+
+        const row = new ActionRowBuilder().addComponents(nicknameInput);
+        modal.addComponents(row);
+
+        await interaction.showModal(modal);
+      } catch (err) {
+        logger.error('Error al abrir modal de verificación:', err);
+        return interaction.reply({ content: '❌ Error al abrir el formulario de verificación.', flags: MessageFlags.Ephemeral });
+      }
+      return;
+    }
+
+    // --- Botón de Iniciar Música ---
+    if (customId === 'iniciar_musica_btn') {
+      try {
+        const modal = new ModalBuilder()
+          .setCustomId('music_modal')
+          .setTitle('Reproducir Música');
+
+        const linkInput = new TextInputBuilder()
+          .setCustomId('music_link_input')
+          .setLabel('Enlace o término de búsqueda de YouTube')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('https://www.youtube.com/watch?... o nombre de la canción')
+          .setRequired(true);
+
+        const row = new ActionRowBuilder().addComponents(linkInput);
+        modal.addComponents(row);
+
+        await interaction.showModal(modal);
+      } catch (err) {
+        logger.error('Error al abrir modal de música:', err);
+        return interaction.reply({ content: '❌ Error al abrir el formulario de música.', flags: MessageFlags.Ephemeral });
+      }
+      return;
+    }
+
+    // --- Botones de Control de Música ---
+    if (customId.startsWith('music_') && customId !== 'iniciar_musica_btn') {
+      try {
+        const { handleMusicButton } = await import('../commands/cs2_play.js');
+        await handleMusicButton(interaction);
+      } catch (err) {
+        logger.error('Error al manejar el botón de música:', err);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({ content: '❌ Error al procesar control de música.', flags: MessageFlags.Ephemeral }).catch(() => {});
+        }
+      }
+      return;
     }
 
     // --- Botón de Llamar Admin ---
     if (customId === 'llamar_admin_btn') {
       try {
-        if (!(await isFeatureEnabled('adminCallNotifications'))) {
-          return interaction.reply({ content: '❌ La función de llamada a admin está desactivada.', ephemeral: true });
+        if (!(await isFeatureEnabled('adminCallNotifications', interaction.guildId))) {
+          return interaction.reply({ content: '❌ La función de llamada a admin está desactivada.', flags: MessageFlags.Ephemeral });
         }
 
         // 1. Verificar si ya tiene una solicitud pendiente
         const hasPending = await db.hasPendingSupportCall(interaction.user.id);
         if (hasPending) {
-          return interaction.reply({ content: '❌ Ya tienes una solicitud de soporte pendiente. Por favor, espera a que un administrador te atienda.', ephemeral: true });
+          return interaction.reply({ content: '❌ Ya tienes una solicitud de soporte pendiente. Por favor, espera a que un administrador te atienda.', flags: MessageFlags.Ephemeral });
         }
 
         // 2. Obtener faceit_id del usuario
         const userData = await db.getFaceitIdByDiscordId(interaction.user.id, interaction.guildId);
         if (!userData || !userData.faceit_player_id) {
-          return interaction.reply({ content: '❌ No tienes una cuenta de Faceit vinculada. Usa `/verificar_fc` para vincularla.', ephemeral: true });
+          return interaction.reply({ content: '❌ No tienes una cuenta de Faceit vinculada. Usa `/verificar_fc` para vincularla.', flags: MessageFlags.Ephemeral });
         }
 
         // 2. Buscar partida activa del usuario
         const activeMatch = await db.getActiveMatchByPlayerId(userData.faceit_player_id);
         if (!activeMatch) {
-          return interaction.reply({ content: '❌ No estás en ninguna partida activa en este momento.', ephemeral: true });
+          return interaction.reply({ content: '❌ No estás en ninguna partida activa en este momento.', flags: MessageFlags.Ephemeral });
         }
 
         // 3. Crear y mostrar el modal
@@ -205,7 +351,7 @@ export async function onInteractionCreate(interaction, db, commandMap) {
 
       } catch (err) {
         logger.error('Error al verificar jugador para modal:', err);
-        return interaction.reply({ content: '❌ Error al procesar tu solicitud. Intenta de nuevo.', ephemeral: true });
+        return interaction.reply({ content: '❌ Error al procesar tu solicitud. Intenta de nuevo.', flags: MessageFlags.Ephemeral });
       }
       return;
     }
@@ -217,22 +363,20 @@ export async function onInteractionCreate(interaction, db, commandMap) {
       try {
         // Verificar si el usuario que hace clic tiene permisos de admin
         const member = interaction.member;
-        const adminRoleName = env.ADMIN_ROLE_NAME || 'ADMIN';
-        const hasAdminRole = member.roles.cache.some(r => r.name.toUpperCase() === adminRoleName.toUpperCase());
-        const hasAdminPermissions = member.permissions.has(PermissionFlagsBits.Administrator);
+        const hasAdminRole = await checkIsAdmin(member, interaction.guild);
 
-        if (!hasAdminRole && !hasAdminPermissions) {
-          return interaction.reply({ content: '❌ Solo los administradores pueden atender solicitudes.', ephemeral: true });
+        if (!hasAdminRole) {
+          return interaction.reply({ content: '❌ Solo los administradores pueden atender solicitudes.', flags: MessageFlags.Ephemeral });
         }
 
         // Obtener la solicitud desde la base de datos
         const callData = await db.getSupportCall(supportId);
         if (!callData) {
-          return interaction.reply({ content: '❌ No se encontró la información de esta solicitud en la base de datos.', ephemeral: true });
+          return interaction.reply({ content: '❌ No se encontró la información de esta solicitud en la base de datos.', flags: MessageFlags.Ephemeral });
         }
 
         if (callData.status === 'atendida') {
-          return interaction.reply({ content: `⚠️ Esta solicitud ya está siendo atendida por <@${callData.claimedBy}>.`, ephemeral: true });
+          return interaction.reply({ content: `⚠️ Esta solicitud ya está siendo atendida por <@${callData.claimedBy}>.`, flags: MessageFlags.Ephemeral });
         }
 
         // Actualizar en Firebase
@@ -244,7 +388,7 @@ export async function onInteractionCreate(interaction, db, commandMap) {
         // Responder de forma efímera al administrador con el enlace de la partida
         await interaction.reply({
           content: `✅ Has tomado la solicitud de soporte.\n🔗 **Enlace de la partida:** ${callData.match_url}\n📝 **Problema:** ${callData.description || 'No especificado'}`,
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
 
         // Notificar al jugador por DM
@@ -261,7 +405,7 @@ export async function onInteractionCreate(interaction, db, commandMap) {
 
       } catch (err) {
         logger.error('Error al reclamar soporte:', err);
-        return interaction.reply({ content: '❌ Ocurrió un error al intentar atender la solicitud.', ephemeral: true });
+        return interaction.reply({ content: '❌ Ocurrió un error al intentar atender la solicitud.', flags: MessageFlags.Ephemeral });
       }
       return;
     }
@@ -283,7 +427,7 @@ export async function onInteractionCreate(interaction, db, commandMap) {
       }
 
       try {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         // 1. Obtener la partida activa de la base de datos
         const activeMatch = await db.getActiveMatch(matchId);
@@ -293,13 +437,10 @@ export async function onInteractionCreate(interaction, db, commandMap) {
 
         // 2. Verificar permisos (Creador de la partida, Admin o rol de Admin)
         const member = interaction.member;
-        const config = await db.getSettings().catch(() => ({}));
-        const adminRoleName = config.adminRoleName || env.ADMIN_ROLE_NAME || 'ADMIN';
-        const hasAdminRole = member.roles.cache.some(r => r.name.toUpperCase() === adminRoleName.toUpperCase());
-        const hasAdminPermissions = member.permissions.has(PermissionFlagsBits.Administrator);
+        const hasAdminRole = await checkIsAdmin(member, interaction.guild);
         const isCreator = activeMatch.creator_id === interaction.user.id;
 
-        if (!isCreator && !hasAdminRole && !hasAdminPermissions) {
+        if (!isCreator && !hasAdminRole) {
           return interaction.editReply('❌ No tienes permisos para definir el resultado de esta sala. Solo el creador de la sala o un administrador pueden hacerlo.');
         }
 
@@ -316,13 +457,18 @@ export async function onInteractionCreate(interaction, db, commandMap) {
           }
         }
         const originalStates = activeMatch.original_voice_states || {};
+
+        // Eliminar la partida activa ANTES de la limpieza de voz para evitar rebotes de voiceStateUpdate
+        await db.removeActiveMatch(matchId);
         
         const { cleanupVoiceChannel } = await import('../services/voice.js');
+        const isCancel = action === 'cancel';
+        const reason = isCancel ? 'Partida manual cancelada' : 'Partida manual finalizada';
         if (activeMatch.faction1_vc_id) {
-          await cleanupVoiceChannel(interaction.guild, activeMatch.faction1_vc_id, waitingRoomId, originalStates, 'Partida manual finalizada');
+          await cleanupVoiceChannel(interaction.guild, activeMatch.faction1_vc_id, waitingRoomId, originalStates, reason, isCancel);
         }
         if (activeMatch.faction2_vc_id) {
-          await cleanupVoiceChannel(interaction.guild, activeMatch.faction2_vc_id, waitingRoomId, originalStates, 'Partida manual finalizada');
+          await cleanupVoiceChannel(interaction.guild, activeMatch.faction2_vc_id, waitingRoomId, originalStates, reason, isCancel);
         }
 
         // 4. Registrar en historial si hubo ganador
@@ -372,9 +518,6 @@ export async function onInteractionCreate(interaction, db, commandMap) {
           embedColor = 0xEF4444; // Rojo claro
         }
 
-        // 5. Eliminar la partida activa de Firestore
-        await db.removeActiveMatch(matchId);
-
         // Resolver canal de anuncios de la guild
         let resolvedMatchesChannelId = null;
         if (config.discordMatchesChannelId) {
@@ -405,8 +548,20 @@ export async function onInteractionCreate(interaction, db, commandMap) {
         }
 
         // 7. Actualizar el panel en vivo
-        if (resolvedMatchesChannelId && !resolvedMatchesChannelId.startsWith('ID_')) {
-          await updateLivePanel(interaction.client, resolvedMatchesChannelId, db);
+        let resolvedMixtonChannelId = null;
+        const mixtonConfigId = config.discordMixtonChannelId || config.discordMatchesChannelId;
+        if (mixtonConfigId) {
+          const ids = mixtonConfigId.split(',').map(id => id.trim());
+          for (const id of ids) {
+            const ch = await interaction.guild.channels.fetch(id).catch(() => null);
+            if (ch && ch.guild.id === interaction.guild.id) {
+              resolvedMixtonChannelId = id;
+              break;
+            }
+          }
+        }
+        if (resolvedMixtonChannelId && !resolvedMixtonChannelId.startsWith('ID_')) {
+          await updateLivePanel(interaction.client, resolvedMixtonChannelId, db);
         }
 
         await db.addLogEntry('info', `Partida manual ${matchId} finalizada (${action}) por ${interaction.user.tag}`, 'bot');

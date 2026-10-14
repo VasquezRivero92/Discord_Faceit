@@ -16,9 +16,16 @@ import {
   Trash2, 
   UserCheck, 
   X,
-  Volume2
+  Volume2,
+  Coins,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+  Check,
+  DollarSign,
+  Wallet
 } from 'lucide-react';
-import { Player, Team, LobbyState, CurrentUser, Guild, ToastMessage } from './types';
+import { Player, Team, LobbyState, CurrentUser, Guild, ToastMessage, PlayerBetStatus, BetStatusResponse } from './types';
 
 export default function App() {
   // Authentication & Loading states
@@ -32,6 +39,14 @@ export default function App() {
     return urlParams.get('guild') || '';
   });
   const [guildName, setGuildName] = useState('Mixton Arena');
+
+  const getTeamName = (team: any) => {
+    if (team && team.captain) {
+      const capName = team.captain.discordUser?.displayName || team.captain.faceit_nickname;
+      return `EQUIPO ${capName}`;
+    }
+    return team ? team.name : '';
+  };
 
   // Lobby States
   const [lobbyState, setLobbyState] = useState<LobbyState>({
@@ -60,11 +75,51 @@ export default function App() {
   const [commandEnabled, setCommandEnabled] = useState(true);
   const [pendingPick, setPendingPick] = useState<Player | null>(null);
   const [numTeamsSelect, setNumTeamsSelect] = useState<number>(4);
+  const [isShuffling, setIsShuffling] = useState<boolean>(false);
+  const [showRouletteModal, setShowRouletteModal] = useState<boolean>(false);
+  const [rouletteSpinning, setRouletteSpinning] = useState<boolean>(false);
+  const [rouletteWinner, setRouletteWinner] = useState<string | null>(null);
+  const [shuffledOrderResult, setShuffledOrderResult] = useState<string[]>([]);
+  const [rouletteRemainingTeamIds, setRouletteRemainingTeamIds] = useState<string[]>([]);
+  const [rouletteSelectedOrder, setRouletteSelectedOrder] = useState<string[]>([]);
+  const [rouletteAngle, setRouletteAngle] = useState<number>(0);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const lastSliceIdxRef = useRef<number>(-1);
+  const sliceColors = ['#FF5500', '#0088FF', '#9900FF', '#00CC66', '#FFCC00', '#FF0077'];
+
+  // Matchup Roulette States
+  const [showMatchupModal, setShowMatchupModal] = useState<boolean>(false);
+  const [matchupUnpairedIds, setMatchupUnpairedIds] = useState<string[]>([]);
+  const [matchupPairs, setMatchupPairs] = useState<{ teamAId: string; teamBId: string }[]>([]);
+  const [currentMatchupSubjectId, setCurrentMatchupSubjectId] = useState<string | null>(null);
+  const [matchupWinner, setMatchupWinner] = useState<string | null>(null);
+  const [matchupSpinning, setMatchupSpinning] = useState<boolean>(false);
+  const [matchupAngle, setMatchupAngle] = useState<number>(0);
+  const [matchupDrawnTemp, setMatchupDrawnTemp] = useState<string[]>([]);
+  const matchupCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const matchupAnimationFrameRef = useRef<number | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   // Match launching selections
   const [matchTeamA, setMatchTeamA] = useState<string>('');
   const [matchTeamB, setMatchTeamB] = useState<string>('');
   const [isLaunchingMatch, setIsLaunchingMatch] = useState(false);
+
+  // Bet Modal state (Cuota / Apuesta por jugador y verificación de los 10 jugadores)
+  const [isBetModalOpen, setIsBetModalOpen] = useState(false);
+  const [selectedBetAmount, setSelectedBetAmount] = useState<number>(5); // default S/ 5
+  const [customBetInput, setCustomBetInput] = useState<string>('');
+  const [isCustomBet, setIsCustomBet] = useState(false);
+  const [betPlayers, setBetPlayers] = useState<PlayerBetStatus[]>([]);
+  const [isLoadingBetStatus, setIsLoadingBetStatus] = useState(false);
+  const [manualPaidMap, setManualPaidMap] = useState<{ [discordId: string]: boolean }>({});
+  const [quickTopUpUser, setQuickTopUpUser] = useState<{ discordId: string; nickname: string } | null>(null);
+  const [quickTopUpAmount, setQuickTopUpAmount] = useState<string>('10');
+  const [isSubmittingTopUp, setIsSubmittingTopUp] = useState(false);
+  const [yapePhoneInput, setYapePhoneInput] = useState<string>('');
+  const [yapeOtpInput, setYapeOtpInput] = useState<string>('');
+  const [topUpTab, setTopUpTab] = useState<'culqi_yape' | 'admin_manual'>('culqi_yape');
 
   // Admin pick order editor state
   const [localPickOrder, setLocalPickOrder] = useState<string[]>([]);
@@ -74,6 +129,7 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const pollingRef = useRef<number | null>(null);
 
   // Helper: Toast Notifications (Admin-style notifications)
   const showToast = useCallback((text: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -101,13 +157,15 @@ export default function App() {
       
       setGuilds(loadedGuilds);
       
-      // If we don't have a currentGuildId, pick the first one
+      // If we don't have a currentGuildId, or the current one is not in the loaded guilds list, pick the first one
       setCurrentGuildId(prev => {
-        if (!prev && loadedGuilds.length > 0) {
+        const exists = loadedGuilds.some((g: any) => g.id === prev);
+        if ((!prev || !exists) && loadedGuilds.length > 0) {
           const firstId = loadedGuilds[0].id;
           const url = new URL(window.location.href);
           url.searchParams.set('guild', firstId);
           window.history.replaceState({}, '', url);
+          localStorage.setItem('mixton_guild_id', firstId);
           return firstId;
         }
         return prev;
@@ -212,6 +270,7 @@ export default function App() {
 
   // Connect WebSocket for real-time updates
   const connectWebSocket = useCallback((guildId: string) => {
+    if (!guildId) return;
     if (wsRef.current) {
       try {
         wsRef.current.onclose = null;
@@ -267,7 +326,7 @@ export default function App() {
       console.error('Error en WebSocket:', err);
       socket.close();
     };
-  }, [fetchHistory]);
+  }, [fetchHistory, fetchState]);
 
   // Check Session with Server on Mount
   useEffect(() => {
@@ -297,18 +356,31 @@ export default function App() {
     checkAuth();
   }, [fetchState, fetchHistory, loadGuildsSelector, showToast]);
 
-  // Connect WebSocket when currentGuildId is resolved
+  // Connect WebSocket when currentGuildId is resolved, with polling as a backup for proxies that drop WS events.
   useEffect(() => {
+    if (pollingRef.current) {
+      window.clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+
     if (currentGuildId) {
       connectWebSocket(currentGuildId);
+      pollingRef.current = window.setInterval(() => {
+        fetchState(currentGuildId);
+      }, 5000);
     }
+
     return () => {
+      if (pollingRef.current) {
+        window.clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
       if (wsRef.current) {
         wsRef.current.onclose = null;
         wsRef.current.close();
       }
     };
-  }, [currentGuildId, connectWebSocket]);
+  }, [currentGuildId, connectWebSocket, fetchState]);
 
   // Clear pendingPick if the turn changes or the draft finishes/resets
   useEffect(() => {
@@ -845,19 +917,375 @@ export default function App() {
     }
   };
 
-  // Admin Action: Randomize Order
+  // Admin Action: Randomize Order (Abre el Modal de Ruleta con múltiples rondas)
   const handleRandomizeOrder = () => {
-    const shuffled = [...localPickOrder];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const temp = shuffled[i];
-      shuffled[i] = shuffled[j];
-      shuffled[j] = temp;
-    }
-    setLocalPickOrder(shuffled);
-    setIsSavingOrder(true);
-    showToast('Orden aleatorizado. Recuerda hacer clic en "Guardar Orden".', 'info');
+    if (localPickOrder.length === 0) return;
+    setRouletteWinner(null);
+    setRouletteAngle(0);
+    setRouletteRemainingTeamIds([...localPickOrder]);
+    setRouletteSelectedOrder([]);
+    setShowRouletteModal(true);
   };
+
+  // Dibujar rueda de la ruleta en Canvas
+  const drawWheel = (ctx: CanvasRenderingContext2D, angle: number, teamsList: Team[]) => {
+    const N = teamsList.length;
+    if (N === 0) {
+      // Limpiar y dibujar texto de finalizado
+      ctx.clearRect(0, 0, 480, 480);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 18px "JetBrains Mono", monospace';
+      ctx.fillText("¡SORTEO COMPLETADO!", 240, 240);
+      return;
+    }
+    const centerX = 240;
+    const centerY = 240;
+    const radius = 220;
+    const sliceAngle = (2 * Math.PI) / N;
+
+    ctx.clearRect(0, 0, 480, 480);
+
+    // Dibujar rebanadas
+    for (let i = 0; i < N; i++) {
+      const startAngle = i * sliceAngle + angle;
+      const endAngle = (i + 1) * sliceAngle + angle;
+
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+      ctx.closePath();
+
+      ctx.fillStyle = sliceColors[i % sliceColors.length];
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#111111';
+      ctx.stroke();
+
+      // Dibujar texto del nombre del equipo / capitán
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.rotate(startAngle + sliceAngle / 2);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 20px "JetBrains Mono", monospace';
+      
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+      ctx.shadowBlur = 5;
+      
+      const labelText = teamsList[i].captain 
+        ? teamsList[i].captain.faceit_nickname.toUpperCase() 
+        : teamsList[i].name.toUpperCase();
+      ctx.fillText(labelText, radius - 20, 6);
+      ctx.restore();
+    }
+
+    // Borde exterior
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.stroke();
+
+    // Círculo central
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 36, 0, 2 * Math.PI);
+    ctx.fillStyle = '#1C1C1C';
+    ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#FF5500';
+    ctx.stroke();
+
+    // Flecha indicador de la ruleta en la parte superior
+    ctx.fillStyle = '#FF5500';
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY - radius + 24);
+    ctx.lineTo(centerX - 18, centerY - radius - 15);
+    ctx.lineTo(centerX + 18, centerY - radius - 15);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  };
+
+  // Obtener o inicializar un AudioContext único para evitar límites del navegador
+  const getAudioContext = () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    if (audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume();
+    }
+    return audioContextRef.current;
+  };
+
+  // Sintetizar sonido de tick con Web Audio API (evita depender de archivos estáticos)
+  const playTickSound = () => {
+    try {
+      const audioCtx = getAudioContext();
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(900, audioCtx.currentTime); // Tono de tick
+      
+      gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.04);
+      
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.04);
+    } catch (e) {
+      // Silenciar errores
+    }
+  };
+
+  // Sintetizar sonido de victoria con Web Audio API (fanfarria de C Mayor)
+  const playVictorySound = () => {
+    try {
+      const audioCtx = getAudioContext();
+      const playTone = (freq: number, time: number, duration: number) => {
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime + time);
+        gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime + time);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + time + duration);
+        osc.start(audioCtx.currentTime + time);
+        osc.stop(audioCtx.currentTime + time + duration);
+      };
+      playTone(261.63, 0.0, 0.4);   // C4
+      playTone(329.63, 0.12, 0.4);  // E4
+      playTone(392.00, 0.24, 0.4);  // G4
+      playTone(523.25, 0.36, 0.8);  // C5
+    } catch (e) {
+      // Silenciar errores
+    }
+  };
+
+  // Girar ruleta con desaceleración progresiva y parada exacta
+  const startRouletteSpin = () => {
+    if (rouletteSpinning || rouletteRemainingTeamIds.length <= 1) return;
+    
+    // 1. Elegir un ganador al azar de los que quedan
+    const randomIndex = Math.floor(Math.random() * rouletteRemainingTeamIds.length);
+    const winnerId = rouletteRemainingTeamIds[randomIndex];
+    
+    // Mapear los IDs restantes a la lista de equipos correspondientes
+    const remainingTeams = lobbyState.teams.filter(t => rouletteRemainingTeamIds.includes(t.id));
+    const winnerIndex = remainingTeams.findIndex(t => t.id === winnerId);
+    
+    if (winnerIndex === -1) return;
+    
+    setRouletteSpinning(true);
+    setRouletteWinner(null);
+    lastSliceIdxRef.current = -1;
+
+    const N = remainingTeams.length;
+    const sliceAngle = (2 * Math.PI) / N;
+    
+    // Parada con desfase aleatorio concentrado en los extremos (distribución en forma de U)
+    const randVal = Math.random();
+    const bias = randVal < 0.5 ? Math.pow(randVal * 2, 2.5) * 0.5 : 1 - Math.pow((1 - randVal) * 2, 2.5) * 0.5;
+    const sliceOffset = 0.05 + bias * 0.9; // Restringido entre 0.05 y 0.95
+    const targetStopAngle = (3 * Math.PI) / 2 - (winnerIndex + sliceOffset) * sliceAngle;
+    const extraTurns = 12;
+    const finalAngle = targetStopAngle + extraTurns * 2 * Math.PI;
+
+    let start: number | null = null;
+    const duration = 9000; // 9 segundos totales (desaceleración suave y progresiva al final)
+
+    const animate = (timestamp: number) => {
+      if (!start) start = timestamp;
+      const elapsed = timestamp - start;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      const easeOut = (t: number) => 1 - Math.pow(1 - t, 4.0);
+      const currentAngle = easeOut(progress) * finalAngle;
+      setRouletteAngle(currentAngle);
+
+      // Reproducción de sonido de tick basado en cambio de división
+      const currentSliceIdx = Math.floor(((3 * Math.PI / 2) - currentAngle) / sliceAngle) % N;
+      const normalizedSliceIdx = currentSliceIdx >= 0 ? currentSliceIdx : (currentSliceIdx + N) % N;
+      if (normalizedSliceIdx !== lastSliceIdxRef.current && progress < 0.99) {
+        lastSliceIdxRef.current = normalizedSliceIdx;
+        playTickSound();
+      }
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        const winningTeam = remainingTeams[winnerIndex];
+        setRouletteWinner(winningTeam.name.toUpperCase());
+        playVictorySound();
+        
+        // Agregar al orden seleccionado y remover de los restantes
+        const newSelected = [...rouletteSelectedOrder, winnerId];
+        const newRemaining = rouletteRemainingTeamIds.filter(id => id !== winnerId);
+        
+        setRouletteSelectedOrder(newSelected);
+        setRouletteRemainingTeamIds(newRemaining);
+        
+        // Si queda solo 1 equipo al remover este, ese último se coloca de manera definitiva al final
+        if (newRemaining.length === 1) {
+          const finalSelected = [...newSelected, newRemaining[0]];
+          setRouletteSelectedOrder(finalSelected);
+          setRouletteRemainingTeamIds([]);
+        }
+
+        setRouletteSpinning(false);
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animate);
+  };
+
+  const handleApplyRouletteOrder = () => {
+    setLocalPickOrder(rouletteSelectedOrder);
+    setIsSavingOrder(true);
+    setShowRouletteModal(false);
+    showToast('¡Nuevo orden de elección aplicado! Recuerda guardarlo.', 'info');
+  };
+
+  // Re-dibujar la ruleta en cambios
+  useEffect(() => {
+    if (!showRouletteModal) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const remainingTeams = lobbyState.teams.filter(t => rouletteRemainingTeamIds.includes(t.id));
+    drawWheel(ctx, rouletteAngle, remainingTeams);
+  }, [rouletteAngle, showRouletteModal, rouletteRemainingTeamIds, lobbyState.teams]);
+
+  // Abrir sorteo de enfrentamientos (Rival Roulette)
+  const handleOpenMatchupRoulette = () => {
+    const ids = completedTeams.map(t => t.id);
+    if (ids.length < 2) {
+      showToast('Se necesitan al menos 2 equipos completos para sortear.', 'error');
+      return;
+    }
+    setMatchupUnpairedIds(ids);
+    setMatchupPairs([]);
+    setMatchupDrawnTemp([]);
+    setMatchupWinner(null);
+    setMatchupAngle(0);
+    setShowMatchupModal(true);
+  };
+
+  // Girar ruleta de enfrentamientos para sacar un equipo al azar
+  const startMatchupSpin = () => {
+    if (matchupSpinning || matchupUnpairedIds.length === 0) return;
+
+    // Se elije un equipo al azar entre todos los que NO se han sorteado aún
+    const randomTeamId = matchupUnpairedIds[Math.floor(Math.random() * matchupUnpairedIds.length)];
+    const remainingTeams = lobbyState.teams.filter(t => matchupUnpairedIds.includes(t.id));
+    const winnerIndex = remainingTeams.findIndex(t => t.id === randomTeamId);
+
+    if (winnerIndex === -1) return;
+
+    setMatchupSpinning(true);
+    setMatchupWinner(null);
+    lastSliceIdxRef.current = -1;
+
+    const N = remainingTeams.length;
+    const sliceAngle = (2 * Math.PI) / N;
+
+    // Parada con desfase aleatorio concentrado en los extremos (distribución en forma de U)
+    const randVal = Math.random();
+    const bias = randVal < 0.5 ? Math.pow(randVal * 2, 2.5) * 0.5 : 1 - Math.pow((1 - randVal) * 2, 2.5) * 0.5;
+    const sliceOffset = 0.05 + bias * 0.9; // Restringido entre 0.05 y 0.95
+    const targetStopAngle = (3 * Math.PI) / 2 - (winnerIndex + sliceOffset) * sliceAngle;
+    const extraTurns = 12;
+    const finalAngle = targetStopAngle + extraTurns * 2 * Math.PI;
+
+    let start: number | null = null;
+    const duration = 9000; // 9 segundos totales (desaceleración suave y progresiva al final)
+
+    const animate = (timestamp: number) => {
+      if (!start) start = timestamp;
+      const elapsed = timestamp - start;
+      const progress = Math.min(elapsed / duration, 1);
+
+      const easeOut = (t: number) => 1 - Math.pow(1 - t, 4.0);
+      const currentAngle = easeOut(progress) * finalAngle;
+      setMatchupAngle(currentAngle);
+
+      // Reproducción de sonido de tick
+      const currentSliceIdx = Math.floor(((3 * Math.PI / 2) - currentAngle) / sliceAngle) % N;
+      const normalizedSliceIdx = currentSliceIdx >= 0 ? currentSliceIdx : (currentSliceIdx + N) % N;
+      if (normalizedSliceIdx !== lastSliceIdxRef.current && progress < 0.99) {
+        lastSliceIdxRef.current = normalizedSliceIdx;
+        playTickSound();
+      }
+
+      if (progress < 1) {
+        matchupAnimationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        const winningTeam = remainingTeams[winnerIndex];
+        setMatchupWinner(winningTeam.name.toUpperCase());
+        playVictorySound();
+
+        // Agregar al grupo temporal de sorteados en la ronda actual
+        const newDrawn = [...matchupDrawnTemp, randomTeamId];
+        const newUnpaired = matchupUnpairedIds.filter(id => id !== randomTeamId);
+
+        setMatchupDrawnTemp(newDrawn);
+        setMatchupUnpairedIds(newUnpaired);
+
+        // Si ya tenemos dos equipos en el grupo temporal, formamos la pareja (Encuentro)
+        if (newDrawn.length === 2) {
+          const newPairs = [...matchupPairs, { teamAId: newDrawn[0], teamBId: newDrawn[1] }];
+          setMatchupPairs(newPairs);
+          setMatchupDrawnTemp([]);
+
+          // Validar reglas especiales del sobrante de equipos
+          if (newUnpaired.length === 1) {
+            // El tercer equipo se enfrenta con el ganador del primer encuentro (Winner Match 1)
+            const finalPairs = [...newPairs, { teamAId: newUnpaired[0], teamBId: 'winner_match_1' }];
+            setMatchupPairs(finalPairs);
+            setMatchupUnpairedIds([]);
+          } else if (newUnpaired.length === 2) {
+            // Si quedan exactamente 2, ellos se enfrentarán automáticamente
+            const finalPairs = [...newPairs, { teamAId: newUnpaired[0], teamBId: newUnpaired[1] }];
+            setMatchupPairs(finalPairs);
+            setMatchupUnpairedIds([]);
+          }
+        } else {
+          // Si es el primer equipo seleccionado y solo quedan 2 en total sin emparejar,
+          // se emparejan automáticamente el seleccionado con el único que queda
+          if (newUnpaired.length === 1 && newDrawn.length === 1) {
+            const newPairs = [...matchupPairs, { teamAId: newDrawn[0], teamBId: newUnpaired[0] }];
+            setMatchupPairs(newPairs);
+            setMatchupDrawnTemp([]);
+            setMatchupUnpairedIds([]);
+          }
+        }
+
+        setMatchupSpinning(false);
+      }
+    };
+
+    matchupAnimationFrameRef.current = requestAnimationFrame(animate);
+  };
+
+  // Re-dibujar la ruleta de enfrentamientos con todos los equipos que faltan emparejar
+  useEffect(() => {
+    if (!showMatchupModal) return;
+    const canvas = matchupCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const teamsList = lobbyState.teams.filter(t => matchupUnpairedIds.includes(t.id));
+    drawWheel(ctx, matchupAngle, teamsList);
+  }, [matchupAngle, showMatchupModal, matchupUnpairedIds, lobbyState.teams]);
 
   // Admin Action: Move Order Arrow
   const handleMoveOrder = (index: number, dir: number) => {
@@ -1012,21 +1440,177 @@ export default function App() {
     }
   };
 
-  // Admin Action: Launch Match between two selected teams
-  const handleLaunchMatch = async () => {
+  // Calculate effective bet amount
+  const effectiveBetAmount = isCustomBet 
+    ? Math.max(0, parseFloat(customBetInput) || 0)
+    : selectedBetAmount;
+
+  // Fetch Bet Status for the 10 players
+  const fetchBetStatus = async (amount: number) => {
+    if (!matchTeamA || !matchTeamB) return;
+    setIsLoadingBetStatus(true);
+    try {
+      const res = await apiFetch('/api/lobby/mixton-check-bet-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teamIdA: matchTeamA,
+          teamIdB: matchTeamB,
+          betAmount: amount
+        })
+      });
+      const data: BetStatusResponse = await res.json();
+      if (!res.ok) throw new Error((data as any).error || 'Error al obtener saldos.');
+      setBetPlayers(data.players || []);
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsLoadingBetStatus(false);
+    }
+  };
+
+  // Open Bet & Quota Verification Modal
+  const handleOpenBetModal = async () => {
+    if (!matchTeamA || !matchTeamB) {
+      showToast('Debes seleccionar dos equipos.', 'error');
+      return;
+    }
+    const teamA = lobbyState.teams.find(t => t.id === matchTeamA);
+    const teamB = lobbyState.teams.find(t => t.id === matchTeamB);
+    if (!teamA?.captain || teamA.players.length !== 4 || !teamB?.captain || teamB.players.length !== 4) {
+      showToast('Ambos equipos deben estar completos con 5 jugadores (Capitán + 4 compañeros).', 'error');
+      return;
+    }
+
+    setManualPaidMap({});
+    setIsBetModalOpen(true);
+    await fetchBetStatus(effectiveBetAmount);
+  };
+
+  // Change bet preset amount
+  const handleSelectBetAmount = (amount: number) => {
+    setIsCustomBet(false);
+    setSelectedBetAmount(amount);
+    fetchBetStatus(amount);
+  };
+
+  // Change custom bet amount
+  const handleCustomBetChange = (val: string) => {
+    setCustomBetInput(val);
+    const num = Math.max(0, parseFloat(val) || 0);
+    fetchBetStatus(num);
+  };
+
+  // Toggle manual paid override
+  const handleToggleManualPaid = (discordId: string) => {
+    setManualPaidMap(prev => ({
+      ...prev,
+      [discordId]: !prev[discordId]
+    }));
+  };
+
+  // Quick top-up submit
+  const handleQuickTopUpSubmit = async () => {
+    if (!quickTopUpUser) return;
+    const amount = parseFloat(quickTopUpAmount);
+    if (isNaN(amount) || amount <= 0) {
+      showToast('Ingresa un monto válido para recargar.', 'error');
+      return;
+    }
+    setIsSubmittingTopUp(true);
+    try {
+      const res = await apiFetch('/api/lobby/quick-add-balance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          discordId: quickTopUpUser.discordId,
+          amount,
+          reason: `Recarga manual por admin desde modal de apuestas`
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al recargar saldo.');
+      showToast(`¡Recargado S/ ${amount.toFixed(2)} a ${quickTopUpUser.nickname}!`, 'success');
+      setQuickTopUpUser(null);
+      await fetchBetStatus(effectiveBetAmount);
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsSubmittingTopUp(false);
+    }
+  };
+
+  // Process recharge with Yape via Culqi API
+  const handleCulqiYapeSubmit = async () => {
+    if (!quickTopUpUser) return;
+    const amount = parseFloat(quickTopUpAmount);
+    if (isNaN(amount) || amount < 1) {
+      showToast('El monto mínimo para recargar es S/ 1.00', 'error');
+      return;
+    }
+    const cleanPhone = yapePhoneInput.replace(/\D/g, '');
+    const cleanOtp = yapeOtpInput.replace(/\D/g, '');
+    if (cleanPhone.length !== 9) {
+      showToast('El número de celular Yape debe tener 9 dígitos.', 'error');
+      return;
+    }
+    if (cleanOtp.length !== 6) {
+      showToast('El código de aprobación de Yape debe tener 6 dígitos.', 'error');
+      return;
+    }
+
+    setIsSubmittingTopUp(true);
+    try {
+      const res = await apiFetch('/api/lobby/wallet/recharge-yape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetDiscordId: quickTopUpUser.discordId,
+          phoneNumber: cleanPhone,
+          otp: cleanOtp,
+          amount
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al procesar el pago con Yape.');
+
+      showToast(`¡Pago de S/ ${amount.toFixed(2)} procesado con éxito con Yape (Culqi)!`, 'success');
+      setQuickTopUpUser(null);
+      setYapePhoneInput('');
+      setYapeOtpInput('');
+      await fetchBetStatus(effectiveBetAmount);
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsSubmittingTopUp(false);
+    }
+  };
+
+  // Admin Action: Confirm Launch Match with Bet
+  const handleConfirmLaunchMatch = async () => {
     if (!matchTeamA || !matchTeamB) return;
     
     setIsLaunchingMatch(true);
     try {
+      const manualPaidDiscordIds = Object.keys(manualPaidMap).filter(id => manualPaidMap[id]);
       const res = await apiFetch('/api/lobby/mixton-create-match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teamIdA: matchTeamA, teamIdB: matchTeamB })
+        body: JSON.stringify({ 
+          teamIdA: matchTeamA, 
+          teamIdB: matchTeamB,
+          betAmount: effectiveBetAmount,
+          manualPaidDiscordIds
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al lanzar el encuentro.');
 
-      showToast('¡Encuentro creado con éxito en Discord!', 'success');
+      showToast(`¡Encuentro creado! ${effectiveBetAmount > 0 ? `Pozo Total: S/ ${(effectiveBetAmount * 10).toFixed(2)}` : 'Modo Gratis'}. Canales de voz creados.`, 'success');
+      if (data.faceitHubUrl) {
+        window.open(data.faceitHubUrl, '_blank');
+      }
+      setIsBetModalOpen(false);
       setMatchTeamA('');
       setMatchTeamB('');
       await fetchState();
@@ -1085,12 +1669,12 @@ export default function App() {
         if (isMyTurn) {
           return {
             className: 'border-2 border-[#FF5500] bg-[#FF5500]/10 text-[#FF5500] px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-wider animate-pulse shadow-[0_0_15px_rgba(255,85,0,0.15)]',
-            text: `🌟 ¡ES TU TURNO! ELIGE JUGADOR PARA ${currentTeam.name.toUpperCase()}`
+            text: `🌟 ¡ES TU TURNO! ELIGE JUGADOR PARA ${getTeamName(currentTeam).toUpperCase()}`
           };
         } else {
           return {
             className: 'border-2 border-neutral-700 bg-neutral-900/50 text-neutral-400 px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-wider',
-            text: `⏳ SELECCIÓN EN CURSO: TURNO DE ${currentTeam.name.toUpperCase()} (CAP: ${captainName.toUpperCase()})`
+            text: `⏳ SELECCIÓN EN CURSO: TURNO DE ${getTeamName(currentTeam).toUpperCase()} (CAP: ${captainName.toUpperCase()})`
           };
         }
       }
@@ -1179,7 +1763,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white font-sans flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-[#0A0A0A] text-white font-sans flex flex-col relative lg:overflow-hidden overflow-y-auto">
       {/* Subtle tech grid background to match admin web */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.012)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
 
@@ -1223,6 +1807,17 @@ export default function App() {
           </div>
         )}
 
+        <a 
+          href="https://www.faceit.com/es/hub/52a88f17-1660-42ae-8322-76592f0c6f23/Mixtones"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5500]/10 border-2 border-[#FF5500]/40 text-[#FF5500] hover:bg-[#FF5500] hover:text-white transition-colors text-xs font-mono font-bold uppercase tracking-wider"
+          title="Abrir Hub de Faceit en una pestaña nueva"
+        >
+          <span className="w-2 h-2 rounded-full bg-[#FF5500] animate-pulse" />
+          Hub Faceit
+        </a>
+
         {currentUser && (
           <div className="flex items-center gap-4 border-l border-[#2D2D2D] pl-4">
             <div className="flex items-center gap-3">
@@ -1252,10 +1847,10 @@ export default function App() {
       </header>
 
       {/* Main Content Grid */}
-      <main className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 p-6 relative z-10 overflow-hidden max-h-[calc(100vh-80px)]">
+      <main className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 p-6 relative z-10 lg:overflow-hidden overflow-y-auto lg:max-h-[calc(100vh-80px)]">
         
         {/* Left Panel: Available Players */}
-        <section className="lg:col-span-1 p-5 bg-[#111] border-4 border-[#1A1A1A] shadow-[8px_8px_0px_rgba(0,0,0,0.5)] flex flex-col max-h-[calc(100vh-140px)] rounded-none">
+        <section className="lg:col-span-1 p-5 bg-[#111] border-4 border-[#1A1A1A] shadow-[8px_8px_0px_rgba(0,0,0,0.5)] flex flex-col lg:max-h-[calc(100vh-140px)] rounded-none">
           <div className="mb-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-black italic tracking-tighter uppercase text-white flex items-center gap-2">
@@ -1432,7 +2027,7 @@ export default function App() {
         </section>
 
         {/* Center & Right Panel */}
-        <section className="lg:col-span-3 flex flex-col gap-6 overflow-y-auto max-h-[calc(100vh-140px)] pr-2">
+        <section className="lg:col-span-3 flex flex-col gap-6 lg:overflow-y-auto lg:max-h-[calc(100vh-140px)] pr-2">
           
           {/* Admin Dashboard Section */}
           {currentUser?.isAdmin && (
@@ -1484,20 +2079,27 @@ export default function App() {
                         const team = lobbyState.teams.find(t => t.id === teamId);
                         if (!team) return null;
                         return (
-                          <div key={teamId} className="flex items-center justify-between text-[9px] bg-[#181818] p-1 border border-[#222]">
-                            <span className="font-bold text-white">{index + 1}. {team.name.toUpperCase()}</span>
+                          <div 
+                            key={teamId} 
+                            className={`flex items-center justify-between text-[9px] p-1 border transition-all duration-75 ${
+                              isShuffling 
+                                ? 'border-[#FF5500] bg-[#FF5500]/5 text-[#FF5500] scale-[0.98] blur-[0.2px] animate-pulse' 
+                                : 'bg-[#181818] border-[#222] text-white'
+                            }`}
+                          >
+                            <span className="font-bold">{index + 1}. {getTeamName(team).toUpperCase()}</span>
                             <div className="flex gap-1">
                               <button 
                                 className="p-0.5 bg-[#252525] border border-[#333] hover:border-white text-neutral-400 hover:text-white disabled:opacity-20"
                                 onClick={() => handleMoveOrder(index, -1)} 
-                                disabled={index === 0}
+                                disabled={index === 0 || isShuffling}
                               >
                                 <ArrowUp className="w-2.5 h-2.5" />
                               </button>
                               <button 
                                 className="p-0.5 bg-[#252525] border border-[#333] hover:border-white text-neutral-400 hover:text-white disabled:opacity-20"
                                 onClick={() => handleMoveOrder(index, 1)} 
-                                disabled={index === localPickOrder.length - 1}
+                                disabled={index === localPickOrder.length - 1 || isShuffling}
                               >
                                 <ArrowDown className="w-2.5 h-2.5" />
                               </button>
@@ -1515,7 +2117,7 @@ export default function App() {
                             <div key={teamId} className={`flex items-center justify-between text-[9px] p-1 border ${
                               isCurrent ? 'border-[#FF5500] bg-[#FF5500]/5 text-[#FF5500]' : 'border-[#222] bg-[#151515] text-neutral-400'
                             }`}>
-                              <span>{index + 1}. {team.name.toUpperCase()} ({team.captain ? team.captain.faceit_nickname.toUpperCase() : 'SIN CAP'})</span>
+                              <span>{index + 1}. {getTeamName(team).toUpperCase()}</span>
                               {isCurrent && <span className="font-bold animate-pulse text-[8px] bg-[#FF5500] text-black px-1">TURNO</span>}
                             </div>
                           );
@@ -1529,14 +2131,14 @@ export default function App() {
                     <button 
                       className="bg-transparent border border-neutral-600 hover:border-white text-white font-bold uppercase py-0.5 text-[10px] transition-colors disabled:opacity-30"
                       onClick={handleSavePickOrder}
-                      disabled={lobbyState.draftStarted || lobbyState.draftFinished || !isSavingOrder || teamsWithCaptains.length === 0}
+                      disabled={lobbyState.draftStarted || lobbyState.draftFinished || !isSavingOrder || teamsWithCaptains.length === 0 || isShuffling}
                     >
                       GUARDAR ORDEN
                     </button>
                     <button 
                       className="bg-transparent border border-neutral-600 hover:border-white text-white font-bold uppercase py-0.5 text-[10px] transition-colors disabled:opacity-30"
                       onClick={handleRandomizeOrder}
-                      disabled={lobbyState.draftStarted || lobbyState.draftFinished || teamsWithCaptains.length === 0}
+                      disabled={lobbyState.draftStarted || lobbyState.draftFinished || teamsWithCaptains.length === 0 || isShuffling}
                     >
                       MEZCLAR
                     </button>
@@ -1600,7 +2202,7 @@ export default function App() {
                       >
                         <option value="">-- ELIGE EQUIPO A --</option>
                         {completedTeams.map(t => (
-                          <option key={t.id} value={t.id}>{t.name.toUpperCase()} ({getAvgEloMatch(t)} ELO)</option>
+                          <option key={t.id} value={t.id}>{getTeamName(t).toUpperCase()} ({getAvgEloMatch(t)} ELO)</option>
                         ))}
                       </select>
                       <span className="text-neutral-500 font-bold uppercase text-[9px]">VS</span>
@@ -1611,18 +2213,28 @@ export default function App() {
                       >
                         <option value="">-- ELIGE EQUIPO B --</option>
                         {completedTeams.map(t => (
-                          <option key={t.id} value={t.id}>{t.name.toUpperCase()} ({getAvgEloMatch(t)} ELO)</option>
+                          <option key={t.id} value={t.id}>{getTeamName(t).toUpperCase()} ({getAvgEloMatch(t)} ELO)</option>
                         ))}
                       </select>
                     </div>
                   </div>
-                  <button 
-                    className="bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] hover:border-[#FF7733] text-white font-bold uppercase text-[10px] py-1.5 px-6 rounded-none transition-all disabled:opacity-30"
-                    disabled={!matchTeamA || !matchTeamB || matchTeamA === matchTeamB || isLaunchingMatch}
-                    onClick={handleLaunchMatch}
-                  >
-                    {isLaunchingMatch ? 'ENVIANDO A DISCORD...' : 'LANZAR ENCUENTRO'}
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      className="bg-transparent border border-neutral-600 hover:border-white text-white font-bold uppercase text-[10px] py-1.5 px-4 rounded-none transition-all disabled:opacity-30 cursor-pointer"
+                      disabled={completedTeams.length < 2 || isLaunchingMatch}
+                      onClick={handleOpenMatchupRoulette}
+                    >
+                      🎲 SORTEAR
+                    </button>
+                    <button 
+                      className="bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] hover:border-[#FF7733] text-white font-bold uppercase text-[10px] py-1.5 px-6 rounded-none transition-all disabled:opacity-30 cursor-pointer flex items-center gap-1.5"
+                      disabled={!matchTeamA || !matchTeamB || matchTeamA === matchTeamB || isLaunchingMatch}
+                      onClick={handleOpenBetModal}
+                    >
+                      <Coins className="w-3.5 h-3.5" />
+                      LANZAR ENCUENTRO
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1663,7 +2275,15 @@ export default function App() {
                           <p className="text-xs font-bold text-white leading-none truncate">
                             {team.captain.discordUser?.displayName || team.captain.faceit_nickname}
                           </p>
-                          <span className="text-[9px] text-neutral-500 block leading-none mt-1">{team.captain.faceit_nickname}</span>
+                          <a 
+                            href={`https://www.faceit.com/es/players/${team.captain.faceit_nickname}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[9px] text-[#FF5500]/80 hover:text-[#FF5500] hover:underline block leading-none mt-1 font-mono"
+                            title="Abrir perfil de Faceit"
+                          >
+                            {team.captain.faceit_nickname} ↗
+                          </a>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
@@ -1715,7 +2335,15 @@ export default function App() {
                           <img className="w-6 h-6 rounded-none border border-[#2D2D2D] object-cover" src={avatar} alt="Avatar" />
                           <div className="min-w-0">
                             <span className="text-[10px] text-neutral-300 font-mono truncate block leading-none">{player.discordUser?.displayName || player.faceit_nickname}</span>
-                            <span className="text-[8px] text-neutral-600 font-mono truncate mt-0.5 block leading-none">{player.faceit_nickname}</span>
+                            <a 
+                              href={`https://www.faceit.com/es/players/${player.faceit_nickname}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[8px] text-[#FF5500]/70 hover:text-[#FF5500] hover:underline font-mono truncate mt-0.5 block leading-none"
+                              title="Ver perfil de Faceit"
+                            >
+                              {player.faceit_nickname} ↗
+                            </a>
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -1799,7 +2427,20 @@ export default function App() {
                   <div key={team.id} className={`p-5 border-4 shadow-[8px_8px_0px_rgba(0,0,0,0.5)] rounded-none relative flex flex-col gap-3 transition-all ${borderStyle}`}>
                     <div className="flex justify-between items-center border-b border-[#222] pb-2 font-mono">
                       <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-black italic tracking-tighter uppercase text-white">{team.name}</h4>
+                        <h4 className="text-sm font-black italic tracking-tighter uppercase text-white">{getTeamName(team)}</h4>
+                        {team.players && team.players.length > 0 && (
+                          <button
+                            className="px-1.5 py-0.5 bg-[#FF5500]/10 border border-[#FF5500]/40 hover:bg-[#FF5500] hover:text-white text-[#FF5500] text-[8px] font-black uppercase transition-colors cursor-pointer rounded-none"
+                            onClick={() => {
+                              const nicks = (team.players || []).map(p => p.faceit_nickname).filter(Boolean).join(', ');
+                              navigator.clipboard.writeText(nicks);
+                              showToast(`Nicks copiados: ${nicks}`, 'info');
+                            }}
+                            title="Copiar nicks de los jugadores para invitarlos en Faceit"
+                          >
+                            📋 Nicks
+                          </button>
+                        )}
                         {currentUser?.isAdmin && (team.captain || (team.players && team.players.length > 0)) && (
                           <button
                             className="px-1.5 py-0.5 bg-red-950 border border-red-500 hover:bg-red-900 hover:border-red-400 text-red-400 hover:text-white text-[8px] font-black uppercase transition-colors cursor-pointer rounded-none"
@@ -1850,60 +2491,74 @@ export default function App() {
                   matchHistory.map((m: any) => {
                     const isWinner1 = m.winner === 'faction1';
                     const isWinner2 = m.winner === 'faction2';
+                    const statusLower = (m.status || '').toLowerCase();
+
+                    let statusBadge = null;
+                    if (statusLower === 'configuring') {
+                      statusBadge = <span className="text-[8px] font-bold text-yellow-400 bg-yellow-500/10 px-1 py-0.5 border border-yellow-500/20">CONFIGURANDO</span>;
+                    } else if (statusLower === 'started' || statusLower === 'starting') {
+                      statusBadge = <span className="text-[8px] font-bold text-blue-400 bg-blue-500/10 px-1 py-0.5 border border-blue-500/20 animate-pulse">EN JUEGO</span>;
+                    } else if (statusLower === 'cancelled' || m.winner === 'CANCELLED') {
+                      statusBadge = <span className="text-[8px] font-bold text-red-400 bg-red-500/10 px-1 py-0.5 border border-red-500/20">CANCELADA</span>;
+                    }
 
                     return (
                       <div key={m.id} className="p-3 bg-[#151515] border border-[#222] text-[10px] flex flex-col gap-2 relative">
                         <div className="flex justify-between items-center text-[9px] text-neutral-500 border-b border-[#222]/30 pb-1.5">
-                          <span>{m.entity_custom_name || 'Lobby'}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span>{m.entity_custom_name || 'Lobby'}</span>
+                            {statusBadge}
+                          </div>
                           <span>{m.map || 'Manual'}</span>
                         </div>
                         
                         <div className="flex flex-col gap-1.5">
                           {/* Faction 1 */}
-                          <div className="flex justify-between items-center">
-                            <span className={`font-bold truncate max-w-[125px] ${isWinner1 ? 'text-green-400' : 'text-neutral-400'}`}>
-                              {isWinner1 && '🏆 '}{m.faction1_name}
-                            </span>
-                            <span className="font-extrabold text-neutral-500">({m.faction1_score})</span>
+                          <div>
+                            <div className="flex justify-between items-center">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className={`font-bold truncate max-w-[125px] ${isWinner1 ? 'text-green-400' : 'text-neutral-400'}`}>
+                                  {isWinner1 && '🏆 '}{m.faction1_name}
+                                </span>
+                                <span className="font-extrabold text-neutral-500 flex-shrink-0">({m.faction1_score})</span>
+                              </div>
+                              {currentUser?.isAdmin && (
+                                <button
+                                  className="bg-[#1C1C1C] hover:bg-white hover:text-black border border-[#2D2D2D] hover:border-white px-2 py-0.5 text-[8px] font-black uppercase transition-all cursor-pointer text-center flex-shrink-0"
+                                  onClick={() => handleAssignHistoryTeamPrompt(m.faction1_roster, m.faction1_name)}
+                                >
+                                  Asignar
+                                </button>
+                              )}
+                            </div>
+                            <div className="text-[8px] text-neutral-500 truncate mt-0.5 pl-2 font-mono">
+                              {m.faction1_roster?.map((p: any) => p.nickname).join(', ') || 'Sin jugadores'}
+                            </div>
                           </div>
                           
                           {/* Faction 2 */}
-                          <div className="flex justify-between items-center">
-                            <span className={`font-bold truncate max-w-[125px] ${isWinner2 ? 'text-green-400' : 'text-neutral-400'}`}>
-                              {isWinner2 && '🏆 '}{m.faction2_name}
-                            </span>
-                            <span className="font-extrabold text-neutral-500">({m.faction2_score})</span>
+                          <div>
+                            <div className="flex justify-between items-center">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className={`font-bold truncate max-w-[125px] ${isWinner2 ? 'text-green-400' : 'text-neutral-400'}`}>
+                                  {isWinner2 && '🏆 '}{m.faction2_name}
+                                </span>
+                                <span className="font-extrabold text-neutral-500 flex-shrink-0">({m.faction2_score})</span>
+                              </div>
+                              {currentUser?.isAdmin && (
+                                <button
+                                  className="bg-[#1C1C1C] hover:bg-white hover:text-black border border-[#2D2D2D] hover:border-white px-2 py-0.5 text-[8px] font-black uppercase transition-all cursor-pointer text-center flex-shrink-0"
+                                  onClick={() => handleAssignHistoryTeamPrompt(m.faction2_roster, m.faction2_name)}
+                                >
+                                  Asignar
+                                </button>
+                              )}
+                            </div>
+                            <div className="text-[8px] text-neutral-500 truncate mt-0.5 pl-2 font-mono">
+                              {m.faction2_roster?.map((p: any) => p.nickname).join(', ') || 'Sin jugadores'}
+                            </div>
                           </div>
                         </div>
-
-                        {/* Admin quick load action */}
-                        {currentUser?.isAdmin && (
-                          <div className="border-t border-[#222]/30 pt-2 mt-1.5 flex flex-col gap-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[8px] text-neutral-400 font-bold uppercase truncate max-w-[110px]">
-                                {isWinner1 && '🏆 '}{m.faction1_name}
-                              </span>
-                              <button
-                                className="bg-[#1C1C1C] hover:bg-white hover:text-black border border-[#2D2D2D] hover:border-white px-2 py-0.5 text-[8px] font-black uppercase transition-all cursor-pointer text-center"
-                                onClick={() => handleAssignHistoryTeamPrompt(m.faction1_roster, m.faction1_name)}
-                              >
-                                Asignar
-                              </button>
-                            </div>
-
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[8px] text-neutral-400 font-bold uppercase truncate max-w-[110px]">
-                                {isWinner2 && '🏆 '}{m.faction2_name}
-                              </span>
-                              <button
-                                className="bg-[#1C1C1C] hover:bg-white hover:text-black border border-[#2D2D2D] hover:border-white px-2 py-0.5 text-[8px] font-black uppercase transition-all cursor-pointer text-center"
-                                onClick={() => handleAssignHistoryTeamPrompt(m.faction2_roster, m.faction2_name)}
-                              >
-                                Asignar
-                              </button>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     );
                   })
@@ -2009,6 +2664,855 @@ export default function App() {
         </div>
       )}
 
+      {/* Roulette Decision Wheel Modal (Premium Interactive Style) */}
+      {showRouletteModal && (
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-[#111] border-4 border-[#1A1A1A] p-8 shadow-2xl relative font-mono text-center">
+            <h3 className="text-sm font-black uppercase text-neutral-400 tracking-wider mb-2 border-b border-[#222] pb-2 flex items-center justify-center gap-1.5">
+              🎡 SORTEO DE ORDEN DE ELECCIÓN
+            </h3>
+            
+            {/* Si aún quedan equipos para sortear, dibujamos la ruleta */}
+            {rouletteRemainingTeamIds.length > 0 ? (
+              <div className="flex flex-col items-center">
+                <p className="text-[10px] text-neutral-400 uppercase tracking-widest font-black mb-2">
+                  SORTEANDO EL TURNO Nº {rouletteSelectedOrder.length + 1}
+                </p>
+                <div className="flex justify-center my-4 relative">
+                  <canvas 
+                    ref={canvasRef} 
+                    width={480} 
+                    height={480}
+                    className="w-[340px] h-[340px] md:w-[420px] md:h-[420px] select-none"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="my-6 p-4 bg-[#161616] border border-[#222] text-left">
+                <p className="text-xs font-black text-[#FF5500] uppercase tracking-wider mb-3 text-center border-b border-[#222] pb-2">
+                  🎯 ORDEN DE ELECCIÓN FINAL
+                </p>
+                <div className="space-y-1">
+                  {rouletteSelectedOrder.map((teamId, idx) => {
+                    const team = lobbyState.teams.find(t => t.id === teamId);
+                    return (
+                      <div key={teamId} className="flex justify-between items-center text-xs p-1.5 bg-[#1C1C1C] border border-[#222]">
+                        <span className="font-bold text-white">{idx + 1}º PUESTO</span>
+                        <span className="text-[#FF5500] font-black uppercase">{team?.name}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Estado e instrucciones */}
+            <div className="mt-4 min-h-[50px] flex flex-col items-center justify-center">
+              {rouletteWinner ? (
+                <div className="space-y-1 animate-bounce">
+                  <p className="text-[9px] text-neutral-500 uppercase tracking-widest font-bold">GANADOR DEL TURNO Nº {rouletteSelectedOrder.length}:</p>
+                  <p className="text-base font-black text-[#FF5500] italic tracking-tighter uppercase">{rouletteWinner}</p>
+                </div>
+              ) : rouletteSpinning ? (
+                <p className="text-xs text-neutral-400 animate-pulse font-bold uppercase tracking-wider">¡Girando a velocidad moderada para ver los nombres!</p>
+              ) : rouletteRemainingTeamIds.length > 0 ? (
+                <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">
+                  Gira para decidir el Turno Nº {rouletteSelectedOrder.length + 1}
+                </p>
+              ) : (
+                <p className="text-[10px] text-green-400 font-bold uppercase tracking-widest animate-pulse">
+                  ¡Sorteo completado con éxito!
+                </p>
+              )}
+            </div>
+
+            {/* Mostrar el progreso acumulado si ya hay equipos sorteados */}
+            {rouletteSelectedOrder.length > 0 && rouletteRemainingTeamIds.length > 0 && (
+              <div className="mt-4 border-t border-[#222]/40 pt-3 text-left">
+                <p className="text-[9px] text-neutral-500 uppercase tracking-wider mb-1 font-bold">ORDEN PARCIAL:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {rouletteSelectedOrder.map((teamId, idx) => {
+                    const team = lobbyState.teams.find(t => t.id === teamId);
+                    return (
+                      <span key={teamId} className="text-[8px] font-mono bg-[#1A1A1A] border border-[#2D2D2D] px-1.5 py-0.5 text-neutral-300 font-bold uppercase">
+                        {idx + 1}º: {team?.name}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 grid grid-cols-2 gap-4">
+              {rouletteRemainingTeamIds.length > 0 ? (
+                <button
+                  onClick={startRouletteSpin}
+                  disabled={rouletteSpinning}
+                  className="bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] text-white font-bold uppercase text-[10px] py-2 px-4 rounded-none transition-all disabled:opacity-30 cursor-pointer"
+                >
+                  {rouletteWinner ? 'GIRAR SIGUIENTE' : '¡GIRAR RULETA!'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleApplyRouletteOrder}
+                  className="bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] text-white font-bold uppercase text-[10px] py-2 px-4 rounded-none transition-all cursor-pointer"
+                >
+                  APLICAR ORDEN
+                </button>
+              )}
+              
+              <button
+                onClick={() => setShowRouletteModal(false)}
+                disabled={rouletteSpinning}
+                className="bg-transparent border border-neutral-600 hover:border-white text-white font-bold uppercase text-[10px] py-2 px-4 rounded-none transition-all cursor-pointer"
+              >
+                {rouletteRemainingTeamIds.length === 0 ? 'CERRAR' : 'CANCELAR'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sorteo de Enfrentamientos Modal (Rival Roulette) */}
+      {showMatchupModal && (
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-[#111] border-4 border-[#1A1A1A] p-8 shadow-2xl relative font-mono text-center">
+            <h3 className="text-sm font-black uppercase text-neutral-400 tracking-wider mb-2 border-b border-[#222] pb-2 flex items-center justify-center gap-1.5">
+              ⚔️ SORTEO DE ENFRENTAMIENTOS
+            </h3>
+
+            {matchupUnpairedIds.length > 0 ? (
+              <div className="flex flex-col items-center">
+                <p className="text-[10px] text-neutral-400 uppercase tracking-widest font-black mb-1">
+                  {matchupDrawnTemp.length === 0 
+                    ? `SORTEANDO INTEGRANTE DE LA PARTIDA ${matchupPairs.length + 1}`
+                    : `SORTEANDO RIVAL PARA: ${lobbyState.teams.find(t => t.id === matchupDrawnTemp[0])?.name.toUpperCase()}`
+                  }
+                </p>
+                <div className="flex justify-center my-2 relative">
+                  <canvas 
+                    ref={matchupCanvasRef} 
+                    width={480} 
+                    height={480}
+                    className="w-[340px] h-[340px] md:w-[420px] md:h-[420px] select-none"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="my-6 p-4 bg-[#161616] border border-[#222] text-left">
+                <p className="text-xs font-black text-[#FF5500] uppercase tracking-wider mb-3 text-center border-b border-[#222] pb-2">
+                  ⚔️ ENCUENTROS SORTEADOS
+                </p>
+                <div className="space-y-1.5">
+                  {matchupPairs.map((pair, idx) => {
+                    const teamA = lobbyState.teams.find(t => t.id === pair.teamAId);
+                    const isWinnerPlaceholder = pair.teamBId === 'winner_match_1';
+                    const teamB = isWinnerPlaceholder ? null : lobbyState.teams.find(t => t.id === pair.teamBId);
+                    
+                    return (
+                      <button 
+                        key={idx}
+                        disabled={isWinnerPlaceholder}
+                        onClick={() => {
+                          if (isWinnerPlaceholder) return;
+                          setMatchTeamA(pair.teamAId);
+                          setMatchTeamB(pair.teamBId);
+                          setShowMatchupModal(false);
+                          showToast(`Cargado en selector: ${teamA?.name} VS ${teamB?.name}`, 'info');
+                        }}
+                        className={`w-full flex justify-between items-center text-xs p-2 bg-[#1C1C1C] border border-[#222] transition-all text-left ${
+                          isWinnerPlaceholder ? 'opacity-80 border-dashed cursor-not-allowed' : 'hover:border-white cursor-pointer'
+                        }`}
+                      >
+                        <span className="font-bold text-white">PARTIDA {idx + 1}</span>
+                        <span className="text-neutral-300 font-bold uppercase truncate max-w-[200px]">
+                          {teamA?.name} <span className="text-[#FF5500] font-black">VS</span> {isWinnerPlaceholder ? 'GANADOR PARTIDA 1' : teamB?.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[9px] text-neutral-500 text-center mt-3 uppercase">
+                  (Haz clic en un encuentro para cargarlo en el panel de lanzador)
+                </p>
+              </div>
+            )}
+
+            {/* Estado e instrucciones */}
+            <div className="mt-2 min-h-[45px] flex flex-col items-center justify-center">
+              {matchupWinner ? (
+                <div className="space-y-0.5 animate-bounce">
+                  <p className="text-[9px] text-neutral-500 uppercase tracking-widest font-bold">EQUIPO SORTEADO:</p>
+                  <p className="text-base font-black text-[#FF5500] italic tracking-tighter uppercase">{matchupWinner}</p>
+                </div>
+              ) : matchupSpinning ? (
+                <p className="text-xs text-neutral-400 animate-pulse font-bold uppercase tracking-wider">¡Decidiendo con la ruleta de equipos!</p>
+              ) : matchupUnpairedIds.length > 0 ? (
+                <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">
+                  Gira para sortear
+                </p>
+              ) : (
+                <p className="text-[10px] text-green-400 font-bold uppercase tracking-widest animate-pulse">
+                  ¡Sorteo finalizado! Selecciona una partida para cargarla
+                </p>
+              )}
+            </div>
+
+            {/* Mostrar el progreso acumulado si ya hay parejas sorteadas */}
+            {matchupPairs.length > 0 && matchupUnpairedIds.length > 0 && (
+              <div className="mt-3 border-t border-[#222]/40 pt-2 text-left">
+                <p className="text-[9px] text-neutral-500 uppercase tracking-wider mb-1 font-bold font-mono">ENCUENTROS LISTOS:</p>
+                <div className="flex flex-col gap-1">
+                  {matchupPairs.map((pair, idx) => {
+                    const teamA = lobbyState.teams.find(t => t.id === pair.teamAId);
+                    const isWinnerPlaceholder = pair.teamBId === 'winner_match_1';
+                    const teamB = isWinnerPlaceholder ? null : lobbyState.teams.find(t => t.id === pair.teamBId);
+                    return (
+                      <div key={idx} className="text-[8px] font-mono bg-[#1A1A1A] border border-[#2D2D2D] px-2 py-1 text-neutral-300 font-bold uppercase flex justify-between">
+                        <span>PARTIDA {idx + 1}:</span>
+                        <span>{teamA?.name} VS {isWinnerPlaceholder ? 'GANADOR PARTIDA 1' : teamB?.name}</span>
+                      </div>
+                    );
+                  })}
+                  {matchupDrawnTemp.length === 1 && (
+                    <div className="text-[8px] font-mono text-yellow-500 animate-pulse uppercase">
+                      ESPERANDO COMPAÑERO PARA: {lobbyState.teams.find(t => t.id === matchupDrawnTemp[0])?.name.toUpperCase()}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 grid grid-cols-2 gap-4">
+              {matchupUnpairedIds.length > 0 ? (
+                <button
+                  onClick={startMatchupSpin}
+                  disabled={matchupSpinning}
+                  className="bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] text-white font-bold uppercase text-[10px] py-2 px-4 rounded-none transition-all disabled:opacity-30 cursor-pointer"
+                >
+                  {matchupWinner ? 'SIGUIENTE ENCUENTRO' : '¡GIRAR RULETA!'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowMatchupModal(false)}
+                  className="bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] text-white font-bold uppercase text-[10px] py-2 px-4 rounded-none transition-all cursor-pointer"
+                >
+                  ACEPTAR
+                </button>
+              )}
+              
+              <button
+                onClick={() => setShowMatchupModal(false)}
+                disabled={matchupSpinning}
+                className="bg-transparent border border-neutral-600 hover:border-white text-white font-bold uppercase text-[10px] py-2 px-4 rounded-none transition-all cursor-pointer"
+              >
+                {matchupUnpairedIds.length === 0 ? 'CERRAR' : 'CANCELAR'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bet & Quota Verification Modal (Antes de lanzar el encuentro) */}
+      {isBetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/85 backdrop-blur-md">
+          <div className="bg-[#121212] border-2 border-[#2D2D2D] w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl rounded-none font-mono text-white animate-fade-in overflow-hidden">
+            
+            {/* Header */}
+            <div className="bg-[#1A1A1A] border-b border-[#2D2D2D] px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-none bg-[#FF5500]/20 border border-[#FF5500] flex items-center justify-center text-[#FF5500]">
+                  <Coins className="w-4 h-4 animate-bounce" />
+                </div>
+                <div>
+                  <h3 className="text-sm md:text-base font-black uppercase tracking-wider text-white flex items-center gap-2">
+                    CONFIGURAR APUESTA Y VERIFICAR CUOTAS
+                  </h3>
+                  <p className="text-[10px] text-neutral-400 font-mono">
+                    Todos los 10 jugadores deben tener saldo suficiente o estar marcados como pagados para poder lanzar.
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsBetModalOpen(false)}
+                className="text-neutral-400 hover:text-white p-1 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content Scrollable */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+              
+              {/* Section 1: Selector de Apuesta / Cuota */}
+              <div className="bg-[#161616] border border-[#2D2D2D] p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-neutral-400 tracking-wider flex items-center gap-1.5 mb-2">
+                    <DollarSign className="w-3.5 h-3.5 text-[#FF5500]" /> CUOTA DE APUESTA POR JUGADOR
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[0, 2, 5, 10, 20].map((amt) => {
+                      const active = !isCustomBet && selectedBetAmount === amt;
+                      return (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => handleSelectBetAmount(amt)}
+                          className={`px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer ${
+                            active 
+                              ? 'bg-[#FF5500] border-[#FF5500] text-white shadow-md' 
+                              : 'bg-[#1F1F1F] border-[#333] hover:border-neutral-500 text-neutral-300'
+                          }`}
+                        >
+                          {amt === 0 ? 'GRATIS (S/ 0)' : `S/ ${amt}.00`}
+                        </button>
+                      );
+                    })}
+
+                    {/* Custom Bet Button / Input */}
+                    <div className="flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCustomBet(true);
+                          handleCustomBetChange(customBetInput || '15');
+                        }}
+                        className={`px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer ${
+                          isCustomBet 
+                            ? 'bg-[#FF5500] border-[#FF5500] text-white' 
+                            : 'bg-[#1F1F1F] border-[#333] hover:border-neutral-500 text-neutral-300'
+                        }`}
+                      >
+                        OTRO MONTO
+                      </button>
+                      {isCustomBet && (
+                        <div className="flex items-center ml-2 border border-[#FF5500] bg-[#1A1A1A] px-2 py-1">
+                          <span className="text-xs text-[#FF5500] font-bold mr-1">S/</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={customBetInput}
+                            onChange={(e) => handleCustomBetChange(e.target.value)}
+                            className="w-16 bg-transparent text-xs text-white font-mono focus:outline-none"
+                            placeholder="0.00"
+                            autoFocus
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pot summary Card */}
+                <div className="bg-[#1A1A1A] border border-[#333] px-5 py-3 flex items-center gap-6 justify-between lg:justify-end">
+                  <div className="text-left">
+                    <span className="text-[9px] uppercase tracking-wider text-neutral-400 block font-bold">Cuota Indiv.</span>
+                    <span className="text-sm font-black text-white">S/ {effectiveBetAmount.toFixed(2)}</span>
+                  </div>
+                  <div className="w-[1px] h-8 bg-[#333]" />
+                  <div className="text-left">
+                    <span className="text-[9px] uppercase tracking-wider text-neutral-400 block font-bold">10 Jugadores</span>
+                    <span className="text-sm font-black text-neutral-300">10 Cupos</span>
+                  </div>
+                  <div className="w-[1px] h-8 bg-[#333]" />
+                  <div className="text-right">
+                    <span className="text-[9px] uppercase tracking-wider text-[#FF5500] block font-bold">🏆 Pozo Acumulado</span>
+                    <span className="text-base md:text-lg font-black text-[#FF5500] tracking-tight">
+                      S/ {(effectiveBetAmount * 10).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Progress & Status Banner */}
+              {(() => {
+                const isPlayerReady = (p: PlayerBetStatus) => {
+                  if (effectiveBetAmount === 0) return true;
+                  if (manualPaidMap[p.discordId]) return true;
+                  return p.balance >= effectiveBetAmount;
+                };
+                const readyCount = betPlayers.filter(isPlayerReady).length;
+                const isAllReady = betPlayers.length === 10 && readyCount === 10;
+
+                return (
+                  <div className={`p-4 border transition-all ${
+                    isAllReady 
+                      ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-200' 
+                      : 'bg-neutral-900 border-neutral-700 text-neutral-300'
+                  }`}>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-2">
+                      <div className="flex items-center gap-2">
+                        {isAllReady ? (
+                          <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                        )}
+                        <span className="text-xs font-bold uppercase tracking-wider">
+                          {isAllReady 
+                            ? '¡LOS 10 JUGADORES ESTÁN LISTOS! Se puede lanzar el encuentro.' 
+                            : `FALTAN ${10 - readyCount} JUGADOR(ES) POR COMPLETAR SU CUOTA (${readyCount}/10 LISTOS)`}
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-mono text-neutral-400 font-bold">
+                        {readyCount} de 10 Cuotas Listas ({Math.round((readyCount / 10) * 100)}%)
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-neutral-800 h-2 rounded-none overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-300 ${
+                          isAllReady ? 'bg-emerald-500' : 'bg-[#FF5500]'
+                        }`}
+                        style={{ width: `${(readyCount / 10) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Section 3: The 10 Players Grid (Team A vs Team B) */}
+              {isLoadingBetStatus ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-2 text-neutral-400">
+                  <RefreshCw className="w-6 h-6 animate-spin text-[#FF5500]" />
+                  <span className="text-xs uppercase font-mono">Consultando saldos en vivo de los 10 jugadores...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Column Team A */}
+                  <div className="bg-[#161616] border border-[#2D2D2D] p-3 md:p-4">
+                    <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#262626]">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black uppercase text-white tracking-wider">
+                          🔵 EQUIPO A: {lobbyState.teams.find(t => t.id === matchTeamA)?.name.toUpperCase() || 'EQUIPO A'}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-neutral-400 font-mono">
+                        {betPlayers.filter(p => p.team === 'A' && (effectiveBetAmount === 0 || manualPaidMap[p.discordId] || p.balance >= effectiveBetAmount)).length}/5 Listos
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {betPlayers.filter(p => p.team === 'A').map((p) => {
+                        const ready = effectiveBetAmount === 0 || manualPaidMap[p.discordId] || p.balance >= effectiveBetAmount;
+                        const isManual = manualPaidMap[p.discordId];
+
+                        return (
+                          <div 
+                            key={p.discordId}
+                            className={`p-2.5 border transition-all flex items-center justify-between gap-3 ${
+                              ready 
+                                ? 'bg-[#181F1A] border-emerald-900/40' 
+                                : 'bg-[#221818] border-red-900/40'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="relative flex-shrink-0">
+                                {p.avatarURL ? (
+                                  <img src={p.avatarURL} alt={p.faceit_nickname} className="w-8 h-8 rounded-none border border-neutral-700 object-cover" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-none bg-neutral-800 border border-neutral-700 flex items-center justify-center text-xs font-bold text-neutral-400">
+                                    {p.faceit_nickname.substring(0, 2).toUpperCase()}
+                                  </div>
+                                )}
+                                {p.isCaptain && (
+                                  <span className="absolute -top-1.5 -right-1.5 text-[9px] bg-amber-500 text-black px-1 font-black leading-tight">
+                                    👑
+                                  </span>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-black text-white truncate max-w-[120px] md:max-w-[150px]">
+                                    {p.faceit_nickname}
+                                  </span>
+                                  {p.displayName && p.displayName !== p.faceit_nickname && (
+                                    <span className="text-[10px] text-neutral-500 truncate hidden sm:inline">
+                                      ({p.displayName})
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px] text-neutral-400 font-mono">
+                                  <span className="flex items-center gap-1">
+                                    <Wallet className="w-2.5 h-2.5 text-neutral-400" />
+                                    Saldo: <strong className="text-white">S/ {p.balance.toFixed(2)}</strong>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {effectiveBetAmount === 0 ? (
+                                <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                                  GRATIS
+                                </span>
+                              ) : isManual ? (
+                                <span className="px-2 py-0.5 text-[9px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                                  ✓ MANUAL
+                                </span>
+                              ) : ready ? (
+                                <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                                  ✓ SALDO OK
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/40">
+                                  FALTA S/ {p.deficit.toFixed(2)}
+                                </span>
+                              )}
+
+                              {effectiveBetAmount > 0 && (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleManualPaid(p.discordId)}
+                                    title={isManual ? 'Quitar marca de pago manual' : 'Marcar como pagado manualmente (Yape directo/efectivo)'}
+                                    className={`px-1.5 py-1 text-[9px] font-bold border transition-all cursor-pointer ${
+                                      isManual 
+                                        ? 'bg-blue-600 border-blue-400 text-white' 
+                                        : 'bg-[#222] border-[#444] text-neutral-400 hover:text-white hover:border-neutral-200'
+                                    }`}
+                                  >
+                                    {isManual ? 'PAGADO' : 'MANUAL'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setQuickTopUpUser({ discordId: p.discordId, nickname: p.faceit_nickname });
+                                      setQuickTopUpAmount(p.deficit > 0 ? p.deficit.toFixed(2) : '5.00');
+                                    }}
+                                    title="Recargar saldo a este usuario"
+                                    className="px-1.5 py-1 text-[9px] font-bold bg-[#262626] border border-[#444] text-[#FF5500] hover:border-[#FF5500] transition-all cursor-pointer"
+                                  >
+                                    + RECARGAR
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Column Team B */}
+                  <div className="bg-[#161616] border border-[#2D2D2D] p-3 md:p-4">
+                    <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#262626]">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black uppercase text-white tracking-wider">
+                          🟠 EQUIPO B: {lobbyState.teams.find(t => t.id === matchTeamB)?.name.toUpperCase() || 'EQUIPO B'}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-neutral-400 font-mono">
+                        {betPlayers.filter(p => p.team === 'B' && (effectiveBetAmount === 0 || manualPaidMap[p.discordId] || p.balance >= effectiveBetAmount)).length}/5 Listos
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {betPlayers.filter(p => p.team === 'B').map((p) => {
+                        const ready = effectiveBetAmount === 0 || manualPaidMap[p.discordId] || p.balance >= effectiveBetAmount;
+                        const isManual = manualPaidMap[p.discordId];
+
+                        return (
+                          <div 
+                            key={p.discordId}
+                            className={`p-2.5 border transition-all flex items-center justify-between gap-3 ${
+                              ready 
+                                ? 'bg-[#181F1A] border-emerald-900/40' 
+                                : 'bg-[#221818] border-red-900/40'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="relative flex-shrink-0">
+                                {p.avatarURL ? (
+                                  <img src={p.avatarURL} alt={p.faceit_nickname} className="w-8 h-8 rounded-none border border-neutral-700 object-cover" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-none bg-neutral-800 border border-neutral-700 flex items-center justify-center text-xs font-bold text-neutral-400">
+                                    {p.faceit_nickname.substring(0, 2).toUpperCase()}
+                                  </div>
+                                )}
+                                {p.isCaptain && (
+                                  <span className="absolute -top-1.5 -right-1.5 text-[9px] bg-amber-500 text-black px-1 font-black leading-tight">
+                                    👑
+                                  </span>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-black text-white truncate max-w-[120px] md:max-w-[150px]">
+                                    {p.faceit_nickname}
+                                  </span>
+                                  {p.displayName && p.displayName !== p.faceit_nickname && (
+                                    <span className="text-[10px] text-neutral-500 truncate hidden sm:inline">
+                                      ({p.displayName})
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px] text-neutral-400 font-mono">
+                                  <span className="flex items-center gap-1">
+                                    <Wallet className="w-2.5 h-2.5 text-neutral-400" />
+                                    Saldo: <strong className="text-white">S/ {p.balance.toFixed(2)}</strong>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {effectiveBetAmount === 0 ? (
+                                <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                                  GRATIS
+                                </span>
+                              ) : isManual ? (
+                                <span className="px-2 py-0.5 text-[9px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                                  ✓ MANUAL
+                                </span>
+                              ) : ready ? (
+                                <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                                  ✓ SALDO OK
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/40">
+                                  FALTA S/ {p.deficit.toFixed(2)}
+                                </span>
+                              )}
+
+                              {effectiveBetAmount > 0 && (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleManualPaid(p.discordId)}
+                                    title={isManual ? 'Quitar marca de pago manual' : 'Marcar como pagado manualmente (Yape directo/efectivo)'}
+                                    className={`px-1.5 py-1 text-[9px] font-bold border transition-all cursor-pointer ${
+                                      isManual 
+                                        ? 'bg-blue-600 border-blue-400 text-white' 
+                                        : 'bg-[#222] border-[#444] text-neutral-400 hover:text-white hover:border-neutral-200'
+                                    }`}
+                                  >
+                                    {isManual ? 'PAGADO' : 'MANUAL'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setQuickTopUpUser({ discordId: p.discordId, nickname: p.faceit_nickname });
+                                      setQuickTopUpAmount(p.deficit > 0 ? p.deficit.toFixed(2) : '5.00');
+                                    }}
+                                    title="Recargar saldo a este usuario"
+                                    className="px-1.5 py-1 text-[9px] font-bold bg-[#262626] border border-[#444] text-[#FF5500] hover:border-[#FF5500] transition-all cursor-pointer"
+                                  >
+                                    + RECARGAR
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            {(() => {
+              const isPlayerReady = (p: PlayerBetStatus) => {
+                if (effectiveBetAmount === 0) return true;
+                if (manualPaidMap[p.discordId]) return true;
+                return p.balance >= effectiveBetAmount;
+              };
+              const readyCount = betPlayers.filter(isPlayerReady).length;
+              const isAllReady = betPlayers.length === 10 && readyCount === 10;
+
+              return (
+                <div className="bg-[#161616] border-t border-[#2D2D2D] px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => fetchBetStatus(effectiveBetAmount)}
+                    disabled={isLoadingBetStatus}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-3 py-2 bg-[#222] hover:bg-[#2A2A2A] border border-[#333] text-xs font-bold text-neutral-300 uppercase transition-all cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingBetStatus ? 'animate-spin' : ''}`} />
+                    Actualizar Saldos
+                  </button>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setIsBetModalOpen(false)}
+                      disabled={isLaunchingMatch}
+                      className="flex-1 sm:flex-none px-4 py-2 border border-neutral-600 hover:border-white text-xs font-bold text-white uppercase transition-all cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConfirmLaunchMatch}
+                      disabled={!isAllReady || isLaunchingMatch}
+                      className={`flex-1 sm:flex-none px-6 py-2 border text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                        isAllReady && !isLaunchingMatch
+                          ? 'bg-[#FF5500] hover:bg-[#FF7733] border-[#FF5500] text-white shadow-lg shadow-[#FF5500]/20'
+                          : 'bg-neutral-800 border-neutral-700 text-neutral-500 cursor-not-allowed opacity-50'
+                      }`}
+                    >
+                      {isLaunchingMatch 
+                        ? 'LANZANDO ENCUENTRO...' 
+                        : isAllReady 
+                          ? `🚀 CONFIRMAR Y LANZAR (POZO: S/ ${(effectiveBetAmount * 10).toFixed(2)})` 
+                          : `BLOQUEADO (${readyCount}/10 LISTOS)`}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+          </div>
+        </div>
+      )}
+
+      {/* Modal para Recarga de Saldo (Culqi Yape o Manual) */}
+      {quickTopUpUser && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in font-mono">
+          <div className="bg-[#1A1A1A] border-2 border-[#FF5500] p-5 w-full max-w-md text-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#2D2D2D] pb-3 mb-3">
+              <h4 className="text-xs font-black uppercase text-[#FF5500] flex items-center gap-2">
+                <Coins className="w-4 h-4" /> RECARGAR SALDO A JUGADOR
+              </h4>
+              <button 
+                type="button"
+                onClick={() => setQuickTopUpUser(null)}
+                className="text-neutral-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-[11px] text-neutral-300 mb-3">
+              Jugador: <strong className="text-white">{quickTopUpUser.nickname}</strong>
+            </p>
+
+            {/* Tabs */}
+            <div className="flex border border-[#333] mb-4 bg-[#141414]">
+              <button
+                type="button"
+                onClick={() => setTopUpTab('culqi_yape')}
+                className={`flex-1 py-1.5 text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  topUpTab === 'culqi_yape'
+                    ? 'bg-[#742284] text-white'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                ⚡ Yape Automático (Culqi)
+              </button>
+              <button
+                type="button"
+                onClick={() => setTopUpTab('admin_manual')}
+                className={`flex-1 py-1.5 text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  topUpTab === 'admin_manual'
+                    ? 'bg-[#FF5500] text-white'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                🛠️ Acreditar Manual
+              </button>
+            </div>
+
+            {topUpTab === 'culqi_yape' ? (
+              <div className="space-y-3 mb-4">
+                <div className="p-2.5 bg-[#25152B] border border-[#742284]/40 text-[10px] text-purple-200">
+                  ℹ️ El jugador genera su <strong>Código de Aprobación</strong> de 6 dígitos en su app de Yape (Menú &gt; Código de aprobación).
+                </div>
+                <div>
+                  <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Monto en Soles (PEN):</label>
+                  <div className="flex items-center bg-[#111] border border-[#333] px-3 py-1.5 focus-within:border-[#742284]">
+                    <span className="text-xs text-[#A855F7] font-bold mr-2">S/</span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={quickTopUpAmount}
+                      onChange={(e) => setQuickTopUpAmount(e.target.value)}
+                      className="w-full bg-transparent text-sm text-white focus:outline-none"
+                      placeholder="5.00"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Celular de Yape (9 dígitos):</label>
+                  <input
+                    type="text"
+                    maxLength={9}
+                    value={yapePhoneInput}
+                    onChange={(e) => setYapePhoneInput(e.target.value)}
+                    className="w-full bg-[#111] border border-[#333] px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#742284]"
+                    placeholder="Ej: 987654321"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Código de Aprobación (6 dígitos):</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={yapeOtpInput}
+                    onChange={(e) => setYapeOtpInput(e.target.value)}
+                    className="w-full bg-[#111] border border-[#333] px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#742284]"
+                    placeholder="Ej: 123456"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3 mb-4">
+                <div>
+                  <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Monto a Acreditar (S/):</label>
+                  <div className="flex items-center bg-[#111] border border-[#333] px-3 py-1.5 focus-within:border-[#FF5500]">
+                    <span className="text-xs text-[#FF5500] font-bold mr-2">S/</span>
+                    <input
+                      type="number"
+                      min="0.5"
+                      step="0.5"
+                      value={quickTopUpAmount}
+                      onChange={(e) => setQuickTopUpAmount(e.target.value)}
+                      className="w-full bg-transparent text-sm text-white focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-neutral-400">
+                  Usa esta opción si el jugador ya te yapeó a tu celular personal o pagó en efectivo.
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 border-t border-[#2D2D2D] pt-3">
+              <button
+                type="button"
+                onClick={() => setQuickTopUpUser(null)}
+                className="px-3 py-1.5 border border-neutral-600 text-xs font-bold text-white uppercase hover:border-white transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              {topUpTab === 'culqi_yape' ? (
+                <button
+                  type="button"
+                  onClick={handleCulqiYapeSubmit}
+                  disabled={isSubmittingTopUp}
+                  className="px-4 py-1.5 bg-[#742284] hover:bg-[#8B2FA0] border border-[#742284] text-xs font-black text-white uppercase transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                >
+                  {isSubmittingTopUp ? 'Cobrando con Yape...' : 'Cobrar con Yape (Culqi)'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleQuickTopUpSubmit}
+                  disabled={isSubmittingTopUp}
+                  className="px-4 py-1.5 bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] text-xs font-black text-white uppercase transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmittingTopUp ? 'Acreditando...' : 'Confirmar Acreditación'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Notification Toast Stack (Admin Style) */}
       <div id="toast-container" className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3">
         {toasts.map(t => (
@@ -2031,3 +3535,4 @@ export default function App() {
     </div>
   );
 }
+

@@ -42,3 +42,24 @@
   scrollbar-width: thin;
   scrollbar-color: #1F1F1F #0A0A0A;
 }
+
+html {
+  font-size: 20px;
+}
+
+/* Forzar que los tamaños pequeños definidos en píxeles fijos también crezcan */
+.text-\[8px\] {
+  font-size: 11px !important;
+}
+.text-\[9px\] {
+  font-size: 12px !important;
+}
+.text-\[10px\] {
+  font-size: 13px !important;
+}
+.text-\[11px\] {
+  font-size: 14px !important;
+}
+.text-\[12px\] {
+  font-size: 15px !important;
+}

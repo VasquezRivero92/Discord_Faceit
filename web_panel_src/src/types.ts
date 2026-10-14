@@ -63,3 +63,25 @@ export interface ToastMessage {
   text: string;
   type: 'success' | 'error' | 'info';
 }
+
+export interface PlayerBetStatus {
+  discordId: string;
+  faceit_nickname: string;
+  displayName: string;
+  avatarURL?: string | null;
+  team: 'A' | 'B';
+  teamName: string;
+  isCaptain: boolean;
+  balance: number;
+  hasEnough: boolean;
+  deficit: number;
+}
+
+export interface BetStatusResponse {
+  betAmount: number;
+  totalPot: number;
+  allReady: boolean;
+  teamA: { id: string; name: string };
+  teamB: { id: string; name: string };
+  players: PlayerBetStatus[];
+}

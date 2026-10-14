@@ -11,5 +11,8 @@ if (fs.existsSync(assetsDir)) {
 }
 
 console.log('Compiling TypeScript and building Vite bundle...');
-execSync('npx tsc && npx vite build', { stdio: 'inherit' });
+const currentDir = import.meta.dirname || path.dirname(new URL(import.meta.url).pathname);
+const tscPath = path.resolve(currentDir, 'node_modules/.bin/tsc');
+const vitePath = path.resolve(currentDir, 'node_modules/.bin/vite');
+execSync(`"${tscPath}" && "${vitePath}" build`, { stdio: 'inherit', cwd: currentDir });
 console.log('Build completed successfully.');

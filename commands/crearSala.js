@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, MessageFlags } from 'discord.js';
 import { getEffectiveConfigForGuild } from '../config/index.js';
 import { updateLivePanel } from '../services/matchMessages.js';
 import { logger } from '../utils/logger.js';
@@ -14,7 +14,7 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction, db) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
     const config = await getEffectiveConfigForGuild(interaction.guildId);
@@ -87,6 +87,11 @@ export async function execute(interaction, db) {
       { id: guild.id, deny: ['Connect'] },
       { id: botId, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
     ];
+
+    if (config.discordMatchAccessRoleId) {
+      permissionOverwrites1.push({ id: config.discordMatchAccessRoleId, allow: ['ViewChannel', 'Connect', 'Speak'] });
+      permissionOverwrites2.push({ id: config.discordMatchAccessRoleId, allow: ['ViewChannel', 'Connect', 'Speak'] });
+    }
 
     for (const p of teamA) {
       permissionOverwrites1.push({ id: p.member.id, allow: ['Connect', 'Speak'] });

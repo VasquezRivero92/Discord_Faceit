@@ -87,3 +87,35 @@ export async function removeAllFaceitRoles(member, guild) {
   }
   return rolesToRemove.length;
 }
+
+export async function syncMemberNickname(guild, memberId, faceitNickname) {
+  if (!guild || !memberId || !faceitNickname) {
+    logger.warn(`[NICK SYNC] Parámetros insuficientes: guild=${!!guild}, memberId=${memberId}, faceitNickname=${faceitNickname}`);
+    return false;
+  }
+  try {
+    const member = await guild.members.fetch(memberId).catch(() => null);
+    if (!member) {
+      logger.warn(`[NICK SYNC] No se pudo encontrar al miembro ${memberId} en el servidor ${guild.name}`);
+      return false;
+    }
+
+    if (member.nickname === faceitNickname) {
+      logger.info(`[NICK SYNC] El apodo de ${member.user.tag} ya es exactamente '${faceitNickname}' en ${guild.name}`);
+      return true;
+    }
+
+    logger.info(`[NICK SYNC] Intentando cambiar apodo de ${member.user.tag} (${member.nickname || member.displayName}) -> '${faceitNickname}'...`);
+    await member.setNickname(faceitNickname, 'Sincronización de apodo con Faceit');
+    logger.success(`[NICK SYNC] Apodo de ${member.user.tag} actualizado a '${faceitNickname}' en ${guild.name}`);
+    return true;
+  } catch (err) {
+    if (err.code === 50013) {
+      logger.warn(`[NICK SYNC] No se pudo cambiar el apodo de ${memberId}: El bot no tiene permisos suficientes en Discord (el usuario puede ser el dueño del servidor o poseer un rol superior al rol del bot).`);
+    } else {
+      logger.error(`[NICK SYNC] Error al cambiar apodo de ${memberId}:`, err.message);
+    }
+    return false;
+  }
+}
+

@@ -8,6 +8,201 @@ dotenv.config();
 
 const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
 
+class MockFirestore {
+  constructor() {
+    this.store = {}; // { collectionName: { docId: data } }
+  }
+  collection(name) {
+    if (!this.store[name]) this.store[name] = {};
+    return new MockCollection(this.store[name], name, this);
+  }
+  batch() {
+    return new MockBatch(this);
+  }
+  _resolveServerTimestamps(data) {
+    if (!data) return data;
+    const copy = { ...data };
+    for (const [k, v] of Object.entries(copy)) {
+      if (v && v.__serverTimestamp) {
+        copy[k] = new Date();
+      }
+    }
+    return copy;
+  }
+}
+
+class MockCollection {
+  constructor(dataStore, name, firestoreInstance) {
+    this.dataStore = dataStore;
+    this.name = name;
+    this.firestoreInstance = firestoreInstance;
+  }
+  doc(id) {
+    const docId = id || Math.random().toString(36).substring(2, 15);
+    return new MockDocument(this.dataStore, docId, this.name, this.firestoreInstance);
+  }
+  async add(data) {
+    const id = Math.random().toString(36).substring(2, 15);
+    const cleanData = this.firestoreInstance._resolveServerTimestamps(data);
+    this.dataStore[id] = cleanData;
+    return new MockDocument(this.dataStore, id, this.name, this.firestoreInstance);
+  }
+  where(field, op, val) {
+    return new MockQuery(this.dataStore, this.name, this.firestoreInstance).where(field, op, val);
+  }
+  orderBy(field, dir) {
+    return new MockQuery(this.dataStore, this.name, this.firestoreInstance).orderBy(field, dir);
+  }
+  limit(n) {
+    return new MockQuery(this.dataStore, this.name, this.firestoreInstance).limit(n);
+  }
+  async get() {
+    return new MockQuery(this.dataStore, this.name, this.firestoreInstance).get();
+  }
+}
+
+class MockDocument {
+  constructor(dataStore, id, collectionName, firestoreInstance) {
+    this.dataStore = dataStore;
+    this.id = id;
+    this.collectionName = collectionName;
+    this.firestoreInstance = firestoreInstance;
+  }
+  async get() {
+    const exists = this.dataStore[this.id] !== undefined;
+    const data = exists ? this.dataStore[this.id] : undefined;
+    return {
+      exists,
+      id: this.id,
+      data: () => (data ? { ...data } : undefined)
+    };
+  }
+  async set(data, options) {
+    const cleanData = this.firestoreInstance._resolveServerTimestamps(data);
+    if (options && options.merge && this.dataStore[this.id]) {
+      this.dataStore[this.id] = { ...this.dataStore[this.id], ...cleanData };
+    } else {
+      this.dataStore[this.id] = cleanData;
+    }
+  }
+  async update(data) {
+    if (this.dataStore[this.id] === undefined) {
+      this.dataStore[this.id] = {};
+    }
+    const cleanData = this.firestoreInstance._resolveServerTimestamps(data);
+    for (const [k, v] of Object.entries(cleanData)) {
+      if (v === '__DELETE__') {
+        delete this.dataStore[this.id][k];
+      } else {
+        this.dataStore[this.id][k] = v;
+      }
+    }
+  }
+  async delete() {
+    delete this.dataStore[this.id];
+  }
+}
+
+class MockQuery {
+  constructor(dataStore, collectionName, firestoreInstance) {
+    this.dataStore = dataStore;
+    this.collectionName = collectionName;
+    this.firestoreInstance = firestoreInstance;
+    this.filters = [];
+    this.order = null;
+    this.lim = null;
+  }
+  where(field, op, val) {
+    this.filters.push({ field, op, val });
+    return this;
+  }
+  orderBy(field, dir) {
+    this.order = { field, dir };
+    return this;
+  }
+  limit(n) {
+    this.lim = n;
+    return this;
+  }
+  async get() {
+    let docs = Object.entries(this.dataStore).map(([id, data]) => ({ id, data }));
+    
+    for (const filter of this.filters) {
+      docs = docs.filter(doc => {
+        const val = doc.data[filter.field];
+        if (filter.op === '==' || filter.op === '===') return val === filter.val;
+        if (filter.op === '!=') return val !== filter.val;
+        if (filter.op === '>') return val > filter.val;
+        if (filter.op === '<') return val < filter.val;
+        if (filter.op === '>=') return val >= filter.val;
+        if (filter.op === '<=') return val <= filter.val;
+        if (filter.op === 'array-contains') return Array.isArray(val) && val.includes(filter.val);
+        if (filter.op === 'in') return Array.isArray(filter.val) && filter.val.includes(val);
+        return true;
+      });
+    }
+
+    if (this.order) {
+      docs.sort((a, b) => {
+        const valA = a.data[this.order.field];
+        const valB = b.data[this.order.field];
+        if (valA < valB) return this.order.dir === 'desc' ? 1 : -1;
+        if (valA > valB) return this.order.dir === 'desc' ? -1 : 1;
+        return 0;
+      });
+    }
+
+    if (this.lim !== null) {
+      docs = docs.slice(0, this.lim);
+    }
+
+    const mockDocs = docs.map(doc => ({
+      id: doc.id,
+      exists: true,
+      data: () => ({ ...doc.data })
+    }));
+
+    return {
+      size: mockDocs.length,
+      empty: mockDocs.length === 0,
+      forEach: (callback) => mockDocs.forEach(callback),
+      docs: mockDocs
+    };
+  }
+}
+
+class MockBatch {
+  constructor(firestoreInstance) {
+    this.firestoreInstance = firestoreInstance;
+    this.operations = [];
+  }
+  set(docRef, data, options) {
+    this.operations.push({ type: 'set', docRef, data, options });
+    return this;
+  }
+  update(docRef, data) {
+    this.operations.push({ type: 'update', docRef, data });
+    return this;
+  }
+  delete(docRef) {
+    this.operations.push({ type: 'delete', docRef });
+    return this;
+  }
+  async commit() {
+    for (const op of this.operations) {
+      if (op.type === 'set') {
+        await op.docRef.set(op.data, op.options);
+      } else if (op.type === 'update') {
+        await op.docRef.update(op.data);
+      } else if (op.type === 'delete') {
+        await op.docRef.delete();
+      }
+    }
+  }
+}
+
+let firestoreInitialized = false;
+
 if (serviceAccountPath) {
   try {
     const resolvedPath = path.resolve(serviceAccountPath);
@@ -17,24 +212,63 @@ if (serviceAccountPath) {
         credential: admin.credential.cert(serviceAccount)
       });
       logger.success('🔥 Firebase inicializado usando el archivo de credenciales.');
+      firestoreInitialized = true;
     } else {
       logger.warn(`⚠️ Advertencia: No se encontró el archivo de credenciales de Firebase en: ${resolvedPath}. Intentando inicialización por defecto...`);
       admin.initializeApp();
+      firestoreInitialized = true;
     }
   } catch (error) {
-      logger.error('❌ Error al inicializar Firebase con archivo, intentando inicialización por defecto:', error);
-    admin.initializeApp();
+    logger.error('❌ Error al inicializar Firebase con archivo, intentando inicialización por defecto:', error.message);
+    try {
+      admin.initializeApp();
+      firestoreInitialized = true;
+    } catch (e) {
+      logger.error('❌ Error al inicializar Firebase tras fallback:', e.message);
+    }
   }
 } else {
   try {
     admin.initializeApp();
     logger.success('🔥 Firebase inicializado con credenciales por defecto.');
+    firestoreInitialized = true;
   } catch (error) {
-    logger.error('❌ Error al inicializar Firebase por defecto:', error);
+    logger.error('❌ Error al inicializar Firebase por defecto:', error.message);
   }
 }
 
-const firestore = admin.firestore();
+let firestore;
+try {
+  if (!firestoreInitialized) {
+    throw new Error('Firebase Admin no se ha inicializado.');
+  }
+  firestore = admin.firestore();
+  logger.success('🔥 Conectado a Firestore con éxito.');
+} catch (error) {
+  logger.error('❌ No se pudo conectar a Firestore, activando base de datos en memoria para desarrollo:', error.message);
+  
+  admin.firestore = () => new MockFirestore();
+  admin.firestore.FieldValue = {
+    serverTimestamp: () => ({ __serverTimestamp: true }),
+    delete: () => '__DELETE__'
+  };
+  admin.firestore.Timestamp = class {
+    constructor(seconds, nanoseconds) {
+      this._seconds = seconds;
+      this._nanoseconds = nanoseconds;
+    }
+    toDate() {
+      return new Date(this._seconds * 1000);
+    }
+    static now() {
+      return new this(Math.floor(Date.now() / 1000), 0);
+    }
+    static fromDate(date) {
+      return new this(Math.floor(date.getTime() / 1000), 0);
+    }
+  };
+  firestore = admin.firestore();
+}
 
 const USERS_COLLECTION = 'faceit_users';
 const PENDING_COLLECTION = 'faceit_pending_verifications';
@@ -96,9 +330,9 @@ let activeMatchesLastFetch = 0;
 let activeMatchesFetched = false;
 const ACTIVE_MATCHES_TTL = 10000; // 10 segundos
 
-async function ensureActiveMatchesCache() {
+async function ensureActiveMatchesCache(forceRefresh = false) {
   const now = Date.now();
-  if (activeMatchesFetched && (now - activeMatchesLastFetch < ACTIVE_MATCHES_TTL)) {
+  if (!forceRefresh && activeMatchesFetched && (now - activeMatchesLastFetch < ACTIVE_MATCHES_TTL)) {
     return;
   }
   try {
@@ -123,6 +357,7 @@ function invalidateActiveMatchesCache() {
 // Caché de Configuración por Servidor (Guild Settings)
 const guildSettingsCache = new Map();
 const GUILD_SETTINGS_TTL = 30000; // 30 segundos
+const hubIdToGuildIdsCache = new Map();
 
 export const db = {
   _firestore: firestore,
@@ -158,7 +393,7 @@ export const db = {
     }
   },
 
-  async linkAccounts(discordId, faceitPlayerId, faceitNickname, skillLevel = null, elo = null, guildId = null) {
+  async linkAccounts(discordId, faceitPlayerId, faceitNickname, skillLevel = null, elo = null, guildId = null, season = null) {
     try {
       const docId = guildId ? `${guildId}_${discordId}` : discordId;
       const userRef = firestore.collection(USERS_COLLECTION).doc(docId);
@@ -171,6 +406,9 @@ export const db = {
         faceit_level: skillLevel,
         faceit_elo: elo
       };
+      if (season !== null && season !== undefined) {
+        userData.faceit_level_season = season;
+      }
       await userRef.set({
         ...userData,
         linkedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -188,15 +426,19 @@ export const db = {
     }
   },
 
-  async updatePlayerStats(discordId, skillLevel, elo, guildId = null) {
+  async updatePlayerStats(discordId, skillLevel, elo, guildId = null, season = null) {
     try {
       const docId = guildId ? `${guildId}_${discordId}` : discordId;
       const userRef = firestore.collection(USERS_COLLECTION).doc(docId);
-      await userRef.update({
+      const updateData = {
         faceit_level: skillLevel,
         faceit_elo: elo,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+      };
+      if (season !== null && season !== undefined) {
+        updateData.faceit_level_season = season;
+      }
+      await userRef.update(updateData);
       readyPlayersCache = null;
       readyPlayersLastFetch = 0;
       
@@ -205,14 +447,73 @@ export const db = {
         cacheUser(docId, {
           ...cached,
           faceit_level: skillLevel,
-          faceit_elo: elo
+          faceit_elo: elo,
+          ...(season !== null && season !== undefined ? { faceit_level_season: season } : {})
         });
       } else {
         invalidateUserCache(docId);
       }
-      logger.info(`Stats actualizados en Firestore para Server(${guildId}) Discord(${discordId}): Nivel ${skillLevel}, ELO ${elo}`);
+      logger.info(`Stats actualizados en Firestore para Server(${guildId}) Discord(${discordId}): Nivel ${skillLevel}, ELO ${elo}${season ? `, Season ${season}` : ''}`);
     } catch (error) {
       logger.error('Error al actualizar stats de jugador en Firestore:', error);
+    }
+  },
+
+  /**
+   * Verifica si un jugador ya ha jugado en la temporada actual de una cola del Hub.
+   * @param {string} discordId
+   * @param {string} queueId
+   * @param {number} season
+   * @param {string|null} guildId
+   * @returns {Promise<boolean>}
+   */
+  async hasPlayerPlayedHubSeason(discordId, queueId, season, guildId = null) {
+    if (!discordId || !season) return false;
+    try {
+      const docId = guildId ? `${guildId}_${discordId}` : discordId;
+      const userRef = firestore.collection(USERS_COLLECTION).doc(docId);
+      const doc = await userRef.get();
+      if (!doc.exists) return false;
+      const data = doc.data();
+      const qKey = (queueId || 'default').replace(/\./g, '_');
+      const playedSeason = data.hub_seasons_played?.[qKey];
+      return playedSeason === season;
+    } catch (error) {
+      logger.error(`Error al verificar season jugada para Discord(${discordId}):`, error);
+      return false;
+    }
+  },
+
+  /**
+   * Registra que un jugador ha iniciado su primera partida en una temporada para una cola del Hub.
+   * @param {string} discordId
+   * @param {string} queueId
+   * @param {number} season
+   * @param {string|null} guildId
+   */
+  async recordPlayerHubSeason(discordId, queueId, season, guildId = null) {
+    if (!discordId || !season) return;
+    try {
+      const docId = guildId ? `${guildId}_${discordId}` : discordId;
+      const userRef = firestore.collection(USERS_COLLECTION).doc(docId);
+      const qKey = (queueId || 'default').replace(/\./g, '_');
+      await userRef.update({
+        [`hub_seasons_played.${qKey}`]: season,
+        last_hub_season_played: season,
+        last_hub_match_at: admin.firestore.FieldValue.serverTimestamp()
+      }).catch(async () => {
+        await userRef.set({
+          hub_seasons_played: {
+            [qKey]: season
+          },
+          last_hub_season_played: season,
+          last_hub_match_at: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+      invalidateUserCache(docId);
+      logger.info(`Temporada de Hub registrada en Firestore: Discord(${discordId}) -> Cola(${qKey}) Season(${season})`);
+    } catch (error) {
+      logger.error(`Error al registrar season de Hub para Discord(${discordId}):`, error);
     }
   },
 
@@ -384,22 +685,30 @@ export const db = {
   },
 
   // --- Gestión de Partidas Activas ---
-  async addActiveMatch(matchId, matchData, vc1Id = null, vc2Id = null, messageId = null, faction1Roster = [], faction2Roster = [], originalVoiceStates = {}, guildId = null) {
+  async addActiveMatch(matchId, matchData, vc1Id = null, vc2Id = null, messageId = null, faction1Roster = [], faction2Roster = [], originalVoiceStates = {}, guildId = null, queueId = null, queueName = null, matchesChannelId = null, waitingRoomId = null) {
+    if (!matchId || typeof matchId !== 'string') {
+      logger.warn('addActiveMatch ignorado: matchId no es válido o está vacío.');
+      return;
+    }
     try {
       const docRef = firestore.collection(ACTIVE_MATCHES_COLLECTION).doc(matchId);
       const matchObj = {
         id: matchId,
         entity_custom_name: matchData.entity_custom_name || 'Club',
         game: matchData.game || 'cs2',
-        map: matchData.voting?.map?.pick?.[0] || 'Votando...',
-        location: matchData.voting?.location?.pick?.[0] || 'Votando...',
-        faction1_name: matchData.teams?.faction1?.name || 'Equipo A',
-        faction2_name: matchData.teams?.faction2?.name || 'Equipo B',
+        map: matchData.voting?.map?.pick?.[0] || matchData.map || 'Votando...',
+        location: matchData.voting?.location?.pick?.[0] || matchData.location || 'Votando...',
+        faction1_name: matchData.teams?.faction1?.name || matchData.faction1_name || 'Equipo A',
+        faction2_name: matchData.teams?.faction2?.name || matchData.faction2_name || 'Equipo B',
         faction1_roster: faction1Roster.map(p => ({ id: p.player_id || p.id, nickname: p.nickname, discord_id: p.discord_id || p.discordId || null })),
         faction2_roster: faction2Roster.map(p => ({ id: p.player_id || p.id, nickname: p.nickname, discord_id: p.discord_id || p.discordId || null })),
         faction1_vc_id: vc1Id,
         faction2_vc_id: vc2Id,
         message_id: messageId,
+        matches_channel_id: matchesChannelId || matchData.matches_channel_id || null,
+        waiting_room_id: waitingRoomId || matchData.waiting_room_id || null,
+        queue_id: queueId || matchData.queue_id || null,
+        queue_name: queueName || matchData.queue_name || null,
         original_voice_states: originalVoiceStates,
         creator_id: matchData.creator_id || null,
         guild_id: guildId,
@@ -418,32 +727,98 @@ export const db = {
 
   async getGuildIdByHubId(hubId) {
     if (!hubId) return null;
-    try {
-      const snapshot = await firestore.collection('guild_settings')
-        .where('faceitHubId', '==', hubId)
-        .limit(1)
-        .get();
-      if (!snapshot.empty) {
-        return snapshot.docs[0].id;
-      }
-      return null;
-    } catch (e) {
-      logger.error('Error al buscar guild por hub ID:', e);
-      return null;
-    }
+    const ids = await this.getGuildIdsByHubId(hubId);
+    return ids.length > 0 ? ids[0] : null;
   },
 
   async getGuildIdsByHubId(hubId) {
     if (!hubId) return [];
+    
+    if (hubIdToGuildIdsCache.has(hubId)) {
+      return hubIdToGuildIdsCache.get(hubId);
+    }
+
     try {
+      const ids = [];
+
+      // 1. Buscar por faceitHubId o faceitClubId
       const snapshot = await firestore.collection('guild_settings')
         .where('faceitHubId', '==', hubId)
         .get();
-      const ids = [];
       snapshot.forEach(doc => {
         ids.push(doc.id);
       });
-      return ids;
+
+      const clubSnapshot = await firestore.collection('guild_settings')
+        .where('faceitClubId', '==', hubId)
+        .get();
+      clubSnapshot.forEach(doc => {
+        if (!ids.includes(doc.id)) {
+          ids.push(doc.id);
+        }
+      });
+
+      // 2. También buscar por faceitLeaderboardId
+      const leaderboardSnapshot = await firestore.collection('guild_settings')
+        .where('faceitLeaderboardId', '==', hubId)
+        .get();
+      leaderboardSnapshot.forEach(doc => {
+        if (!ids.includes(doc.id)) {
+          ids.push(doc.id);
+        }
+      });
+
+      // 3. Buscar si el hubId corresponde al ID de alguna Cola configurada (queues)
+      const allGuildsSnap = await firestore.collection('guild_settings').get();
+      allGuildsSnap.forEach(doc => {
+        const data = doc.data() || {};
+        if (Array.isArray(data.queues)) {
+          const hasQueue = data.queues.some(q => 
+            (q.id && q.id.toLowerCase() === hubId.toLowerCase()) || 
+            (q.queueId && q.queueId.toLowerCase() === hubId.toLowerCase())
+          );
+          if (hasQueue && !ids.includes(doc.id)) {
+            ids.push(doc.id);
+          }
+        }
+      });
+
+      if (ids.length > 0) {
+        hubIdToGuildIdsCache.set(hubId, ids);
+        return ids;
+      }
+
+      // Si no se encuentra, verificar si el hubId pertenece a un Club (Organizador)
+      const { env } = await import('./config/index.js');
+      if (env && env.FACEIT_API_KEY && !hubId.startsWith('ID_')) {
+        const res = await fetch(`https://open.faceit.com/data/v4/hubs/${hubId}`, {
+          headers: {
+            Authorization: `Bearer ${env.FACEIT_API_KEY}`,
+            Accept: 'application/json',
+          },
+        });
+
+        if (res.ok) {
+          const hubData = await res.json();
+          const organizerId = hubData.organizer_id;
+          if (organizerId) {
+            const orgSnapshot = await firestore.collection('guild_settings')
+              .where('faceitHubId', '==', organizerId)
+              .get();
+            
+            orgSnapshot.forEach(doc => {
+              if (!ids.includes(doc.id)) ids.push(doc.id);
+            });
+
+            if (ids.length > 0) {
+              hubIdToGuildIdsCache.set(hubId, ids);
+              return ids;
+            }
+          }
+        }
+      }
+
+      return [];
     } catch (e) {
       logger.error('Error al buscar guilds por hub ID:', e);
       return [];
@@ -475,6 +850,10 @@ export const db = {
   },
 
   async removeActiveMatch(matchId) {
+    if (!matchId || typeof matchId !== 'string') {
+      logger.warn('removeActiveMatch ignorado: matchId no es válido o está vacío.');
+      return;
+    }
     try {
       const docRef = firestore.collection(ACTIVE_MATCHES_COLLECTION).doc(matchId);
       await docRef.delete();
@@ -486,27 +865,57 @@ export const db = {
     }
   },
 
-  // --- Historial de Partidas Finalizadas ---
-  async addMatchToHistory(matchId, matchData, winner, scoreA, scoreB, faction1Roster = [], faction2Roster = [], guildId = null) {
+  // --- Historial de Partidas ---
+  async addMatchToHistory(matchId, matchData, winner, scoreA, scoreB, faction1Roster = [], faction2Roster = [], guildId = null, status = 'finished') {
+    if (!matchId || typeof matchId !== 'string') {
+      logger.warn('addMatchToHistory ignorado: matchId no es válido o está vacío.');
+      return;
+    }
     try {
       const docRef = firestore.collection(MATCHES_HISTORY_COLLECTION).doc(matchId);
-      await docRef.set({
+      const existingDoc = await docRef.get();
+
+      const formatRoster = (roster) => {
+        if (!Array.isArray(roster)) return [];
+        return roster.map(p => ({
+          id: p.player_id || p.id || p.guid || null,
+          nickname: p.nickname || p.name || p.username || 'Jugador',
+          discord_id: p.discord_id || p.discordId || null
+        }));
+      };
+
+      const f1Roster = formatRoster(faction1Roster && faction1Roster.length > 0 ? faction1Roster : matchData.teams?.faction1?.roster || matchData.faction1_roster);
+      const f2Roster = formatRoster(faction2Roster && faction2Roster.length > 0 ? faction2Roster : matchData.teams?.faction2?.roster || matchData.faction2_roster);
+
+      const mapPick = matchData.voting?.map?.pick?.[0] || matchData.map || 'Desconocido';
+      const locPick = matchData.voting?.location?.pick?.[0] || matchData.location || 'Desconocido';
+
+      const matchObj = {
         id: matchId,
-        entity_custom_name: matchData.entity_custom_name || 'Club',
+        entity_custom_name: matchData.entity_custom_name || matchData.competition_name || 'Club',
         game: matchData.game || 'cs2',
-        map: matchData.voting?.map?.pick?.[0] || 'Desconocido',
-        location: matchData.voting?.location?.pick?.[0] || 'Desconocido',
-        faction1_name: matchData.teams?.faction1?.name || 'Equipo A',
-        faction2_name: matchData.teams?.faction2?.name || 'Equipo B',
-        faction1_score: scoreA,
-        faction2_score: scoreB,
-        winner: winner, // 'faction1' or 'faction2'
-        faction1_roster: faction1Roster.map(p => ({ id: p.player_id || p.id, nickname: p.nickname, discord_id: p.discord_id || p.discordId || null })),
-        faction2_roster: faction2Roster.map(p => ({ id: p.player_id || p.id, nickname: p.nickname, discord_id: p.discord_id || p.discordId || null })),
-        guild_id: guildId,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-      logger.success(`Partida ${matchId} agregada al historial de Firestore.`);
+        map: mapPick,
+        location: locPick,
+        faction1_name: matchData.teams?.faction1?.name || matchData.faction1_name || 'Equipo A',
+        faction2_name: matchData.teams?.faction2?.name || matchData.faction2_name || 'Equipo B',
+        faction1_score: scoreA !== undefined && scoreA !== null ? scoreA : (matchData.faction1_score || 0),
+        faction2_score: scoreB !== undefined && scoreB !== null ? scoreB : (matchData.faction2_score || 0),
+        winner: winner || matchData.winner || 'TBD',
+        status: status || matchData.status || 'finished',
+        queue_id: matchData.queue_id || null,
+        queue_name: matchData.queue_name || null,
+        faction1_roster: f1Roster,
+        faction2_roster: f2Roster,
+        guild_id: guildId || matchData.guild_id || null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      if (!existingDoc.exists) {
+        matchObj.createdAt = admin.firestore.FieldValue.serverTimestamp();
+      }
+
+      await docRef.set(matchObj, { merge: true });
+      logger.success(`Partida ${matchId} [${status}] guardada/actualizada en historial de Firestore.`);
     } catch (error) {
       logger.error('Error al guardar partida en historial de Firestore:', error);
     }
@@ -538,7 +947,20 @@ export const db = {
     }
   },
 
+  async deleteMatchFromHistory(matchId) {
+    if (!matchId || typeof matchId !== 'string') return false;
+    try {
+      await firestore.collection(MATCHES_HISTORY_COLLECTION).doc(matchId).delete();
+      logger.success(`Partida ${matchId} eliminada del historial de Firestore.`);
+      return true;
+    } catch (error) {
+      logger.error(`Error al eliminar partida ${matchId} del historial de Firestore:`, error);
+      return false;
+    }
+  },
+
   async getActiveMatch(matchId) {
+    if (!matchId || typeof matchId !== 'string') return null;
     try {
       await ensureActiveMatchesCache();
       return activeMatchesCacheMap.get(matchId) || null;
@@ -548,9 +970,9 @@ export const db = {
     }
   },
 
-  async getActiveMatches() {
+  async getActiveMatches(forceRefresh = false) {
     try {
-      await ensureActiveMatchesCache();
+      await ensureActiveMatchesCache(forceRefresh);
       return Array.from(activeMatchesCacheMap.values());
     } catch (error) {
       logger.error('Error al obtener partidas activas de Firestore:', error);
@@ -559,9 +981,10 @@ export const db = {
   },
 
   // --- Configuración del Panel Fijo ---
-  async getPanelMessageConfig() {
+  async getPanelMessageConfig(guildId) {
     try {
-      const doc = await firestore.collection(CONFIG_COLLECTION).doc('panel').get();
+      const docName = guildId ? `panel_${guildId}` : 'panel';
+      const doc = await firestore.collection(CONFIG_COLLECTION).doc(docName).get();
       if (doc.exists) return doc.data();
       return null;
     } catch (error) {
@@ -570,11 +993,13 @@ export const db = {
     }
   },
 
-  async setPanelMessageConfig(messageId, channelId) {
+  async setPanelMessageConfig(messageId, channelId, guildId) {
     try {
-      await firestore.collection(CONFIG_COLLECTION).doc('panel').set({
+      const docName = guildId ? `panel_${guildId}` : 'panel';
+      await firestore.collection(CONFIG_COLLECTION).doc(docName).set({
         messageId,
         channelId,
+        guildId: guildId || null,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
     } catch (error) {
@@ -1092,9 +1517,138 @@ export const db = {
     }
   },
 
+  async getHubBansCache(hubId) {
+    try {
+      const snapshot = await firestore.collection('hub_bans_cache').where('hubId', '==', hubId).get();
+      const bans = [];
+      snapshot.forEach(doc => {
+        bans.push({ id: doc.id, ...doc.data() });
+      });
+      return bans;
+    } catch (err) {
+      logger.error('Error al obtener cache de baneos:', err);
+      return [];
+    }
+  },
+
+  async addHubBanToCache(hubId, userId, banData) {
+    try {
+      await firestore.collection('hub_bans_cache').doc(`${hubId}_${userId}`).set({
+        hubId,
+        userId,
+        ...banData,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      return true;
+    } catch (err) {
+      logger.error('Error al agregar baneo a cache:', err);
+      return false;
+    }
+  },
+
+  async removeHubBanFromCache(hubId, userId) {
+    try {
+      await firestore.collection('hub_bans_cache').doc(`${hubId}_${userId}`).delete();
+      return true;
+    } catch (err) {
+      logger.error('Error al eliminar baneo de cache:', err);
+      return false;
+    }
+  },
+
   invalidateNicknameMapCache() {
     nicknameToDiscordMapCache = null;
     nicknameToDiscordMapLastFetch = 0;
+  },
+
+  // --- Gestión de Saldos / Billetera (Yape / Apuestas) ---
+  async getUserBalance(discordId, guildId = null) {
+    if (!discordId) return 0;
+    try {
+      const user = await this.getFullUser(discordId, guildId);
+      if (user && user.wallet_balance !== undefined) {
+        return Number(user.wallet_balance) || 0;
+      }
+      return 0;
+    } catch (err) {
+      logger.error(`Error al obtener balance de ${discordId}:`, err);
+      return 0;
+    }
+  },
+
+  async updateUserBalance(discordId, delta, guildId = null, reason = '') {
+    if (!discordId) return 0;
+    try {
+      const docId = guildId ? `${guildId}_${discordId}` : discordId;
+      const userRef = firestore.collection(USERS_COLLECTION).doc(docId);
+      const doc = await userRef.get();
+      let newBalance = 0;
+      if (doc.exists) {
+        const currentBalance = Number(doc.data().wallet_balance || 0);
+        newBalance = Math.max(0, parseFloat((currentBalance + Number(delta)).toFixed(2)));
+        await userRef.update({
+          wallet_balance: newBalance,
+          last_balance_update: Date.now(),
+          last_balance_reason: reason
+        });
+      } else {
+        newBalance = Math.max(0, parseFloat(Number(delta).toFixed(2)));
+        await userRef.set({
+          discordId,
+          guild_id: guildId || null,
+          wallet_balance: newBalance,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          last_balance_update: Date.now(),
+          last_balance_reason: reason
+        });
+      }
+      return newBalance;
+    } catch (err) {
+      logger.error(`Error al actualizar balance de ${discordId}:`, err);
+      throw err;
+    }
+  },
+
+  async setUserBalance(discordId, amount, guildId = null, reason = '') {
+    if (!discordId) return 0;
+    try {
+      const docId = guildId ? `${guildId}_${discordId}` : discordId;
+      const userRef = firestore.collection(USERS_COLLECTION).doc(docId);
+      const newBalance = Math.max(0, parseFloat(Number(amount).toFixed(2)));
+      await userRef.set({
+        discordId,
+        guild_id: guildId || null,
+        wallet_balance: newBalance,
+        last_balance_update: Date.now(),
+        last_balance_reason: reason
+      }, { merge: true });
+      return newBalance;
+    } catch (err) {
+      logger.error(`Error al establecer balance de ${discordId}:`, err);
+      throw err;
+    }
+  },
+
+  async recordCulqiCharge(chargeId, discordId, amount, details = {}) {
+    try {
+      const chargeRef = firestore.collection('culqi_charges').doc(chargeId);
+      const doc = await chargeRef.get();
+      if (doc.exists && doc.data()?.credited) {
+        return { alreadyProcessed: true, charge: doc.data() };
+      }
+      await chargeRef.set({
+        chargeId,
+        discordId,
+        amount,
+        credited: true,
+        details,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { alreadyProcessed: false };
+    } catch (err) {
+      logger.error(`Error al registrar cargo de Culqi ${chargeId}:`, err);
+      return { alreadyProcessed: false };
+    }
   }
 };
 
@@ -1103,14 +1657,18 @@ function getDefaultSettings() {
     // Canales
     discordLinkChannelId: '',
     discordMatchesChannelId: '',
+    discordMixtonChannelId: '',
     discordRolesChannelId: '',
     discordStatusChannelId: '',
     discordWaitingRoomChannelId: '',
     discordAdminAlertsChannelId: '',
     discordSupportChannelId: '',
+    discordMusicChannelId: '',
+    discordSanctionsChannelId: '',
     // Feature flags
     autoWelcomeDm: true,
     autoRoleSync: true,
+    autoNickSync: true,
     autoVoiceChannels: true,
     autoMovePlayers: true,
     matchAnnouncements: true,
@@ -1121,7 +1679,7 @@ function getDefaultSettings() {
     // Hub
     faceitHubId: '',
     // Roles
-    adminRoleName: 'ADMIN',
+    adminRoleId: '',
     // Misc
     matchTimeoutMinutes: 120,
     updatedAt: null

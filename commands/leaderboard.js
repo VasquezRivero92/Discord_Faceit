@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { fetchLeaderboard } from '../services/faceitApi.js';
 import { logger } from '../utils/logger.js';
 import { getEffectiveConfigForGuild } from '../config/index.js';
@@ -11,10 +11,10 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction, db) {
   const isEnabled = await isFeatureEnabled('command_leaderboard', interaction.guildId);
   if (isEnabled === false) {
-    return interaction.reply({ content: '❌ Este comando está desactivado por el administrador.', ephemeral: true });
+    return interaction.reply({ content: '❌ Este comando está desactivado por el administrador.', flags: MessageFlags.Ephemeral });
   }
 
-  await interaction.deferReply({ ephemeral: false });
+  await interaction.deferReply();
 
   try {
     const config = await getEffectiveConfigForGuild(interaction.guildId);

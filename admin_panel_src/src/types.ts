@@ -6,6 +6,8 @@ export interface LinkedUser {
   linkedAt: string;
   roleType?: 'level' | 'special';
   roleValue?: string;
+  faceit_level?: number;
+  faceit_level_season?: number;
 }
 
 export interface LiveMatch {
@@ -26,19 +28,38 @@ export interface SystemLog {
   timestamp: string;
 }
 
+export interface HubQueue {
+  id: string;
+  queueId: string;
+  name: string;
+  discordMatchesChannelId: string;
+  discordWaitingRoomChannelId: string;
+  discordMixtonChannelId?: string;
+  discordMatchAccessRoleId?: string;
+  hubRoleId?: string;
+  discordHubRoleId?: string;
+}
+
 export interface BotConfig {
   discordGuildId: string;
   discordLinkChannelId: string;
   discordMatchesChannelId: string;
+  discordMixtonChannelId?: string;
   discordRolesChannelId: string;
   discordStatusChannelId: string;
   discordWaitingRoomChannelId: string;
   discordAdminAlertsChannelId: string;
   discordSupportChannelId: string;
+  discordMusicChannelId?: string;
+  discordSanctionsChannelId?: string;
+  discordMatchAccessRoleId?: string;
+  hubRoleId?: string;
+  discordHubRoleId?: string;
   faceitHubId: string;
   faceitLeaderboardId: string;
-  adminRoleName: string;
+  adminRoleId: string;
   matchTimeoutMinutes: number;
+  queues?: HubQueue[];
 }
 
 export interface FeatureFlag {

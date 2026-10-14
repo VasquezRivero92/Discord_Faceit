@@ -1,9 +1,9 @@
-import { SlashCommandBuilder } from 'discord.js';
-import { fetchFaceitPlayer } from '../services/faceitApi.js';
+import { SlashCommandBuilder, MessageFlags } from 'discord.js';
+import { fetchFaceitPlayer, fetchCurrentHubSeason } from '../services/faceitApi.js';
 import { logger } from '../utils/logger.js';
-import { env } from '../config/index.js';
+import { env, getEffectiveConfigForGuild } from '../config/index.js';
 import { isFeatureEnabled, getSettings } from '../utils/featureFlags.js';
-import { syncMemberLevelRole, getPlayerSkillLevel } from '../services/roles.js';
+import { syncMemberLevelRole, getPlayerSkillLevel, syncMemberNickname } from '../services/roles.js';
 import { playerCache } from '../utils/cache.js';
 
 export const data = new SlashCommandBuilder()
@@ -16,35 +16,39 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction, db) {
-  const isEnabled = await isFeatureEnabled('command_verificar');
-  if (isEnabled === false) {
-    return interaction.reply({ content: '❌ Este comando está desactivado por el administrador.', ephemeral: true });
+  const nickname = interaction.options.getString('nickname');
+  return processVerification(interaction, db, nickname);
+}
+
+export async function processVerification(interaction, db, nickname) {
+  if (!interaction.deferred && !interaction.replied) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   }
 
-  const settings = await getSettings().catch(() => ({}));
-  const linkChannelId = settings.discordLinkChannelId || env.DISCORD_LINK_CHANNEL_ID;
+  const isEnabled = await isFeatureEnabled('command_verificar', interaction.guildId);
+  if (isEnabled === false) {
+    return interaction.editReply({ content: '❌ Este comando está desactivado por el administrador.' });
+  }
+
+  const config = interaction.guildId ? await getEffectiveConfigForGuild(interaction.guildId) : await getSettings().catch(() => ({}));
+  const linkChannelId = config.discordLinkChannelId || env.DISCORD_LINK_CHANNEL_ID;
   const isConfigured = linkChannelId && !linkChannelId.startsWith('ID_') && !linkChannelId.startsWith('ID-');
 
   if (!isConfigured) {
-    return interaction.reply({
+    return interaction.editReply({
       content: '❌ El canal de vinculación no está configurado por el administrador.',
-      ephemeral: true,
     });
   }
 
   const allowedChannels = linkChannelId.split(',').map(id => id.trim()).filter(Boolean);
   if (!allowedChannels.includes(interaction.channelId)) {
     const channelMentions = allowedChannels.map(id => `<#${id}>`).join(' o ');
-    return interaction.reply({
-      content: `❌ Este comando solo se puede usar en el canal de vinculación: ${channelMentions}.`,
-      ephemeral: true,
+    return interaction.editReply({
+      content: `❌ Este proceso solo se puede realizar en el canal de vinculación: ${channelMentions}.`,
     });
   }
 
-  const nickname = interaction.options.getString('nickname');
   const discordId = interaction.user.id;
-
-  await interaction.deferReply({ ephemeral: true });
 
   try {
     if (!env.FACEIT_API_KEY || env.FACEIT_API_KEY.startsWith('TU_')) {
@@ -53,10 +57,26 @@ export async function execute(interaction, db) {
 
     const player = await fetchFaceitPlayer(nickname);
 
+    const guildConfig = await getEffectiveConfigForGuild(interaction.guildId);
+    const currentSeason = await fetchCurrentHubSeason(guildConfig.faceitLeaderboardId || guildConfig.faceitHubId).catch(() => null);
+
     const existingDiscordId = await db.getDiscordIdByFaceitId(player.player_id, interaction.guildId);
     if (existingDiscordId) {
       if (existingDiscordId === discordId) {
-        return interaction.editReply(`ℹ️ Tu cuenta de Discord ya está vinculada al perfil de Faceit **${player.nickname}**.`);
+        const skillLevel = getPlayerSkillLevel(player);
+        if (interaction.guild) {
+          const autoRoleSync = await isFeatureEnabled('autoRoleSync', interaction.guildId);
+          if (autoRoleSync) {
+            await syncMemberLevelRole(interaction.guild, discordId, skillLevel);
+            const elo = player.games?.cs2?.faceit_elo || player.games?.csgo?.faceit_elo || 0;
+            await db.updatePlayerStats(discordId, skillLevel, elo, interaction.guildId, currentSeason);
+          }
+          const autoNickSync = await isFeatureEnabled('autoNickSync', interaction.guildId);
+          if (autoNickSync !== false) {
+            await syncMemberNickname(interaction.guild, discordId, player.nickname);
+          }
+        }
+        return interaction.editReply(`ℹ️ Tu cuenta de Discord ya está vinculada al perfil de Faceit **${player.nickname}**. Se han sincronizado tus roles y apodo.`);
       } else {
         return interaction.editReply(`❌ La cuenta de Faceit **${player.nickname}** ya está vinculada al usuario de Discord <@${existingDiscordId}>.`);
       }
@@ -70,14 +90,18 @@ export async function execute(interaction, db) {
     }
 
     // Enlazar cuentas guardando nivel y elo
-    await db.linkAccounts(discordId, player.player_id, player.nickname, skillLevel, elo, interaction.guildId);
+    await db.linkAccounts(discordId, player.player_id, player.nickname, skillLevel, elo, interaction.guildId, currentSeason);
     await db.addLogEntry('success', `El usuario ${interaction.user.tag} vinculó su cuenta directamente con Faceit ID ${player.nickname}`, 'bot', interaction.guildId);
     playerCache.set(`${interaction.guildId}_${discordId}`, { faceitId: player.player_id, nickname: player.nickname, level: skillLevel });
 
-    // Sincronizar roles
+    // Sincronizar roles y apodo
     const autoRoleSync = await isFeatureEnabled('autoRoleSync', interaction.guildId);
     if (autoRoleSync && interaction.guild) {
       await syncMemberLevelRole(interaction.guild, discordId, skillLevel);
+    }
+    const autoNickSync = await isFeatureEnabled('autoNickSync', interaction.guildId);
+    if (autoNickSync !== false && interaction.guild) {
+      await syncMemberNickname(interaction.guild, discordId, player.nickname);
     }
 
     const faceitProfileUrl = `https://www.faceit.com/en/players/${player.nickname}`;
@@ -99,7 +123,7 @@ export async function execute(interaction, db) {
     }
 
   } catch (error) {
-    logger.error('Error en el comando /verificar_fc:', error);
+    logger.error('Error en la vinculación de Faceit:', error);
     if (error.message === 'PLAYER_NOT_FOUND') {
       return interaction.editReply(`❌ No se encontró ningún jugador con el nickname **${nickname}** en Faceit.`);
     }

@@ -71,6 +71,7 @@ export const initialMatches: LiveMatch[] = [
 export const initialFeatureFlags: FeatureFlag[] = [
   { key: 'autoWelcomeDm', name: 'Welcome DM', desc: 'Enviar mensaje de bienvenida por DM a nuevos miembros', enabled: true },
   { key: 'autoRoleSync', name: 'Role Sync', desc: 'Sincronizar roles de nivel y club automáticamente', enabled: true },
+  { key: 'autoNickSync', name: 'Nick Sync', desc: 'Sincronizar apodos de Discord al iniciar partida de Faceit', enabled: true },
   { key: 'autoVoiceChannels', name: 'Voice Channels', desc: 'Crear canales de voz temporales para partidas', enabled: true },
   { key: 'autoMovePlayers', name: 'Auto Move', desc: 'Mover jugadores a sus canales de voz al iniciar partida', enabled: false },
   { key: 'matchAnnouncements', name: 'Match Announcements', desc: 'Anunciar partidas en Discord', enabled: true },
@@ -80,14 +81,22 @@ export const initialFeatureFlags: FeatureFlag[] = [
 ];
 
 export const initialConfig: BotConfig = {
+  discordGuildId: '111222333444555666',
   discordLinkChannelId: '112233445566778899',
   discordMatchesChannelId: '223344556677889900',
+  discordMixtonChannelId: '',
   discordRolesChannelId: '334455667788990011',
   discordStatusChannelId: '445566778899001122',
   discordWaitingRoomChannelId: '556677889900112233',
+  discordAdminAlertsChannelId: '667788990011223344',
+  discordSupportChannelId: '778899001122334455',
+  discordMusicChannelId: '',
+  discordMatchAccessRoleId: '',
+  hubRoleId: '',
+  discordHubRoleId: '',
   faceitHubId: 'hub-latam-cs2-pro',
   faceitLeaderboardId: '6a05ea92c18e557389267373',
-  adminRoleName: 'ADMINISTRADOR',
+  adminRoleId: '',
   matchTimeoutMinutes: 120,
 };
 

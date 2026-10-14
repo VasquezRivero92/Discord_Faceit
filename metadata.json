@@ -1,0 +1,6 @@
+{
+  "name": "Discord Faceit Hub Bot & Mixton Arena Panel",
+  "description": "Un bot de Discord integrado con Faceit Hub, con paneles de control para administración (admin panel) y torneos de Mixtos (lobby de draft en tiempo real).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { checkIsAdmin } from '../services/adminCheck.js';
 import { removeAllFaceitRoles } from '../services/roles.js';
 import { logger } from '../utils/logger.js';
@@ -17,7 +17,7 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction, db) {
   const isEnabled = await isFeatureEnabled('command_desvincular', interaction.guildId);
   if (isEnabled === false) {
-    return interaction.reply({ content: '❌ Este comando está desactivado por el administrador.', ephemeral: true });
+    return interaction.reply({ content: '❌ Este comando está desactivado por el administrador.', flags: MessageFlags.Ephemeral });
   }
 
   const settings = await getSettings().catch(() => ({}));
@@ -27,7 +27,7 @@ export async function execute(interaction, db) {
   if (!isConfigured) {
     return interaction.reply({
       content: '❌ El canal de vinculación no está configurado por el administrador.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -36,7 +36,7 @@ export async function execute(interaction, db) {
     const channelMentions = allowedChannels.map(id => `<#${id}>`).join(' o ');
     return interaction.reply({
       content: `❌ Este comando solo se puede usar en el canal de vinculación: ${channelMentions}.`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -46,14 +46,14 @@ export async function execute(interaction, db) {
   if (!isAdmin) {
     return interaction.reply({
       content: '❌ No tienes permisos para usar este comando. Se requiere el rol **ADMIN**.',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
   const targetUser = interaction.options.getUser('usuario');
   const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
 
-  await interaction.deferReply({ ephemeral: false });
+  await interaction.deferReply();
 
   try {
     await db.unlinkAccount(targetUser.id, interaction.guildId);

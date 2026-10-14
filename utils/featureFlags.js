@@ -38,10 +38,20 @@ export async function isFeatureEnabled(featureKey, guildId = null) {
 
   // 2. Fallback a settings globales
   const settings = await getSettings();
-  if (featureKey.startsWith('command_') && settings[featureKey] === undefined) {
+  if (settings && settings[featureKey] !== undefined) {
+    return settings[featureKey] === true;
+  }
+
+  // 3. Fallback a valores por defecto del sistema
+  const defaults = getDefaultSettings();
+  if (defaults[featureKey] !== undefined) {
+    return defaults[featureKey] === true;
+  }
+
+  if (featureKey.startsWith('command_')) {
     return true;
   }
-  return settings[featureKey] === true;
+  return false;
 }
 
 export async function requireFeature(featureKey, res, next) {
@@ -55,6 +65,7 @@ export function getDefaultSettings() {
   return {
     autoWelcomeDm: true,
     autoRoleSync: true,
+    autoNickSync: true,
     autoVoiceChannels: true,
     autoMovePlayers: true,
     matchAnnouncements: true,
@@ -62,7 +73,7 @@ export function getDefaultSettings() {
     liveMatchPanel: true,
     webhookValidation: false,
     adminCallNotifications: true,
-    adminRoleName: 'ADMIN',
+    adminRoleId: '',
     matchTimeoutMinutes: 120,
     command_mixton_listo: true,
     command_mixton_no_listo: true,

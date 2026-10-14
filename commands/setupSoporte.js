@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, MessageFlags } from 'discord.js';
 import { isFeatureEnabled } from '../utils/featureFlags.js';
 import { logger } from '../utils/logger.js';
 
@@ -9,7 +9,7 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction, db) {
   if (!(await isFeatureEnabled('adminCallNotifications', interaction.guildId))) {
-    return interaction.reply({ content: '❌ La función de llamada a admin está desactivada.', ephemeral: true });
+    return interaction.reply({ content: '❌ La función de llamada a admin está desactivada.', flags: MessageFlags.Ephemeral });
   }
 
   const templates = await db.getMessageTemplates();

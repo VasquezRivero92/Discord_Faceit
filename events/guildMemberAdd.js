@@ -4,7 +4,7 @@ import { env } from '../config/index.js';
 import { isFeatureEnabled } from '../utils/featureFlags.js';
 
 export async function onGuildMemberAdd(member, db) {
-  if (!(await isFeatureEnabled('autoWelcomeDm'))) {
+  if (!(await isFeatureEnabled('autoWelcomeDm', member.guild?.id))) {
     return;
   }
 

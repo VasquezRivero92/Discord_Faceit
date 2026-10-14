@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { env } from '../config/index.js';
 import { isFeatureEnabled } from '../utils/featureFlags.js';
 
@@ -9,7 +9,7 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
   const isEnabled = await isFeatureEnabled('command_info', interaction.guildId);
   if (isEnabled === false) {
-    return interaction.reply({ content: '❌ Este comando está desactivado por el administrador.', ephemeral: true });
+    return interaction.reply({ content: '❌ Este comando está desactivado por el administrador.', flags: MessageFlags.Ephemeral });
   }
 
   const clubUrl = 'https://www.faceit.com/es/club/e72c25e6-74e5-415b-97da-e541296ff1db/queue/9ccf9665-c715-4938-8edd-1ab17bc7d263/chat';
@@ -29,5 +29,5 @@ export async function execute(interaction) {
     .setFooter({ text: 'Bot de Faceit Hub' })
     .setTimestamp();
 
-  await interaction.reply({ embeds: [embed], ephemeral: false });
+  await interaction.reply({ embeds: [embed] });
 }

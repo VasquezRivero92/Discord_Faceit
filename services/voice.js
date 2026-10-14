@@ -1,5 +1,6 @@
 import { logger } from '../utils/logger.js';
 import { db } from '../database.js';
+import { getEffectiveConfigForGuild } from '../config/index.js';
 
 /**
  * Crea canales de voz temporales para una partida y mueve jugadores.
@@ -15,7 +16,7 @@ export async function createMatchVoiceChannels(guild, waitingRoomId, faction1, f
 
     const parentId = waitingRoom.parentId;
 
-    const botId = guild.members.me?.id || guild.client.user.id;
+    const botId = guild.members?.me?.id || guild.client?.user?.id || 'bot-id';
     const permissionOverwrites1 = [
       { id: guild.id, deny: ['Connect'] },
       { id: botId, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
@@ -24,6 +25,18 @@ export async function createMatchVoiceChannels(guild, waitingRoomId, faction1, f
       { id: guild.id, deny: ['Connect'] },
       { id: botId, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
     ];
+
+    const config = await getEffectiveConfigForGuild(guild.id).catch(() => ({}));
+    if (config.discordMatchAccessRoleId) {
+      permissionOverwrites1.push({
+        id: config.discordMatchAccessRoleId,
+        allow: ['ViewChannel', 'Connect', 'Speak']
+      });
+      permissionOverwrites2.push({
+        id: config.discordMatchAccessRoleId,
+        allow: ['ViewChannel', 'Connect', 'Speak']
+      });
+    }
 
     if (db) {
       // Agregar permisos de Connect y Speak para los jugadores de Faction 1
@@ -50,8 +63,49 @@ export async function createMatchVoiceChannels(guild, waitingRoomId, faction1, f
       }
     }
 
+    let cap1Name = faction1.name || 'Equipo A';
+    let cap2Name = faction2.name || 'Equipo B';
+
+    if (db) {
+      const getCapName = async (faction) => {
+        const leaderId = faction.leader;
+        let captainNickname = null;
+        let captainDiscordId = null;
+
+        if (leaderId) {
+          const leaderPlayer = (faction.roster || []).find(p => (p.player_id || p.id) === leaderId);
+          if (leaderPlayer) {
+            captainNickname = leaderPlayer.nickname;
+          }
+          captainDiscordId = await db.getDiscordIdByFaceitId(leaderId, guild.id);
+        }
+
+        if (!captainNickname && faction.roster && faction.roster.length > 0) {
+          captainNickname = faction.roster[0].nickname;
+          const firstPlayerId = faction.roster[0].player_id || faction.roster[0].id;
+          if (firstPlayerId) {
+            captainDiscordId = await db.getDiscordIdByFaceitId(firstPlayerId, guild.id);
+          }
+        }
+
+        if (captainDiscordId) {
+          const member = await guild.members.fetch(captainDiscordId).catch(() => null);
+          if (member) {
+            return member.displayName;
+          }
+        }
+
+        return captainNickname || faction.name || 'Desconocido';
+      };
+
+      const nameA = await getCapName(faction1);
+      const nameB = await getCapName(faction2);
+      cap1Name = `Team ${nameA}`;
+      cap2Name = `Team ${nameB}`;
+    }
+
     const vc1 = await guild.channels.create({
-      name: `🔊 ${faction1.name || 'Equipo A'}`,
+      name: `🔊 ${cap1Name}`,
       type: 2,
       parent: parentId,
       permissionOverwrites: permissionOverwrites1,
@@ -60,7 +114,7 @@ export async function createMatchVoiceChannels(guild, waitingRoomId, faction1, f
     vcIds.vc1Id = vc1.id;
 
     const vc2 = await guild.channels.create({
-      name: `🔊 ${faction2.name || 'Equipo B'}`,
+      name: `🔊 ${cap2Name}`,
       type: 2,
       parent: parentId,
       permissionOverwrites: permissionOverwrites2,
@@ -102,9 +156,15 @@ export async function movePlayersToVoice(guild, players, voiceChannelId, db, rea
 }
 
 /**
- * Devuelve jugadores a su canal original o sala de espera y elimina el canal de voz temporal.
+ * Devuelve jugadores a su canal original o a la sala de espera / canal General y elimina el canal de voz temporal.
+ * @param {Guild} guild - Servidor de Discord.
+ * @param {string} vcId - ID del canal de voz temporal a eliminar.
+ * @param {string} waitingRoomId - ID de la sala de espera / general.
+ * @param {Object|string} originalVoiceStates - Mapa de canales previos por usuario.
+ * @param {string} reason - Razón del cleanup.
+ * @param {boolean} forceGeneral - Si es true (por ej. en cancelación de partida), mueve a TODOS al canal General / Sala de Espera sin importar su canal original.
  */
-export async function cleanupVoiceChannel(guild, vcId, waitingRoomId, originalVoiceStates = {}, reason = 'Partida terminada') {
+export async function cleanupVoiceChannel(guild, vcId, waitingRoomId, originalVoiceStates = {}, reason = 'Partida terminada', forceGeneral = false) {
   if (!vcId) return;
 
   // Manejo de compatibilidad si el cuarto parámetro es un string de razón (llamadas antiguas)
@@ -120,14 +180,26 @@ export async function cleanupVoiceChannel(guild, vcId, waitingRoomId, originalVo
       return;
     }
 
-    const waitingRoom = waitingRoomId ? await guild.channels.fetch(waitingRoomId).catch(() => null) : null;
+    let waitingRoom = waitingRoomId ? await guild.channels.fetch(waitingRoomId).catch(() => null) : null;
+
+    // Fallback: Si no se configuró o no se encontró el canal de espera, buscar canal de voz "General", "Sala de Espera", "Lobby" o cualquier canal de voz en la guild
+    if (!waitingRoom || waitingRoom.type !== 2) {
+      const channels = await guild.channels.fetch().catch(() => null);
+      if (channels) {
+        waitingRoom = channels.find(c => c.type === 2 && (
+          c.name.toLowerCase().includes('general') ||
+          c.name.toLowerCase().includes('espera') ||
+          c.name.toLowerCase().includes('lobby')
+        )) || channels.find(c => c.type === 2) || null;
+      }
+    }
 
     for (const [_, member] of vc.members) {
       try {
         let targetChannel = waitingRoom;
         const originalChannelId = originalVoiceStates?.[member.id];
 
-        if (originalChannelId) {
+        if (originalChannelId && !forceGeneral) {
           const origChannel = await guild.channels.fetch(originalChannelId).catch(() => null);
           if (origChannel) {
             targetChannel = origChannel;
@@ -135,14 +207,14 @@ export async function cleanupVoiceChannel(guild, vcId, waitingRoomId, originalVo
         }
 
         if (targetChannel) {
-          await member.voice.setChannel(targetChannel, `${reason} - Regreso a canal original`);
-          logger.info(`Movido de vuelta ${member.user.tag} a ${targetChannel.name}`);
+          await member.voice.setChannel(targetChannel, `${reason} - Regreso a ${forceGeneral ? 'canal General' : 'canal original'}`);
+          logger.info(`Movido ${member.user.tag} a ${targetChannel.name} (${reason})`);
         } else {
-          logger.info(`No hay canal de destino para mover de vuelta a ${member.user.tag}.`);
+          logger.info(`No hay canal de destino (General/Espera) para mover a ${member.user.tag}.`);
         }
       } catch (err) {
-        logger.warn(`No se pudo mover a ${member.user.tag} al finalizar partida:`, err.message);
-        await db.addLogEntry('warn', `No se pudo mover a ${member.user.tag} de vuelta a sala de espera/canal original: ${err.message}`, 'bot').catch(() => {});
+        logger.warn(`No se pudo mover a ${member.user.tag} al limpiar canal de voz:`, err.message);
+        await db.addLogEntry('warn', `No se pudo mover a ${member.user.tag} al canal general/espera: ${err.message}`, 'bot').catch(() => {});
       }
     }
 
@@ -161,15 +233,26 @@ export async function cleanupVoiceChannel(guild, vcId, waitingRoomId, originalVo
 }
 
 /**
- * Limpia todos los canales de voz temporales que contengan el prefijo 🔊 al iniciar el bot.
+ * Limpia todos los canales de voz temporales que contengan el prefijo 🔊 al iniciar el bot o en mantenimientos,
+ * excluyendo explícitamente los canales de partidas que continúan activas.
  */
-export async function cleanupOrphanVoiceChannels(guild, waitingRoomId) {
+export async function cleanupOrphanVoiceChannels(guild, waitingRoomId, db = null) {
   try {
     const channels = await guild.channels.fetch();
-    const orphanVCs = channels.filter(c => c.type === 2 && c.name.startsWith('🔊'));
+    const activeVcIds = new Set();
+
+    if (db) {
+      const activeMatches = await db.getActiveMatches().catch(() => []);
+      for (const m of activeMatches) {
+        if (m.faction1_vc_id) activeVcIds.add(m.faction1_vc_id);
+        if (m.faction2_vc_id) activeVcIds.add(m.faction2_vc_id);
+      }
+    }
+
+    const orphanVCs = channels.filter(c => c.type === 2 && c.name.startsWith('🔊') && !activeVcIds.has(c.id));
 
     for (const [_, vc] of orphanVCs) {
-      await cleanupVoiceChannel(guild, vc.id, waitingRoomId, 'Cleanup al iniciar el bot');
+      await cleanupVoiceChannel(guild, vc.id, waitingRoomId, {}, 'Cleanup de canal huérfano', true);
     }
 
     if (orphanVCs.size > 0) {

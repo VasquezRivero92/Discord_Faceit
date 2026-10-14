@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { isFeatureEnabled } from '../utils/featureFlags.js';
 import { mixtonEvents } from '../routes/lobby.js';
@@ -10,7 +10,7 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction, db) {
   const isEnabled = await isFeatureEnabled('command_mixton_listo', interaction.guildId).catch(() => true);
   if (isEnabled === false) {
-    return interaction.reply({ content: '❌ Este comando está desactivado por el administrador.', ephemeral: true });
+    return interaction.reply({ content: '❌ Este comando está desactivado por el administrador.', flags: MessageFlags.Ephemeral });
   }
 
   const discordId = interaction.user.id;
@@ -21,7 +21,7 @@ export async function execute(interaction, db) {
     if (!userData || !userData.faceit_player_id) {
       return interaction.reply({
         content: '❌ No estás verificado. Debes vincular tu cuenta de Faceit usando el comando `/verificar_fc <nickname>` antes de unirte al mixton.',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
 
@@ -41,13 +41,13 @@ export async function execute(interaction, db) {
       .setTimestamp()
       .setFooter({ text: 'Sistema de Competencias Mixton' });
 
-    await interaction.reply({ embeds: [embed] });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 
   } catch (error) {
     logger.error('Error en el comando /mixton_listo:', error);
     await interaction.reply({
       content: `❌ Ocurrió un error al intentar cambiar tu estado a listo: ${error.message}`,
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 }
