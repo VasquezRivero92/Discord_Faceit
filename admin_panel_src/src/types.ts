@@ -51,6 +51,7 @@ export interface BotConfig {
   discordAdminAlertsChannelId: string;
   discordSupportChannelId: string;
   discordMusicChannelId?: string;
+  discordRechargeChannelId?: string;
   discordSanctionsChannelId?: string;
   discordMatchAccessRoleId?: string;
   hubRoleId?: string;

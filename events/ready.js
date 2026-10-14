@@ -113,6 +113,9 @@ export async function onReady(client, commands, db) {
   // Auto-desplegar panel de música
   await checkAndDeployMusicPanel(client, db);
 
+  // Auto-desplegar panel de recargas de saldo
+  await checkAndDeployRechargePanel(client, db);
+
   // Cleanup de partidas expiradas cada 5 minutos
   setInterval(async () => {
     await cleanupExpiredMatches(client, db);
@@ -305,6 +308,85 @@ export async function checkAndDeployVerificationPanel(client, db) {
         }
       } catch (err) {
         logger.warn(`No se pudo comprobar/crear el panel de verificación automático en canal ${channelId}:`, err.message);
+      }
+    }
+  }
+}
+
+export async function checkAndDeployRechargePanel(client, db) {
+  const settings = await getSettings().catch(() => ({}));
+  const rechargeChannelId = settings.discordRechargeChannelId || env.DISCORD_RECHARGE_CHANNEL_ID;
+  if (rechargeChannelId && !rechargeChannelId.startsWith('ID_')) {
+    const allowedChannels = rechargeChannelId.split(',').map(id => id.trim()).filter(Boolean);
+    for (const channelId of allowedChannels) {
+      try {
+        const channel = await client.channels.fetch(channelId).catch(() => null);
+        if (!channel) continue;
+
+        // Limpiar mensajes antiguos no anclados (más de 1 hora de antigüedad)
+        try {
+          const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
+          if (messages) {
+            const now = Date.now();
+            const ONE_HOUR = 60 * 60 * 1000;
+            for (const msg of messages.values()) {
+              if (!msg.pinned && (now - msg.createdTimestamp > ONE_HOUR)) {
+                await msg.delete().catch(() => {});
+              }
+            }
+          }
+        } catch (msgCleanErr) {
+          logger.warn(`Error al limpiar mensajes antiguos en canal de recargas ${channelId}:`, msgCleanErr.message);
+        }
+
+        // Verificar si ya existe el panel de recargas
+        const messages = await channel.messages.fetch({ limit: 50 }).catch(() => []);
+        const hasPanel = messages.some(msg => 
+          msg.components?.some(row => 
+            row.components?.some(btn => btn.customId === 'iniciar_recarga_btn')
+          )
+        );
+
+        if (!hasPanel) {
+          logger.info(`No se encontró panel de recargas en el canal ${channelId}. Creándolo automáticamente...`);
+          
+          const embed = new EmbedBuilder()
+            .setTitle('💰 Billetera y Recargas Mixton Arena')
+            .setDescription(
+              '¡Recarga saldo a tu cuenta de forma instantánea usando **Yape** para participar en las partidas y cuotas de apuestas de Mixton Arena!\n\n' +
+              '**📌 ¿Cómo recargar?**\n' +
+              '1️⃣ Presiona el botón de abajo **[Recargar con Yape]**.\n' +
+              '2️⃣ Ingresa el monto en Soles (PEN), tu número celular de Yape y el código de aprobación de 6 dígitos desde tu app de Yape.\n' +
+              '3️⃣ Tu saldo se acreditará inmediatamente en tu perfil y podrás usarlo en cualquier mixton.\n\n' +
+              '🔒 *Pagos 100% seguros y automatizados mediante Culqi.*'
+            )
+            .setColor(0x742284) // Morado característico de Yape
+            .setFooter({ text: 'Sistema de Pagos y Billetera Mixton • Yape / Culqi' })
+            .setTimestamp();
+
+          const button = new ButtonBuilder()
+            .setCustomId('iniciar_recarga_btn')
+            .setLabel('Recargar con Yape')
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji('💜');
+
+          const row = new ActionRowBuilder().addComponents(button);
+
+          const newMessage = await channel.send({
+            embeds: [embed],
+            components: [row]
+          });
+          
+          try {
+            await newMessage.pin();
+          } catch (pinErr) {
+            logger.warn(`No se pudo fijar el mensaje de recargas en el canal ${channelId}:`, pinErr.message);
+          }
+          
+          logger.success(`Panel de recargas creado y anclado en el canal: ${channelId}`);
+        }
+      } catch (err) {
+        logger.warn(`No se pudo comprobar/crear el panel de recargas automático en canal ${channelId}:`, err.message);
       }
     }
   }

@@ -91,6 +91,7 @@ export const initialConfig: BotConfig = {
   discordAdminAlertsChannelId: '667788990011223344',
   discordSupportChannelId: '778899001122334455',
   discordMusicChannelId: '',
+  discordRechargeChannelId: '',
   discordMatchAccessRoleId: '',
   hubRoleId: '',
   discordHubRoleId: '',

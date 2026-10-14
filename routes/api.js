@@ -950,6 +950,7 @@ export function createApiRouter(client, db, config) {
         discordSanctionsChannelId: settings.discordSanctionsChannelId || process.env.DISCORD_SANCTIONS_CHANNEL_ID || env.DISCORD_SANCTIONS_CHANNEL_ID || '',
         discordSupportChannelId: settings.discordSupportChannelId || process.env.DISCORD_SUPPORT_CHANNEL_ID || env.DISCORD_SUPPORT_CHANNEL_ID || '',
         discordMusicChannelId: settings.discordMusicChannelId || process.env.DISCORD_MUSIC_CHANNEL_ID || env.DISCORD_MUSIC_CHANNEL_ID || '',
+        discordRechargeChannelId: settings.discordRechargeChannelId || process.env.DISCORD_RECHARGE_CHANNEL_ID || env.DISCORD_RECHARGE_CHANNEL_ID || '',
         discordMatchAccessRoleId: settings.discordMatchAccessRoleId || process.env.DISCORD_MATCH_ACCESS_ROLE_ID || env.DISCORD_MATCH_ACCESS_ROLE_ID || '',
         hubRoleId: settings.hubRoleId || process.env.FACEIT_HUB_ROLE_ID || env.FACEIT_HUB_ROLE_ID || '',
         discordHubRoleId: settings.discordHubRoleId || process.env.DISCORD_HUB_ROLE_ID || env.DISCORD_HUB_ROLE_ID || '',
@@ -990,6 +991,7 @@ export function createApiRouter(client, db, config) {
         DISCORD_SANCTIONS_CHANNEL_ID: newSettings.discordSanctionsChannelId,
         DISCORD_SUPPORT_CHANNEL_ID: newSettings.discordSupportChannelId,
         DISCORD_MUSIC_CHANNEL_ID: newSettings.discordMusicChannelId,
+        DISCORD_RECHARGE_CHANNEL_ID: newSettings.discordRechargeChannelId,
         DISCORD_MATCH_ACCESS_ROLE_ID: newSettings.discordMatchAccessRoleId,
         FACEIT_HUB_ROLE_ID: newSettings.hubRoleId,
         DISCORD_HUB_ROLE_ID: newSettings.discordHubRoleId,
@@ -1019,6 +1021,7 @@ export function createApiRouter(client, db, config) {
       if (newSettings.hubRoleId !== undefined) firestoreUpdates.hubRoleId = newSettings.hubRoleId;
       if (newSettings.discordHubRoleId !== undefined) firestoreUpdates.discordHubRoleId = newSettings.discordHubRoleId;
       if (newSettings.discordMatchAccessRoleId !== undefined) firestoreUpdates.discordMatchAccessRoleId = newSettings.discordMatchAccessRoleId;
+      if (newSettings.discordRechargeChannelId !== undefined) firestoreUpdates.discordRechargeChannelId = newSettings.discordRechargeChannelId;
 
       if (Object.keys(firestoreUpdates).length > 0) {
         await db.setSettings(firestoreUpdates);
@@ -1029,10 +1032,13 @@ export function createApiRouter(client, db, config) {
       await db.addLogEntry('info', 'La configuración del bot (.env y queues) fue actualizada desde el panel web.', 'system');
 
       try {
-        const { checkAndDeploySupportPanel } = await import('../events/ready.js');
+        const { checkAndDeploySupportPanel, checkAndDeployRechargePanel } = await import('../events/ready.js');
         checkAndDeploySupportPanel(client, db).catch(e => logger.error('Error al autodesplegar panel desde API:', e.message));
+        if (checkAndDeployRechargePanel) {
+          checkAndDeployRechargePanel(client, db).catch(e => logger.error('Error al autodesplegar panel de recargas desde API:', e.message));
+        }
       } catch (err) {
-        logger.error('Error al importar checkAndDeploySupportPanel en API:', err.message);
+        logger.error('Error al importar checkAndDeploy en API:', err.message);
       }
 
       res.json({ success: true, settings: newSettings });

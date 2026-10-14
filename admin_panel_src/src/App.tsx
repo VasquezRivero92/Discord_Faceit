@@ -2305,6 +2305,10 @@ export default function App() {
                           <input type="text" value={config.discordMusicChannelId || ''} onChange={(e) => setConfig({ ...config, discordMusicChannelId: e.target.value })} className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-[#5865F2]/50 transition-colors" />
                         </div>
                         <div className="flex flex-col gap-1.5 md:col-span-2">
+                          <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#5865F2]/80">ID Canal de Recargas de Saldo (Botón Yape / Panel Autodespliegue)</label>
+                          <input type="text" value={config.discordRechargeChannelId || ''} onChange={(e) => setConfig({ ...config, discordRechargeChannelId: e.target.value })} className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-[#5865F2]/50 transition-colors" placeholder="ID del canal de Discord donde se anclará el botón de recargas Yape" />
+                        </div>
+                        <div className="flex flex-col gap-1.5 md:col-span-2">
                           <label className="text-[10px] font-mono font-black uppercase tracking-widest text-[#5865F2]/80">ID Rol Acceso a Salas de Partida (Espectador / Staff)</label>
                           <input type="text" value={config.discordMatchAccessRoleId || ''} onChange={(e) => setConfig({ ...config, discordMatchAccessRoleId: e.target.value })} className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3.5 outline-none focus:border-[#5865F2]/50 transition-colors" placeholder="Ej: 123456789012345678" />
                         </div>
