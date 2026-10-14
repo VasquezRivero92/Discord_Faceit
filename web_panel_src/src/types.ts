@@ -85,3 +85,13 @@ export interface BetStatusResponse {
   teamB: { id: string; name: string };
   players: PlayerBetStatus[];
 }
+
+export interface MixtonQueue {
+  id: string;
+  queueId: string;
+  name: string;
+  hubId?: string;
+  hubName?: string;
+  status: 'free' | 'busy';
+  activeMatch?: { id: string; teamA: string; teamB: string; startedAt: number } | null;
+}

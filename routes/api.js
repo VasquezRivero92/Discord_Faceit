@@ -11,7 +11,7 @@ import { fetchFaceitPlayer, fetchFaceitPlayerById } from '../services/faceitApi.
 import { updateLivePanel } from '../services/matchMessages.js';
 import { cleanupVoiceChannel } from '../services/voice.js';
 import { env } from '../config/index.js';
-import { fetchFaceitStats, fetchPlayerHistory, fetchHubInfo, fetchLeaderboard, fetchLatestSeasonPoints, fetchCurrentHubSeason } from '../services/faceitApi.js';
+import { fetchFaceitStats, fetchPlayerHistory, fetchHubInfo, fetchLeaderboard, fetchLatestSeasonPoints, fetchCurrentHubSeason, fetchFaceitHubQueues } from '../services/faceitApi.js';
 import { getEffectiveConfig, getEffectiveConfigForGuild, CLUB_ROLES_MAP } from '../config/index.js';
 
 export function createApiRouter(client, db, config) {
@@ -134,6 +134,20 @@ export function createApiRouter(client, db, config) {
       });
     } catch(e) {
       res.json({ uptimeSeconds: process.uptime(), hubRegion: 'ERROR' });
+    }
+  });
+
+  // --- Sincronización de Colas de Faceit Club ---
+  router.get('/faceit-club-queues', requireAuth, async (req, res) => {
+    try {
+      const targetGuildId = resolveTargetGuildId(req);
+      const effectiveConfig = targetGuildId ? await getEffectiveConfigForGuild(targetGuildId) : await getEffectiveConfig();
+      const hubId = req.query.hubId || effectiveConfig.faceitHubId || env.FACEIT_HUB_ID;
+      const queues = await fetchFaceitHubQueues(hubId);
+      res.json({ queues });
+    } catch (err) {
+      logger.error('Error al consultar colas de club:', err);
+      res.status(500).json({ error: 'Error al consultar colas en Faceit' });
     }
   });
 

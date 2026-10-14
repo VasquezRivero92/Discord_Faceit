@@ -23,9 +23,11 @@ import {
   RefreshCw,
   Check,
   DollarSign,
-  Wallet
+  Wallet,
+  Layers,
+  Radio
 } from 'lucide-react';
-import { Player, Team, LobbyState, CurrentUser, Guild, ToastMessage, PlayerBetStatus, BetStatusResponse } from './types';
+import { Player, Team, LobbyState, CurrentUser, Guild, ToastMessage, PlayerBetStatus, BetStatusResponse, MixtonQueue } from './types';
 
 export default function App() {
   // Authentication & Loading states
@@ -120,6 +122,11 @@ export default function App() {
   const [yapePhoneInput, setYapePhoneInput] = useState<string>('');
   const [yapeOtpInput, setYapeOtpInput] = useState<string>('');
   const [topUpTab, setTopUpTab] = useState<'culqi_yape' | 'admin_manual'>('culqi_yape');
+
+  // Queue / Room selection state (Colas / Salas Faceit)
+  const [availableQueues, setAvailableQueues] = useState<MixtonQueue[]>([]);
+  const [selectedQueueId, setSelectedQueueId] = useState<string>('auto');
+  const [isLoadingQueues, setIsLoadingQueues] = useState<boolean>(false);
 
   // Admin pick order editor state
   const [localPickOrder, setLocalPickOrder] = useState<string[]>([]);
@@ -1469,6 +1476,22 @@ export default function App() {
     }
   };
 
+  // Fetch Available Faceit Queues
+  const fetchQueues = async () => {
+    setIsLoadingQueues(true);
+    try {
+      const res = await apiFetch('/api/lobby/mixton-queues');
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableQueues(data.queues || []);
+      }
+    } catch (err) {
+      console.error('Error al cargar colas de Faceit:', err);
+    } finally {
+      setIsLoadingQueues(false);
+    }
+  };
+
   // Open Bet & Quota Verification Modal
   const handleOpenBetModal = async () => {
     if (!matchTeamA || !matchTeamB) {
@@ -1483,7 +1506,9 @@ export default function App() {
     }
 
     setManualPaidMap({});
+    setSelectedQueueId('auto');
     setIsBetModalOpen(true);
+    fetchQueues();
     await fetchBetStatus(effectiveBetAmount);
   };
 
@@ -1600,7 +1625,8 @@ export default function App() {
           teamIdA: matchTeamA, 
           teamIdB: matchTeamB,
           betAmount: effectiveBetAmount,
-          manualPaidDiscordIds
+          manualPaidDiscordIds,
+          queueId: selectedQueueId
         })
       });
       const data = await res.json();
@@ -3024,6 +3050,84 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {/* Section 1.5: Selector de Sala / Cola Faceit */}
+              {(() => {
+                const autoAssignedQueue = availableQueues.find(q => q.status === 'free') || availableQueues[0];
+                const selectedQueueObj = selectedQueueId === 'auto' 
+                  ? autoAssignedQueue 
+                  : availableQueues.find(q => (q.queueId || q.id) === selectedQueueId);
+
+                return (
+                  <div className="bg-[#161616] border border-[#2D2D2D] p-4 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black uppercase text-neutral-400 tracking-wider flex items-center gap-1.5">
+                        <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" /> SALA / COLA ASIGNADA EN FACEIT
+                      </label>
+                      <span className="text-[10px] text-neutral-500 font-mono">
+                        {isLoadingQueues ? 'Consultando disponibilidad...' : 'Asignación automática inteligente'}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Opción Automática */}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedQueueId('auto')}
+                        className={`px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 ${
+                          selectedQueueId === 'auto'
+                            ? 'bg-emerald-600 border-emerald-500 text-white shadow-md'
+                            : 'bg-[#1F1F1F] border-[#333] hover:border-neutral-500 text-neutral-300'
+                        }`}
+                      >
+                        <span>🤖 AUTOMÁTICA (Siguiente libre)</span>
+                        {autoAssignedQueue && (
+                          <span className="text-[10px] bg-black/40 px-1.5 py-0.5 rounded text-emerald-200">
+                            👉 {autoAssignedQueue.name}
+                          </span>
+                        )}
+                      </button>
+
+                      {/* Botones de Colas individuales */}
+                      {availableQueues.map((q) => {
+                        const isSelected = selectedQueueId === (q.queueId || q.id);
+                        const isFree = q.status === 'free';
+
+                        return (
+                          <button
+                            key={q.queueId || q.id}
+                            type="button"
+                            onClick={() => setSelectedQueueId(q.queueId || q.id)}
+                            className={`px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 ${
+                              isSelected
+                                ? 'bg-[#FF5500] border-[#FF5500] text-white shadow-md'
+                                : 'bg-[#1F1F1F] border-[#333] hover:border-neutral-500 text-neutral-300'
+                            }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${isFree ? 'bg-emerald-400' : 'bg-red-500'}`} />
+                            <span>{q.name}</span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                              isFree ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/50' : 'bg-red-950/80 text-red-300 border border-red-800/50'
+                            }`}>
+                              {isFree ? 'LIBRE' : 'EN JUEGO'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Advertencia si la sala elegida está ocupada */}
+                    {selectedQueueObj && selectedQueueObj.status === 'busy' && selectedQueueObj.activeMatch && (
+                      <div className="text-[11px] text-amber-300 bg-amber-950/50 border border-amber-800/60 px-3 py-1.5 flex items-center gap-2 font-mono">
+                        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>
+                          <strong>{selectedQueueObj.name}</strong> tiene una partida en curso: <strong>{selectedQueueObj.activeMatch.teamA} vs {selectedQueueObj.activeMatch.teamB}</strong>. Si lanzas en esta sala, los capitanes compartirán la cola de Faceit.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Section 2: Progress & Status Banner */}
               {(() => {

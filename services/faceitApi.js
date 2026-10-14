@@ -591,3 +591,91 @@ export async function fetchCurrentHubSeason(targetId, fallbackId = null) {
 
   return null;
 }
+
+const faceitQueuesCache = new Map();
+
+/**
+ * Consulta y autodetecta las colas y salas asociadas a un Hub o Club de Faceit.
+ * Soporta Clubs con divisiones (children) y Hubs individuales con colas directas.
+ * @param {string} hubId
+ * @returns {Promise<Array<{ id: string, queueId: string, name: string, hubId: string, hubName: string, open: boolean }>>}
+ */
+export async function fetchFaceitHubQueues(hubId) {
+  const targetHubId = hubId || env.FACEIT_HUB_ID || 'e72c25e6-74e5-415b-97da-e541296ff1db';
+  if (!targetHubId) return [];
+
+  const now = Date.now();
+  const cached = faceitQueuesCache.get(targetHubId);
+  if (cached && cached.expiresAt > now) {
+    return cached.queues;
+  }
+
+  const detectedQueues = [];
+
+  try {
+    const hubRes = await fetch(`https://api.faceit.com/hubs/v1/hub/${targetHubId}`, {
+      headers: { Accept: 'application/json' }
+    });
+
+    if (hubRes.ok) {
+      const hubData = await hubRes.json();
+      const children = hubData.payload?.children || [];
+
+      // Si el Hub es un Club con salas/divisiones secundarias
+      if (children.length > 0) {
+        for (const child of children) {
+          try {
+            const qRes = await fetch(`https://api.faceit.com/queue/v1/queue/hub/${child.guid}`, {
+              headers: { Accept: 'application/json' }
+            });
+            if (qRes.ok) {
+              const qData = await qRes.json();
+              for (const q of (qData.payload || [])) {
+                detectedQueues.push({
+                  id: q.id,
+                  queueId: q.id,
+                  name: child.name || q.queueName || 'Sala Faceit',
+                  hubId: child.guid,
+                  hubName: child.name || 'Mixtones',
+                  open: q.open !== false
+                });
+              }
+            }
+          } catch (childErr) {
+            logger.warn(`Error al consultar colas para child hub ${child.guid}:`, childErr.message);
+          }
+        }
+      }
+
+      // Si no tiene children o no encontramos colas secundarias, buscar en el Hub principal
+      if (detectedQueues.length === 0) {
+        const directQRes = await fetch(`https://api.faceit.com/queue/v1/queue/hub/${targetHubId}`, {
+          headers: { Accept: 'application/json' }
+        });
+        if (directQRes.ok) {
+          const directQData = await directQRes.json();
+          for (const q of (directQData.payload || [])) {
+            detectedQueues.push({
+              id: q.id,
+              queueId: q.id,
+              name: q.queueName || hubData.payload?.name || 'Sala Principal',
+              hubId: targetHubId,
+              hubName: hubData.payload?.name || 'Mixtones',
+              open: q.open !== false
+            });
+          }
+        }
+      }
+    }
+  } catch (err) {
+    logger.error(`Error al consultar colas de Faceit para Hub ${targetHubId}:`, err.message);
+  }
+
+  // Guardar en cache por 3 minutos
+  faceitQueuesCache.set(targetHubId, {
+    queues: detectedQueues,
+    expiresAt: now + 3 * 60 * 1000
+  });
+
+  return detectedQueues;
+}

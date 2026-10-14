@@ -921,6 +921,46 @@ export default function App() {
     setConfig({ ...config, queues: currentQueues });
   };
 
+  const [isSyncingFaceitQueues, setIsSyncingFaceitQueues] = useState(false);
+
+  const handleSyncFaceitQueues = async () => {
+    setIsSyncingFaceitQueues(true);
+    try {
+      const res = await apiFetch(`/api/admin/faceit-club-queues${selectedGuildId ? `?guildId=${selectedGuildId}` : ''}`);
+      if (!res.ok) throw new Error('Error al consultar colas en Faceit');
+      const data = await res.json();
+      if (!data.queues || data.queues.length === 0) {
+        showToast('No se encontraron colas adicionales en el Hub/Club de Faceit.', 'info');
+        return;
+      }
+      const currentQueues = [...(config.queues || [])];
+      let added = 0;
+      for (const fq of data.queues) {
+        const exists = currentQueues.some(cq => cq.queueId === fq.queueId || cq.id === fq.queueId);
+        if (!exists) {
+          currentQueues.push({
+            id: fq.queueId,
+            queueId: fq.queueId,
+            name: fq.name,
+            discordMatchesChannelId: '',
+            discordWaitingRoomChannelId: '',
+            discordMixtonChannelId: '',
+            discordMatchAccessRoleId: '',
+            hubRoleId: '',
+            discordHubRoleId: '',
+          });
+          added++;
+        }
+      }
+      setConfig({ ...config, queues: currentQueues });
+      showToast(`¡Sincronización completa! Se agregaron ${added} colas/divisiones de Faceit.`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Error al sincronizar colas de Faceit', 'error');
+    } finally {
+      setIsSyncingFaceitQueues(false);
+    }
+  };
+
   // Handle Save Configuration
   const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2359,18 +2399,29 @@ export default function App() {
                         Multi-Cola del Hub (Paralelas)
                       </div>
 
-                      <div className="flex items-center justify-between pt-1">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
                         <p className="text-xs text-neutral-400 font-mono">
                           Configura las colas independientes del Hub (5v5 Principal, 5v5 Secundaria, etc.) con sus respectivos canales de Discord.
                         </p>
-                        <button
-                          type="button"
-                          onClick={handleAddQueue}
-                          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black text-[11px] font-black uppercase tracking-wider rounded-none transition-colors flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          AÑADIR COLA
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={handleSyncFaceitQueues}
+                            disabled={isSyncingFaceitQueues}
+                            className="px-3.5 py-2 bg-[#FF5500] hover:bg-[#FF7700] text-white text-[11px] font-black uppercase tracking-wider rounded-none transition-colors flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] cursor-pointer disabled:opacity-50"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingFaceitQueues ? 'animate-spin' : ''}`} />
+                            {isSyncingFaceitQueues ? 'SINCRONIZANDO...' : 'SINCRONIZAR DESDE FACEIT'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleAddQueue}
+                            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black text-[11px] font-black uppercase tracking-wider rounded-none transition-colors flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            AÑADIR COLA
+                          </button>
+                        </div>
                       </div>
 
                       {(!config.queues || config.queues.length === 0) ? (

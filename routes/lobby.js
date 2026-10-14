@@ -8,7 +8,7 @@ import { updateLivePanel } from '../services/matchMessages.js';
 import { updateMixtonReadyPanel } from '../services/mixtonPanel.js';
 import { invalidateSettingsCache } from '../utils/featureFlags.js';
 import { EventEmitter } from 'events';
-import { fetchFaceitPlayerById } from '../services/faceitApi.js';
+import { fetchFaceitPlayerById, fetchFaceitHubQueues } from '../services/faceitApi.js';
 import { crearLobbyMatchmaking, steamClient } from '../steamBot.js';
 import { playTTSCountdown } from '../utils/voiceAnnouncer.js';
 import { culqiService } from '../services/culqiService.js';
@@ -1106,10 +1106,108 @@ export function createLobbyRouter(client, db, config, wss) {
     }
   });
 
+  /**
+   * Helper para obtener las colas y su estado de ocupación (free/busy)
+   */
+  async function getQueuesWithStatus(guildId, effectiveConfig) {
+    let queues = [];
+    if (Array.isArray(effectiveConfig.queues) && effectiveConfig.queues.length > 0) {
+      queues = effectiveConfig.queues.map((q, idx) => ({
+        id: q.queueId || q.id || `queue_${idx + 1}`,
+        queueId: q.queueId || q.id || `queue_${idx + 1}`,
+        name: q.name || `Cola ${idx + 1}`,
+        hubId: q.hubId || effectiveConfig.faceitHubId || 'e72c25e6-74e5-415b-97da-e541296ff1db',
+        hubName: q.hubName || q.name,
+        discordMatchesChannelId: q.discordMatchesChannelId || null,
+        discordWaitingRoomChannelId: q.discordWaitingRoomChannelId || null,
+        discordMatchAccessRoleId: q.discordMatchAccessRoleId || null,
+        hubRoleId: q.hubRoleId || null,
+        open: true
+      }));
+    } else {
+      // Si no hay colas manuales en la config, autodetectar desde Faceit
+      const detected = await fetchFaceitHubQueues(effectiveConfig.faceitHubId).catch(() => []);
+      if (detected && detected.length > 0) {
+        queues = detected.map((q, idx) => ({
+          id: q.id || q.queueId || `cola_${idx + 1}`,
+          queueId: q.queueId || q.id,
+          name: q.name || `Sala ${idx + 1}`,
+          hubId: q.hubId || effectiveConfig.faceitHubId || 'e72c25e6-74e5-415b-97da-e541296ff1db',
+          hubName: q.hubName || q.name,
+          open: q.open !== false
+        }));
+      } else {
+        // Fallback genérico si no se encuentran colas en Faceit
+        queues = [
+          {
+            id: 'sala_a',
+            queueId: 'sala_a',
+            name: 'Sala A (Cola 1)',
+            hubId: effectiveConfig.faceitHubId || 'e72c25e6-74e5-415b-97da-e541296ff1db',
+            hubName: 'Mixtones',
+            open: true
+          },
+          {
+            id: 'sala_b',
+            queueId: 'sala_b',
+            name: 'Sala B (Cola 2)',
+            hubId: effectiveConfig.faceitHubId || 'e72c25e6-74e5-415b-97da-e541296ff1db',
+            hubName: 'Mixtones',
+            open: true
+          }
+        ];
+      }
+    }
+
+    // Comprobar estado de ocupación con las partidas activas
+    const activeMatches = await db.getActiveMatches().catch(() => []);
+    const queuesWithStatus = queues.map(q => {
+      const qId = String(q.queueId || q.id || '').trim();
+      const qName = String(q.name || '').trim().toLowerCase();
+
+      const busyMatch = activeMatches.find(m => {
+        const matchQId = String(m.queue_id || '').trim();
+        const matchQName = String(m.queue_name || '').trim().toLowerCase();
+        if (qId && matchQId && qId === matchQId) return true;
+        if (qName && matchQName && qName === matchQName) return true;
+        return false;
+      });
+
+      return {
+        ...q,
+        status: busyMatch ? 'busy' : 'free',
+        activeMatch: busyMatch ? {
+          id: busyMatch.id,
+          teamA: busyMatch.faction1_name || 'Equipo A',
+          teamB: busyMatch.faction2_name || 'Equipo B',
+          startedAt: busyMatch.startedAt || null
+        } : null
+      };
+    });
+
+    // Encontrar la primera libre
+    const firstFree = queuesWithStatus.find(q => q.status === 'free');
+    const autoSelectedQueueId = firstFree ? (firstFree.queueId || firstFree.id) : (queuesWithStatus[0]?.queueId || queuesWithStatus[0]?.id || 'default');
+
+    return { queues: queuesWithStatus, autoSelectedQueueId };
+  }
+
+  // 7.5 Obtener estado en vivo de las colas/salas (para selector web)
+  router.get('/mixton-queues', requireAuth, async (req, res) => {
+    try {
+      const effectiveConfig = await getEffectiveConfigForGuild(req.guildId);
+      const result = await getQueuesWithStatus(req.guildId, effectiveConfig);
+      res.json(result);
+    } catch (err) {
+      logger.error('Error al obtener colas de mixton:', err);
+      res.status(500).json({ error: 'Error al consultar estado de las colas.' });
+    }
+  });
+
   // 8. Crear partida mixton en Discord (Admin)
   router.post('/mixton-create-match', requireAuth, verifyGuildAdmin, async (req, res) => {
     try {
-      const { teamIdA, teamIdB, betAmount = 0, manualPaidDiscordIds = [] } = req.body;
+      const { teamIdA, teamIdB, betAmount = 0, manualPaidDiscordIds = [], queueId = 'auto' } = req.body;
       if (!teamIdA || !teamIdB) {
         return res.status(400).json({ error: 'Debes seleccionar dos equipos.' });
       }
@@ -1190,8 +1288,42 @@ export function createLobbyRouter(client, db, config, wss) {
         return res.status(500).json({ error: `No se pudo conectar a Discord para la Guild ${guildIdToUse}.` });
       }
 
+      // Resolver la sala/cola de Faceit asignada (manual o auto)
+      const { queues: currentQueues, autoSelectedQueueId } = await getQueuesWithStatus(guildIdToUse, effectiveConfig);
+      let assignedQueue = null;
+      if (queueId && queueId !== 'auto') {
+        assignedQueue = currentQueues.find(q => String(q.queueId || q.id) === String(queueId));
+      }
+      if (!assignedQueue) {
+        assignedQueue = currentQueues.find(q => String(q.queueId || q.id) === String(autoSelectedQueueId)) || currentQueues[0];
+      }
+      if (!assignedQueue) {
+        assignedQueue = {
+          id: 'default',
+          queueId: 'default',
+          name: 'Sala Principal',
+          hubId: effectiveConfig.faceitHubId || 'e72c25e6-74e5-415b-97da-e541296ff1db',
+          hubName: 'Mixtones'
+        };
+      }
+
+      const activeHubId = assignedQueue.hubId || effectiveConfig.faceitHubId || 'e72c25e6-74e5-415b-97da-e541296ff1db';
+      const cleanHubSlug = encodeURIComponent(assignedQueue.hubName || assignedQueue.name || 'Mixtones');
+      const queueQuery = (assignedQueue.queueId && assignedQueue.queueId !== 'default' && assignedQueue.queueId !== 'sala_a' && assignedQueue.queueId !== 'sala_b') 
+        ? `?queue=${assignedQueue.queueId}` 
+        : '';
+      const faceitHubUrl = `https://www.faceit.com/es/hub/${activeHubId}/${cleanHubSlug}${queueQuery}`;
+
       let matchesChannelId = null;
-      if (effectiveConfig.discordMatchesChannelId) {
+      // Priorizar canal de texto específico de la cola si está configurado
+      if (assignedQueue.discordMatchesChannelId) {
+        const qCh = await guild.channels.fetch(assignedQueue.discordMatchesChannelId).catch(() => null);
+        if (qCh && qCh.guild.id === guild.id) {
+          matchesChannelId = qCh.id;
+        }
+      }
+
+      if (!matchesChannelId && effectiveConfig.discordMatchesChannelId) {
         const ids = effectiveConfig.discordMatchesChannelId.split(',').map(id => id.trim());
         for (const id of ids) {
           const ch = await guild.channels.fetch(id).catch(() => null);
@@ -1224,7 +1356,15 @@ export function createLobbyRouter(client, db, config, wss) {
 
       // 1. Canales de voz temporales
       let waitingRoomId = null;
-      if (effectiveConfig.discordWaitingRoomChannelId) {
+      // Priorizar sala de espera específica de la cola si está configurada
+      if (assignedQueue.discordWaitingRoomChannelId) {
+        const qVc = await guild.channels.fetch(assignedQueue.discordWaitingRoomChannelId).catch(() => null);
+        if (qVc && qVc.guild.id === guild.id) {
+          waitingRoomId = qVc.id;
+        }
+      }
+
+      if (!waitingRoomId && effectiveConfig.discordWaitingRoomChannelId) {
         const ids = effectiveConfig.discordWaitingRoomChannelId.split(',').map(id => id.trim());
         for (const id of ids) {
           const ch = await guild.channels.fetch(id).catch(() => null);
@@ -1352,9 +1492,6 @@ export function createLobbyRouter(client, db, config, wss) {
           return `${isCap ? '👑 **Capitán**' : '•'} ${getLvlEmoji(p.faceit_level)} <@${p.discordId}> (\`${p.faceit_nickname}\` - ELO: ${p.faceit_elo || 1000})`;
         }).join('\n');
 
-        const activeHubId = effectiveConfig.faceitHubId || '52a88f17-1660-42ae-8322-76592f0c6f23';
-        const faceitHubUrl = `https://www.faceit.com/es/hub/${activeHubId}/Mixtones`;
-
         const embedFields = [
           { name: '🌐 Modo de Juego', value: 'Mixton Competitivo', inline: true },
           { name: '🗺️ Mapa', value: '`Elección de Capitanes`', inline: true },
@@ -1370,7 +1507,7 @@ export function createLobbyRouter(client, db, config, wss) {
         }
 
         embedFields.push(
-          { name: '🟠 Club Faceit', value: `[Entrar a la cola del Hub](${faceitHubUrl})`, inline: false },
+          { name: '🎯 Sala Faceit Asignada', value: `🟢 **${assignedQueue.name}**\n[Entrar a la cola de ${assignedQueue.name}](${faceitHubUrl})`, inline: false },
           { name: `👥 Roster A (${teamA.name}) [Promedio ELO: ${avgEloA}]`, value: team1List, inline: false },
           { name: `👥 Roster B (${teamB.name}) [Promedio ELO: ${avgEloB}]`, value: team2List, inline: false }
         );
@@ -1378,7 +1515,7 @@ export function createLobbyRouter(client, db, config, wss) {
         const startedEmbed = new EmbedBuilder()
           .setTitle(parsedBetAmount > 0 ? `🎮 ¡Partida Mixton con Apuesta (S/ ${parsedBetAmount.toFixed(2)})!` : '🎮 ¡Partida Mixton Competitiva!')
           .setColor(parsedBetAmount > 0 ? 0x15C253 : 0xFF5500)
-          .setDescription(`Lanzada por el Administrador **${req.user.username}** desde el panel web.`)
+          .setDescription(`Lanzada por el Administrador **${req.user.username}** desde el panel web.\n🎯 **Sala Asignada en Faceit:** **${assignedQueue.name}**`)
           .addFields(embedFields)
           .setFooter({ text: 'Usa los botones para reportar el resultado de la partida' })
           .setTimestamp();
@@ -1402,7 +1539,7 @@ export function createLobbyRouter(client, db, config, wss) {
           .setEmoji('❌');
 
         const faceitBtn = new ButtonBuilder()
-          .setLabel('Cola en Faceit')
+          .setLabel(`Entrar a ${assignedQueue.name.substring(0, 20)}`)
           .setStyle(ButtonStyle.Link)
           .setURL(faceitHubUrl)
           .setEmoji('🟠');
@@ -1411,15 +1548,12 @@ export function createLobbyRouter(client, db, config, wss) {
 
         const playerPings = [...rosterA, ...rosterB].map(p => `<@${p.discordId}>`).join(' ');
         const msg = await matchesChannel.send({ 
-          content: `📢 **¡Partida Mixtón Iniciada!**\nJugadores: ${playerPings}`,
+          content: `📢 **¡Partida Mixtón Iniciada!** (Sala: **${assignedQueue.name}**)\nJugadores: ${playerPings}`,
           embeds: [startedEmbed], 
           components: [row] 
         }).catch(err => logger.error('Error enviando anuncio mixton:', err));
         if (msg) messageId = msg.id;
       }
-
-      const activeHubId = effectiveConfig.faceitHubId || '52a88f17-1660-42ae-8322-76592f0c6f23';
-      const faceitHubUrl = `https://www.faceit.com/es/hub/${activeHubId}/Mixtones`;
 
       if (messageId) {
         const messageUrl = `https://discord.com/channels/${guild.id}/${matchesChannelId}/${messageId}`;
@@ -1433,28 +1567,28 @@ export function createLobbyRouter(client, db, config, wss) {
             if (isCap) {
               const matesList = (teamA.players || []).map(t => `• [${t.faceit_nickname || 'Jugador'}](https://www.faceit.com/es/players/${t.faceit_nickname || ''}) (<@${t.discordId}>)`).join('\n') || 'Sin compañeros asignados';
               dmEmbed = new EmbedBuilder()
-                .setTitle('👑 ¡Eres el Capitán y Líder de Grupo en Faceit!')
-                .setDescription(`Has sido elegido Capitán de **${teamA.name}**.\n\n👉 **Invita a tus 4 compañeros a tu Grupo (Party) en FACEIT** y luego dale a **JUGAR** en la cola del Hub:`)
+                .setTitle(`👑 ¡Capitán de ${teamA.name} - Sala: ${assignedQueue.name}!`)
+                .setDescription(`Has sido elegido Capitán de **${teamA.name}**.\n\n🎯 **SALA FACEIT ASIGNADA: ${assignedQueue.name.toUpperCase()}**\n\n👉 **Invita a tus 4 compañeros a tu Grupo (Party) en FACEIT** y luego dale a **JUGAR** únicamente en esta sala asignada:\n${faceitHubUrl}`)
                 .setColor(0xFF5500)
                 .addFields(
                   { name: '👥 Tus Compañeros (Haz clic para invitar en Faceit)', value: matesList, inline: false },
                   { name: '🔊 Tu Canal de Voz', value: `<#${vc1.id}>`, inline: true },
                   { name: '🔗 Anuncio en Discord', value: `[Ir al canal](${messageUrl})`, inline: true },
-                  { name: '🟠 Cola del Hub Faceit', value: `[Abrir Hub para Jugar](${faceitHubUrl})`, inline: false }
+                  { name: `🟠 Cola Faceit: ${assignedQueue.name}`, value: `[👉 Abrir ${assignedQueue.name} para Jugar](${faceitHubUrl})`, inline: false }
                 )
-                .setFooter({ text: 'Asegúrate de que los 5 estén en el grupo antes de darle a Jugar' })
+                .setFooter({ text: `Asegúrate de que los 5 estén en el grupo antes de darle a Jugar en ${assignedQueue.name}` })
                 .setTimestamp();
             } else {
               const capNick = teamA.captain?.faceit_nickname || 'Capitán';
               const capUrl = `https://www.faceit.com/es/players/${capNick}`;
               dmEmbed = new EmbedBuilder()
-                .setTitle('🎮 ¡Invitación de Equipo Mixton!')
-                .setDescription(`Has sido asignado a **${teamA.name}**.\n\n👑 Tu Capitán y líder de grupo en Faceit es: **[${capNick}](${capUrl})** (<@${teamA.captain?.discordId}>).\n\n👉 **Acepta la invitación de grupo de tu Capitán en Faceit** o agrégalo como amigo para unirte a su grupo antes de iniciar la partida.`)
+                .setTitle(`🎮 ¡Invitación de Equipo Mixton - Sala: ${assignedQueue.name}!`)
+                .setDescription(`Has sido asignado a **${teamA.name}**.\n\n👑 Tu Capitán y líder de grupo en Faceit es: **[${capNick}](${capUrl})** (<@${teamA.captain?.discordId}>).\n\n🎯 **SALA FACEIT ASIGNADA: ${assignedQueue.name.toUpperCase()}**\n\n👉 **Acepta la invitación de grupo de tu Capitán en Faceit** o agrégalo como amigo para unirte a su grupo antes de iniciar la partida.`)
                 .setColor(0x15C253)
                 .addFields(
                   { name: '👑 Tu Capitán en Faceit', value: `[Perfil de ${capNick}](${capUrl})`, inline: true },
                   { name: '🔊 Canal de Voz', value: `<#${vc1.id}>`, inline: true },
-                  { name: '🟠 Hub Mixtones', value: `[Ir al Hub](${faceitHubUrl})`, inline: true }
+                  { name: `🟠 Sala: ${assignedQueue.name}`, value: `[Ir al Hub](${faceitHubUrl})`, inline: true }
                 )
                 .setFooter({ text: 'Ten abierto Faceit y el Anti-Cheat' })
                 .setTimestamp();
@@ -1476,28 +1610,28 @@ export function createLobbyRouter(client, db, config, wss) {
             if (isCap) {
               const matesList = (teamB.players || []).map(t => `• [${t.faceit_nickname || 'Jugador'}](https://www.faceit.com/es/players/${t.faceit_nickname || ''}) (<@${t.discordId}>)`).join('\n') || 'Sin compañeros asignados';
               dmEmbed = new EmbedBuilder()
-                .setTitle('👑 ¡Eres el Capitán y Líder de Grupo en Faceit!')
-                .setDescription(`Has sido elegido Capitán de **${teamB.name}**.\n\n👉 **Invita a tus 4 compañeros a tu Grupo (Party) en FACEIT** y luego dale a **JUGAR** en la cola del Hub:`)
+                .setTitle(`👑 ¡Capitán de ${teamB.name} - Sala: ${assignedQueue.name}!`)
+                .setDescription(`Has sido elegido Capitán de **${teamB.name}**.\n\n🎯 **SALA FACEIT ASIGNADA: ${assignedQueue.name.toUpperCase()}**\n\n👉 **Invita a tus 4 compañeros a tu Grupo (Party) en FACEIT** y luego dale a **JUGAR** únicamente en esta sala asignada:\n${faceitHubUrl}`)
                 .setColor(0xFF5500)
                 .addFields(
                   { name: '👥 Tus Compañeros (Haz clic para invitar en Faceit)', value: matesList, inline: false },
                   { name: '🔊 Tu Canal de Voz', value: `<#${vc2.id}>`, inline: true },
                   { name: '🔗 Anuncio en Discord', value: `[Ir al canal](${messageUrl})`, inline: true },
-                  { name: '🟠 Cola del Hub Faceit', value: `[Abrir Hub para Jugar](${faceitHubUrl})`, inline: false }
+                  { name: `🟠 Cola Faceit: ${assignedQueue.name}`, value: `[👉 Abrir ${assignedQueue.name} para Jugar](${faceitHubUrl})`, inline: false }
                 )
-                .setFooter({ text: 'Asegúrate de que los 5 estén en el grupo antes de darle a Jugar' })
+                .setFooter({ text: `Asegúrate de que los 5 estén en el grupo antes de darle a Jugar en ${assignedQueue.name}` })
                 .setTimestamp();
             } else {
               const capNick = teamB.captain?.faceit_nickname || 'Capitán';
               const capUrl = `https://www.faceit.com/es/players/${capNick}`;
               dmEmbed = new EmbedBuilder()
-                .setTitle('🎮 ¡Invitación de Equipo Mixton!')
-                .setDescription(`Has sido asignado a **${teamB.name}**.\n\n👑 Tu Capitán y líder de grupo en Faceit es: **[${capNick}](${capUrl})** (<@${teamB.captain?.discordId}>).\n\n👉 **Acepta la invitación de grupo de tu Capitán en Faceit** o agrégalo como amigo para unirte a su grupo antes de iniciar la partida.`)
+                .setTitle(`🎮 ¡Invitación de Equipo Mixton - Sala: ${assignedQueue.name}!`)
+                .setDescription(`Has sido asignado a **${teamB.name}**.\n\n👑 Tu Capitán y líder de grupo en Faceit es: **[${capNick}](${capUrl})** (<@${teamB.captain?.discordId}>).\n\n🎯 **SALA FACEIT ASIGNADA: ${assignedQueue.name.toUpperCase()}**\n\n👉 **Acepta la invitación de grupo de tu Capitán en Faceit** o agrégalo como amigo para unirte a su grupo antes de iniciar la partida.`)
                 .setColor(0xFF3E3E)
                 .addFields(
                   { name: '👑 Tu Capitán en Faceit', value: `[Perfil de ${capNick}](${capUrl})`, inline: true },
                   { name: '🔊 Canal de Voz', value: `<#${vc2.id}>`, inline: true },
-                  { name: '🟠 Hub Mixtones', value: `[Ir al Hub](${faceitHubUrl})`, inline: true }
+                  { name: `🟠 Sala: ${assignedQueue.name}`, value: `[Ir al Hub](${faceitHubUrl})`, inline: true }
                 )
                 .setFooter({ text: 'Ten abierto Faceit y el Anti-Cheat' })
                 .setTimestamp();
@@ -1520,13 +1654,29 @@ export function createLobbyRouter(client, db, config, wss) {
         creator_id: req.user.userId,
         bet_amount_per_player: parsedBetAmount,
         total_pot: parseFloat((parsedBetAmount * 10).toFixed(2)),
-        manual_paid_players: Array.from(manualPaidSet)
+        manual_paid_players: Array.from(manualPaidSet),
+        queue_id: assignedQueue.queueId || assignedQueue.id,
+        queue_name: assignedQueue.name
       };
 
       const dbRosterA = rosterA.map(p => ({ player_id: p.faceit_player_id, nickname: p.faceit_nickname, discord_id: p.discordId }));
       const dbRosterB = rosterB.map(p => ({ player_id: p.faceit_player_id, nickname: p.faceit_nickname, discord_id: p.discordId }));
 
-      await db.addActiveMatch(matchId, matchData, vc1.id, vc2.id, messageId, dbRosterA, dbRosterB, originalVoiceStates, guildIdToUse);
+      await db.addActiveMatch(
+        matchId, 
+        matchData, 
+        vc1.id, 
+        vc2.id, 
+        messageId, 
+        dbRosterA, 
+        dbRosterB, 
+        originalVoiceStates, 
+        guildIdToUse,
+        assignedQueue.queueId || assignedQueue.id,
+        assignedQueue.name,
+        matchesChannelId,
+        waitingRoomId
+      );
       await updateLivePanel(client, matchesChannelId, db);
 
       // Quitar estado mixton_ready
@@ -1546,8 +1696,8 @@ export function createLobbyRouter(client, db, config, wss) {
       await db.saveMixtonLobbyState(state, guildIdToUse);
       mixtonEvents.emit('update', guildIdToUse);
 
-      logger.success(`Partida mixton ${matchId} iniciada desde web por ${req.user.username}`);
-      res.json({ success: true, matchId, faceitHubUrl });
+      logger.success(`Partida mixton ${matchId} (Sala: ${assignedQueue.name}) iniciada desde web por ${req.user.username}`);
+      res.json({ success: true, matchId, faceitHubUrl, assignedQueue });
 
       // Ejecutar el envío de invitaciones de Steam en segundo plano
       (async () => {
