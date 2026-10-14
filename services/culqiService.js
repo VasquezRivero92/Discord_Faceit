@@ -2,6 +2,7 @@ import { env } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
 const CULQI_API_BASE = 'https://api.culqi.com/v2';
+const CULQI_SECURE_BASE = 'https://secure.culqi.com/v2';
 
 /**
  * Servicio de integración con la API de Culqi (Cobros automáticos con Yape)
@@ -33,17 +34,17 @@ export const culqiService = {
     const payload = {
       otp: cleanOtp,
       number_phone: cleanPhone,
-      phone_number: cleanPhone,
       ...(amountInCents > 0 ? { amount: amountInCents.toString() } : {})
     };
 
     try {
-      const response = await fetch(`${CULQI_API_BASE}/tokens/yape`, {
+      const response = await fetch(`${CULQI_SECURE_BASE}/tokens/yape`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${publicKey}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'x-culqi-product': 'online'
         },
         body: JSON.stringify(payload)
       });
@@ -51,11 +52,13 @@ export const culqiService = {
       const data = await response.json();
 
       if (!response.ok) {
-        let errorMsg = data.user_message || 'Error al validar token de Yape. Verifica los datos ingresados.';
+        let errorMsg = data.user_message || data.merchant_message || 'Error al validar token de Yape. Verifica los datos ingresados.';
         if (data.type === 'authentication_error') {
           errorMsg = 'Error en las credenciales de la pasarela de pagos. Contacta al administrador del sistema.';
+          logger.error('❌ Error de autenticación en Culqi (CULQI_PUBLIC_KEY inválida o rechazada por la pasarela):', data.merchant_message || data);
+        } else {
+          logger.error('Error al crear token de Yape:', data);
         }
-        logger.error('Error al crear token de Yape:', data);
         throw new Error(errorMsg);
       }
 
@@ -108,11 +111,13 @@ export const culqiService = {
       const data = await response.json();
 
       if (!response.ok) {
-        let errorMsg = data.user_message || 'Error al procesar el cargo de Yape.';
+        let errorMsg = data.user_message || data.merchant_message || 'Error al procesar el cargo de Yape.';
         if (data.type === 'authentication_error') {
           errorMsg = 'Error en las credenciales de la pasarela de pagos. Contacta al administrador del sistema.';
+          logger.error('❌ Error de autenticación en Culqi (CULQI_SECRET_KEY inválida o rechazada por la pasarela):', data.merchant_message || data);
+        } else {
+          logger.error('Error en createCharge:', data);
         }
-        logger.error('Error en createCharge:', data);
         throw new Error(errorMsg);
       }
 
