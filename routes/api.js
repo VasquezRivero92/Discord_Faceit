@@ -111,14 +111,14 @@ export function createApiRouter(client, db, config) {
 
   // --- Información del usuario logueado ---
   router.get('/me', requireAuth, async (req, res) => {
-    let phoneNumber = null;
+    let hasSavedPhone = false;
     try {
       if (req.user?.userId) {
         const u = await db.getFullUser(req.user.userId, req.guildId);
-        if (u?.phoneNumber) phoneNumber = u.phoneNumber;
+        if (u?.phoneNumber) hasSavedPhone = true;
       }
     } catch (_) {}
-    res.json({ user: { ...req.user, phoneNumber } });
+    res.json({ user: { ...req.user, hasSavedPhone } });
   });
 
   // --- Información del Sistema (Uptime y Hub) ---

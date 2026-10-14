@@ -49,16 +49,12 @@ export async function execute(interaction, db) {
 
   const phoneInput = new TextInputBuilder()
     .setCustomId('celular_input')
-    .setLabel('Número de celular Yape (9 dígitos)')
+    .setLabel(savedPhone ? 'Celular Yape (Opcional - ya registrado)' : 'Número de celular Yape (9 dígitos)')
     .setStyle(TextInputStyle.Short)
-    .setPlaceholder('Ej: 987654321')
-    .setMinLength(9)
+    .setPlaceholder(savedPhone ? '🔒 Ya registrado confidencialmente (Déjalo vacío)' : 'Ej: 987654321 (Confidencial)')
+    .setMinLength(savedPhone ? 0 : 9)
     .setMaxLength(9)
-    .setRequired(true);
-
-  if (savedPhone) {
-    phoneInput.setValue(savedPhone);
-  }
+    .setRequired(!savedPhone);
 
   const otpInput = new TextInputBuilder()
     .setCustomId('otp_input')
@@ -85,8 +81,8 @@ export async function handleRecargaModalSubmit(interaction, db) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const amountStr = interaction.fields.getTextInputValue('monto_input');
-  const phone = interaction.fields.getTextInputValue('celular_input');
-  const otp = interaction.fields.getTextInputValue('otp_input');
+  let phone = interaction.fields.getTextInputValue('celular_input')?.trim();
+  const otp = interaction.fields.getTextInputValue('otp_input')?.trim();
 
   const amount = parseFloat(amountStr);
   if (isNaN(amount) || amount < 1) {
@@ -95,10 +91,26 @@ export async function handleRecargaModalSubmit(interaction, db) {
     });
   }
 
+  if (!phone) {
+    try {
+      const user = await db?.getFullUser?.(interaction.user.id, interaction.guildId);
+      if (user?.phoneNumber) {
+        phone = user.phoneNumber;
+      }
+    } catch (_) {}
+  }
+
+  const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
+  if (cleanPhone.length !== 9) {
+    return interaction.editReply({
+      content: '❌ Debes ingresar tu número de celular Yape de 9 dígitos.'
+    });
+  }
+
   try {
     const result = await culqiService.processYapeRecharge({
       discordId: interaction.user.id,
-      phoneNumber: phone,
+      phoneNumber: cleanPhone,
       otp: otp,
       amount: amount,
       nickname: interaction.member?.displayName || interaction.user.username,

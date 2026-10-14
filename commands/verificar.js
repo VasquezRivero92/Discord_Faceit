@@ -87,7 +87,7 @@ export async function processVerification(interaction, db, nickname, phoneNumber
         if (cleanPhone) {
           await db.setUserPhone(discordId, cleanPhone, interaction.guildId);
         }
-        const phoneNotice = cleanPhone ? `\n📱 Se actualizó tu celular para recargas Yape: **${cleanPhone}**.` : '';
+        const phoneNotice = cleanPhone ? '\n🔒 Tu número celular para recargas Yape ha sido registrado de forma confidencial.' : '';
         return interaction.editReply(`ℹ️ Tu cuenta de Discord ya está vinculada al perfil de Faceit **${player.nickname}**. Se han sincronizado tus roles y apodo.${phoneNotice}`);
       } else {
         return interaction.editReply(`❌ La cuenta de Faceit **${player.nickname}** ya está vinculada al usuario de Discord <@${existingDiscordId}>.`);
@@ -103,7 +103,7 @@ export async function processVerification(interaction, db, nickname, phoneNumber
 
     // Enlazar cuentas guardando nivel, elo y número telefónico opcional
     await db.linkAccounts(discordId, player.player_id, player.nickname, skillLevel, elo, interaction.guildId, currentSeason, cleanPhone);
-    await db.addLogEntry('success', `El usuario ${interaction.user.tag} vinculó su cuenta directamente con Faceit ID ${player.nickname}${cleanPhone ? ` (Cel: ${cleanPhone})` : ''}`, 'bot', interaction.guildId);
+    await db.addLogEntry('success', `El usuario ${interaction.user.tag} vinculó su cuenta directamente con Faceit ID ${player.nickname}`, 'bot', interaction.guildId);
     playerCache.set(`${interaction.guildId}_${discordId}`, { faceitId: player.player_id, nickname: player.nickname, level: skillLevel });
 
     // Sincronizar roles y apodo
@@ -117,7 +117,7 @@ export async function processVerification(interaction, db, nickname, phoneNumber
     }
 
     const faceitProfileUrl = `https://www.faceit.com/en/players/${player.nickname}`;
-    const phoneNotice = cleanPhone ? `\n📱 Celular registrado para recargas Yape: **${cleanPhone}**` : '';
+    const phoneNotice = cleanPhone ? '\n🔒 Tu número celular para recargas Yape ha sido registrado de forma confidencial.' : '';
 
     // Responder con éxito (efímero al usuario)
     await interaction.editReply({

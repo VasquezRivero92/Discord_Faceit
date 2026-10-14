@@ -424,7 +424,7 @@ export const db = {
       nicknameToDiscordMapCache = null;
       nicknameToDiscordMapLastFetch = 0;
       cacheUser(docId, userData);
-      logger.success(`Cuenta vinculada en Firestore: Server(${guildId}) Discord(${discordId}) <-> Faceit(${faceitNickname})${cleanPhone ? ` Cel(${cleanPhone})` : ''}`);
+      logger.success(`Cuenta vinculada en Firestore: Server(${guildId}) Discord(${discordId}) <-> Faceit(${faceitNickname})`);
     } catch (error) {
       logger.error('Error al vincular cuentas en Firestore:', error);
     }
@@ -454,7 +454,7 @@ export const db = {
           }
         }
       }
-      logger.info(`📱 Teléfono ${cleanPhone} guardado para Discord ID ${discordId}`);
+      logger.info(`📱 Teléfono guardado de forma confidencial para Discord ID ${discordId}`);
       return true;
     } catch (err) {
       logger.error(`Error al guardar teléfono para usuario ${discordId}:`, err);

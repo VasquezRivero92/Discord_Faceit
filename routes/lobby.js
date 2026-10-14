@@ -276,14 +276,14 @@ export function createLobbyRouter(client, db, config, wss) {
 
   // --- Información del usuario autenticado ---
   router.get('/me', requireAuth, async (req, res) => {
-    let phoneNumber = null;
+    let hasSavedPhone = false;
     try {
       if (req.user?.userId) {
         const u = await db.getFullUser(req.user.userId, req.guildId);
-        if (u?.phoneNumber) phoneNumber = u.phoneNumber;
+        if (u?.phoneNumber) hasSavedPhone = true;
       }
     } catch (_) {}
-    res.json({ user: { ...req.user, phoneNumber } });
+    res.json({ user: { ...req.user, hasSavedPhone } });
   });
 
   // --- Lista de servidores (Guilds) para administrador ---
@@ -1006,10 +1006,10 @@ export function createLobbyRouter(client, db, config, wss) {
 
       for (const p of rosterA) {
         const balance = await db.getUserBalance(p.discordId, guildIdToUse);
-        let phoneNumber = null;
+        let hasSavedPhone = false;
         try {
           const u = await db.getFullUser(p.discordId, guildIdToUse);
-          if (u?.phoneNumber) phoneNumber = u.phoneNumber;
+          if (u?.phoneNumber) hasSavedPhone = true;
         } catch (_) {}
 
         playerStatusList.push({
@@ -1017,7 +1017,7 @@ export function createLobbyRouter(client, db, config, wss) {
           faceit_nickname: p.faceit_nickname,
           displayName: p.discordUser?.displayName || p.discordUser?.username || p.faceit_nickname,
           avatarURL: p.discordUser?.avatarURL || null,
-          phoneNumber,
+          hasSavedPhone,
           team: 'A',
           teamName: teamA.name,
           isCaptain: p.discordId === teamA.captain.discordId,
@@ -1029,10 +1029,10 @@ export function createLobbyRouter(client, db, config, wss) {
 
       for (const p of rosterB) {
         const balance = await db.getUserBalance(p.discordId, guildIdToUse);
-        let phoneNumber = null;
+        let hasSavedPhone = false;
         try {
           const u = await db.getFullUser(p.discordId, guildIdToUse);
-          if (u?.phoneNumber) phoneNumber = u.phoneNumber;
+          if (u?.phoneNumber) hasSavedPhone = true;
         } catch (_) {}
 
         playerStatusList.push({
@@ -1040,7 +1040,7 @@ export function createLobbyRouter(client, db, config, wss) {
           faceit_nickname: p.faceit_nickname,
           displayName: p.discordUser?.displayName || p.discordUser?.username || p.faceit_nickname,
           avatarURL: p.discordUser?.avatarURL || null,
-          phoneNumber,
+          hasSavedPhone,
           team: 'B',
           teamName: teamB.name,
           isCaptain: p.discordId === teamB.captain.discordId,
@@ -1099,13 +1099,25 @@ export function createLobbyRouter(client, db, config, wss) {
       const { phoneNumber, otp, amount, targetDiscordId } = req.body;
       const discordId = (req.user?.isAdmin && targetDiscordId) ? targetDiscordId : req.user.userId;
 
-      if (!phoneNumber || !otp || !amount) {
-        return res.status(400).json({ error: 'Debes proporcionar tu número de celular Yape, código de aprobación y monto.' });
+      if (!otp || !amount) {
+        return res.status(400).json({ error: 'Debes proporcionar el código de aprobación de Yape y monto.' });
+      }
+
+      let phoneToUse = phoneNumber ? String(phoneNumber).replace(/\D/g, '') : null;
+      if (!phoneToUse || phoneToUse.length !== 9) {
+        const existingUser = await db.getFullUser(discordId, req.guildId);
+        if (existingUser?.phoneNumber) {
+          phoneToUse = existingUser.phoneNumber;
+        }
+      }
+
+      if (!phoneToUse || phoneToUse.length !== 9) {
+        return res.status(400).json({ error: 'Debes proporcionar un número de celular Yape válido de 9 dígitos.' });
       }
 
       const result = await culqiService.processYapeRecharge({
         discordId,
-        phoneNumber,
+        phoneNumber: phoneToUse,
         otp,
         amount,
         email: req.user.email || null,

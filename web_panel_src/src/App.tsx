@@ -116,7 +116,7 @@ export default function App() {
   const [betPlayers, setBetPlayers] = useState<PlayerBetStatus[]>([]);
   const [isLoadingBetStatus, setIsLoadingBetStatus] = useState(false);
   const [manualPaidMap, setManualPaidMap] = useState<{ [discordId: string]: boolean }>({});
-  const [quickTopUpUser, setQuickTopUpUser] = useState<{ discordId: string; nickname: string; phoneNumber?: string | null } | null>(null);
+  const [quickTopUpUser, setQuickTopUpUser] = useState<{ discordId: string; nickname: string; hasSavedPhone?: boolean } | null>(null);
   const [quickTopUpAmount, setQuickTopUpAmount] = useState<string>('10');
   const [isSubmittingTopUp, setIsSubmittingTopUp] = useState(false);
   const [yapePhoneInput, setYapePhoneInput] = useState<string>('');
@@ -1575,7 +1575,7 @@ export default function App() {
     }
     const cleanPhone = yapePhoneInput.replace(/\D/g, '');
     const cleanOtp = yapeOtpInput.replace(/\D/g, '');
-    if (cleanPhone.length !== 9) {
+    if (!quickTopUpUser.hasSavedPhone && cleanPhone.length !== 9) {
       showToast('El número de celular Yape debe tener 9 dígitos.', 'error');
       return;
     }
@@ -1591,7 +1591,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           targetDiscordId: quickTopUpUser.discordId,
-          phoneNumber: cleanPhone,
+          phoneNumber: cleanPhone.length === 9 ? cleanPhone : undefined,
           otp: cleanOtp,
           amount
         })
@@ -3282,9 +3282,9 @@ export default function App() {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setQuickTopUpUser({ discordId: p.discordId, nickname: p.faceit_nickname, phoneNumber: p.phoneNumber });
+                                      setQuickTopUpUser({ discordId: p.discordId, nickname: p.faceit_nickname, hasSavedPhone: p.hasSavedPhone });
                                       setQuickTopUpAmount(p.deficit > 0 ? p.deficit.toFixed(2) : '5.00');
-                                      setYapePhoneInput(p.phoneNumber || '');
+                                      setYapePhoneInput('');
                                       setYapeOtpInput('');
                                     }}
                                     title="Recargar saldo a este usuario"
@@ -3399,9 +3399,9 @@ export default function App() {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setQuickTopUpUser({ discordId: p.discordId, nickname: p.faceit_nickname, phoneNumber: p.phoneNumber });
+                                      setQuickTopUpUser({ discordId: p.discordId, nickname: p.faceit_nickname, hasSavedPhone: p.hasSavedPhone });
                                       setQuickTopUpAmount(p.deficit > 0 ? p.deficit.toFixed(2) : '5.00');
-                                      setYapePhoneInput(p.phoneNumber || '');
+                                      setYapePhoneInput('');
                                       setYapeOtpInput('');
                                     }}
                                     title="Recargar saldo a este usuario"
@@ -3544,22 +3544,27 @@ export default function App() {
                     />
                   </div>
                 </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10px] text-neutral-400 uppercase font-bold">Celular de Yape (9 dígitos):</label>
-                    {quickTopUpUser?.phoneNumber && (
-                      <span className="text-[9px] text-[#A855F7] font-bold">✓ Celular guardado</span>
-                    )}
+                {quickTopUpUser?.hasSavedPhone ? (
+                  <div>
+                    <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Celular de Yape:</label>
+                    <div className="bg-[#111] border border-[#742284]/40 px-3 py-2 text-xs text-purple-200 flex items-center justify-between">
+                      <span className="font-bold">🔒 Número registrado guardado</span>
+                      <span className="text-[10px] text-neutral-400">(Totalmente confidencial)</span>
+                    </div>
                   </div>
-                  <input
-                    type="text"
-                    maxLength={9}
-                    value={yapePhoneInput}
-                    onChange={(e) => setYapePhoneInput(e.target.value)}
-                    className="w-full bg-[#111] border border-[#333] px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#742284]"
-                    placeholder="Ej: 987654321"
-                  />
-                </div>
+                ) : (
+                  <div>
+                    <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Celular de Yape (9 dígitos):</label>
+                    <input
+                      type="text"
+                      maxLength={9}
+                      value={yapePhoneInput}
+                      onChange={(e) => setYapePhoneInput(e.target.value)}
+                      className="w-full bg-[#111] border border-[#333] px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#742284]"
+                      placeholder="Ej: 987654321 (Se guardará confidencialmente)"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Código de Aprobación (6 dígitos):</label>
                   <input

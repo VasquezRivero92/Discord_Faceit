@@ -261,9 +261,9 @@ export async function onInteractionCreate(interaction, db, commandMap) {
 
         const phoneInput = new TextInputBuilder()
           .setCustomId('phone_number')
-          .setLabel('Número de celular (Opcional)')
+          .setLabel('Número de celular (Opcional - Privado)')
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder('Ej: 987654321 (Para depósitos Yape)')
+          .setPlaceholder('Ej: 987654321 (100% confidencial)')
           .setMinLength(0)
           .setMaxLength(15)
           .setRequired(false);
@@ -310,16 +310,12 @@ export async function onInteractionCreate(interaction, db, commandMap) {
 
         const phoneInput = new TextInputBuilder()
           .setCustomId('celular_input')
-          .setLabel('Número de celular Yape (9 dígitos)')
+          .setLabel(savedPhone ? 'Celular Yape (Opcional - ya registrado)' : 'Número de celular Yape (9 dígitos)')
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder('Ej: 987654321')
-          .setMinLength(9)
+          .setPlaceholder(savedPhone ? '🔒 Ya registrado confidencialmente (Déjalo vacío)' : 'Ej: 987654321 (Confidencial)')
+          .setMinLength(savedPhone ? 0 : 9)
           .setMaxLength(9)
-          .setRequired(true);
-
-        if (savedPhone) {
-          phoneInput.setValue(savedPhone);
-        }
+          .setRequired(!savedPhone);
 
         const otpInput = new TextInputBuilder()
           .setCustomId('otp_input')

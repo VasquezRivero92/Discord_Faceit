@@ -133,7 +133,7 @@ export const culqiService = {
       throw new Error('El monto mínimo de recarga es S/ 1.00');
     }
 
-    logger.info(`Iniciando recarga Yape Culqi: S/ ${numAmount.toFixed(2)} para Discord ID ${discordId} (Cel: ${phoneNumber})`);
+    logger.info(`Iniciando recarga Yape: S/ ${numAmount.toFixed(2)} para Discord ID ${discordId}`);
 
     // 1. Crear Token de Yape
     const token = await this.createYapeToken(phoneNumber, otp, numAmount);
@@ -182,7 +182,7 @@ export const culqiService = {
           const existingUser = await db.getFullUser(discordId, guildId);
           if (existingUser && !existingUser.phoneNumber) {
             await db.setUserPhone(discordId, phoneNumber, guildId);
-            logger.info(`📱 Teléfono ${phoneNumber} guardado automáticamente para el usuario verificado ${discordId}`);
+            logger.info(`📱 Teléfono guardado confidencialmente para el usuario verificado ${discordId}`);
           }
         } catch (phoneErr) {
           logger.warn(`No se pudo autoguardar el teléfono del usuario ${discordId}: ${phoneErr.message}`);
