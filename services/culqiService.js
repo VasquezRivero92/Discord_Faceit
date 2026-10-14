@@ -12,8 +12,9 @@ export const culqiService = {
    * @param {string} phoneNumber - Número de 9 dígitos de Yape
    * @param {string} otp - Código de aprobación de 6 dígitos generado en la app de Yape
    */
-  async createYapeToken(phoneNumber, otp) {
-    const publicKey = env.CULQI_PUBLIC_KEY || process.env.CULQI_PUBLIC_KEY;
+  async createYapeToken(phoneNumber, otp, amount = 0) {
+    const rawKey = env.CULQI_PUBLIC_KEY || process.env.CULQI_PUBLIC_KEY || '';
+    const publicKey = rawKey.trim();
     if (!publicKey) {
       throw new Error('CULQI_PUBLIC_KEY no está configurada en las variables de entorno.');
     }
@@ -28,23 +29,32 @@ export const culqiService = {
       throw new Error('El código de aprobación de Yape debe tener exactamente 6 dígitos.');
     }
 
+    const amountInCents = Math.round(Number(amount || 0) * 100);
+    const payload = {
+      otp: cleanOtp,
+      number_phone: cleanPhone,
+      phone_number: cleanPhone,
+      ...(amountInCents > 0 ? { amount: amountInCents.toString() } : {})
+    };
+
     try {
       const response = await fetch(`${CULQI_API_BASE}/tokens/yape`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${publicKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
-        body: JSON.stringify({
-          phone_number: cleanPhone,
-          otp: cleanOtp
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        const errorMsg = data.user_message || data.merchant_message || data.message || 'Error al validar token de Yape en Culqi.';
+        let errorMsg = data.user_message || data.merchant_message || data.message || 'Error al validar token de Yape en Culqi.';
+        if (data.type === 'authentication_error') {
+          errorMsg = 'La Llave Pública de Culqi (pk_test_...) no es válida o tu cuenta en Culqi aún no está activada. Confirma el correo de Culqi o revisa tu panel en Desarrollo > API Keys.';
+        }
         logger.error('Error al crear token de Yape en Culqi:', data);
         throw new Error(errorMsg);
       }
@@ -60,7 +70,8 @@ export const culqiService = {
    * Ejecuta un cargo con la API de Culqi usando el token de Yape generado.
    */
   async createCharge({ amount, sourceId, email, discordId, nickname, description }) {
-    const secretKey = env.CULQI_SECRET_KEY || process.env.CULQI_SECRET_KEY;
+    const rawKey = env.CULQI_SECRET_KEY || process.env.CULQI_SECRET_KEY || '';
+    const secretKey = rawKey.trim();
     if (!secretKey) {
       throw new Error('CULQI_SECRET_KEY no está configurada en las variables de entorno.');
     }
@@ -88,7 +99,8 @@ export const culqiService = {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${secretKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify(payload)
       });
@@ -96,7 +108,10 @@ export const culqiService = {
       const data = await response.json();
 
       if (!response.ok) {
-        const errorMsg = data.user_message || data.merchant_message || data.message || 'Error al procesar el cargo con Culqi.';
+        let errorMsg = data.user_message || data.merchant_message || data.message || 'Error al procesar el cargo con Culqi.';
+        if (data.type === 'authentication_error') {
+          errorMsg = 'La Llave Secreta de Culqi (sk_test_...) no es válida o tu cuenta en Culqi aún no está activada. Revisa tu panel en Desarrollo > API Keys.';
+        }
         logger.error('Error en createCharge de Culqi:', data);
         throw new Error(errorMsg);
       }
@@ -121,7 +136,7 @@ export const culqiService = {
     logger.info(`Iniciando recarga Yape Culqi: S/ ${numAmount.toFixed(2)} para Discord ID ${discordId} (Cel: ${phoneNumber})`);
 
     // 1. Crear Token de Yape
-    const token = await this.createYapeToken(phoneNumber, otp);
+    const token = await this.createYapeToken(phoneNumber, otp, numAmount);
     if (!token?.id) {
       throw new Error('No se pudo generar el token de autorización de Yape.');
     }
