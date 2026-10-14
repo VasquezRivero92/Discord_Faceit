@@ -22,16 +22,23 @@ export async function onReady(client, commands, db) {
     // Se registran globalmente para evitar duplicados en la guild
     await rest.put(Routes.applicationCommands(env.DISCORD_CLIENT_ID), { body: commands });
     
-    // Registrar también en la guild configurada para disponibilidad instantánea (evita la espera de 1 hora de caché global)
-    const guildId = config.discordGuildId;
-    if (guildId && !guildId.startsWith('ID_')) {
-      await rest.put(
-        Routes.applicationGuildCommands(env.DISCORD_CLIENT_ID, guildId),
-        { body: commands }
-      );
-      logger.success(`Comandos de barra registrados instantáneamente en la guild: ${guildId}`);
-    } else {
-      logger.success('Comandos de barra registrados con éxito globalmente.');
+    // Registrar también en todas las guilds donde está el bot para disponibilidad instantánea (evita la espera de 1 hora de caché global)
+    const targetGuilds = new Set();
+    if (config.discordGuildId && !config.discordGuildId.startsWith('ID_')) {
+      targetGuilds.add(config.discordGuildId);
+    }
+    client.guilds.cache.forEach(g => targetGuilds.add(g.id));
+
+    for (const gId of targetGuilds) {
+      try {
+        await rest.put(
+          Routes.applicationGuildCommands(env.DISCORD_CLIENT_ID, gId),
+          { body: commands }
+        );
+        logger.success(`Comandos de barra registrados instantáneamente en la guild: ${gId}`);
+      } catch (gErr) {
+        logger.warn(`No se pudieron registrar comandos en la guild ${gId}:`, gErr.message);
+      }
     }
     await db.addLogEntry('success', `Bot conectado como ${client.user.tag} y comandos sincronizados.`, 'system');
   } catch (error) {
