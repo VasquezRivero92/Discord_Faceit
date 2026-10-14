@@ -22,15 +22,14 @@ export async function onReady(client, commands, db) {
     // Se registran globalmente para evitar duplicados en la guild
     await rest.put(Routes.applicationCommands(env.DISCORD_CLIENT_ID), { body: commands });
     
-    // Si hay un guild ID configurado, limpiamos los comandos específicos de ese guild
-    // para evitar que se muestren duplicados en el cliente de Discord.
+    // Registrar también en la guild configurada para disponibilidad instantánea (evita la espera de 1 hora de caché global)
     const guildId = config.discordGuildId;
     if (guildId && !guildId.startsWith('ID_')) {
       await rest.put(
         Routes.applicationGuildCommands(env.DISCORD_CLIENT_ID, guildId),
-        { body: [] }
+        { body: commands }
       );
-      logger.success(`Comandos de barra registrados globalmente y limpiados de la guild: ${guildId}`);
+      logger.success(`Comandos de barra registrados instantáneamente en la guild: ${guildId}`);
     } else {
       logger.success('Comandos de barra registrados con éxito globalmente.');
     }
