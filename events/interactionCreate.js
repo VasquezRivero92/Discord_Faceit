@@ -29,6 +29,7 @@ export async function loadCommands() {
     await import('../commands/desancionar.js'),
     await import('../commands/say.js'),
     await import('../commands/recargar.js'),
+    await import('../commands/setupRecargas.js'),
   ];
 
   for (const mod of commandFiles) {

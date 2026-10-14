@@ -314,14 +314,45 @@ export async function checkAndDeployVerificationPanel(client, db) {
 }
 
 export async function checkAndDeployRechargePanel(client, db) {
-  const settings = await getSettings().catch(() => ({}));
-  const rechargeChannelId = settings.discordRechargeChannelId || env.DISCORD_RECHARGE_CHANNEL_ID;
-  if (rechargeChannelId && !rechargeChannelId.startsWith('ID_')) {
-    const allowedChannels = rechargeChannelId.split(',').map(id => id.trim()).filter(Boolean);
-    for (const channelId of allowedChannels) {
+  try {
+    const globalSettings = await getSettings().catch(() => ({}));
+    const channelsToDeploy = new Set();
+
+    // 1. Canal configurado globalmente o en .env
+    const globalChannel = globalSettings.discordRechargeChannelId || env.DISCORD_RECHARGE_CHANNEL_ID;
+    if (globalChannel && !globalChannel.startsWith('ID_')) {
+      globalChannel.split(',').map(id => id.trim()).filter(Boolean).forEach(id => channelsToDeploy.add(id));
+    }
+
+    // 2. Canales configurados por cada servidor (Guild) en Firestore
+    for (const guild of client.guilds.cache.values()) {
       try {
-        const channel = await client.channels.fetch(channelId).catch(() => null);
-        if (!channel) continue;
+        const guildSettings = await db.getGuildSettings(guild.id).catch(() => ({}));
+        if (guildSettings && guildSettings.discordRechargeChannelId && !guildSettings.discordRechargeChannelId.startsWith('ID_')) {
+          guildSettings.discordRechargeChannelId.split(',').map(id => id.trim()).filter(Boolean).forEach(id => channelsToDeploy.add(id));
+        }
+      } catch (gErr) {
+        logger.warn(`Error al leer settings de recargas para guild ${guild.id}:`, gErr.message);
+      }
+    }
+
+    if (channelsToDeploy.size === 0) {
+      logger.info('ℹ️ No hay canales configurados para el panel de recargas automático (usa /setup_recargas o configúralo en el panel admin).');
+      return;
+    }
+
+    logger.info(`🔍 Verificando panel de recargas en canales: [${Array.from(channelsToDeploy).join(', ')}]`);
+
+    for (const channelId of channelsToDeploy) {
+      try {
+        const channel = await client.channels.fetch(channelId).catch((fetchErr) => {
+          logger.warn(`⚠️ No se pudo acceder al canal de recargas ${channelId}:`, fetchErr.message);
+          return null;
+        });
+        if (!channel) {
+          logger.warn(`⚠️ El canal de recargas ${channelId} no existe o el bot no tiene permisos para verlo.`);
+          continue;
+        }
 
         // Limpiar mensajes antiguos no anclados (más de 1 hora de antigüedad)
         try {
@@ -343,12 +374,12 @@ export async function checkAndDeployRechargePanel(client, db) {
         const messages = await channel.messages.fetch({ limit: 50 }).catch(() => []);
         const hasPanel = messages.some(msg => 
           msg.components?.some(row => 
-            row.components?.some(btn => btn.customId === 'iniciar_recarga_btn')
+            row.components?.some(btn => btn.customId === 'iniciar_recarga_btn' || btn.data?.custom_id === 'iniciar_recarga_btn')
           )
         );
 
         if (!hasPanel) {
-          logger.info(`No se encontró panel de recargas en el canal ${channelId}. Creándolo automáticamente...`);
+          logger.info(`✨ Desplegando panel de recargas en el canal #${channel.name || channelId}...`);
           
           const embed = new EmbedBuilder()
             .setTitle('💰 Billetera y Recargas Mixton Arena')
@@ -383,12 +414,16 @@ export async function checkAndDeployRechargePanel(client, db) {
             logger.warn(`No se pudo fijar el mensaje de recargas en el canal ${channelId}:`, pinErr.message);
           }
           
-          logger.success(`Panel de recargas creado y anclado en el canal: ${channelId}`);
+          logger.success(`✅ Panel de recargas creado y anclado en #${channel.name || channelId}`);
+        } else {
+          logger.info(`ℹ️ El panel de recargas ya existe en el canal #${channel.name || channelId}.`);
         }
       } catch (err) {
         logger.warn(`No se pudo comprobar/crear el panel de recargas automático en canal ${channelId}:`, err.message);
       }
     }
+  } catch (globalErr) {
+    logger.error('Error general en checkAndDeployRechargePanel:', globalErr);
   }
 }
 
