@@ -140,6 +140,36 @@ export const culqiService = {
 
     logger.info(`Iniciando recarga Yape: S/ ${numAmount.toFixed(2)} para Discord ID ${discordId}`);
 
+    // Modo Simulación para desarrollo y pruebas (activable con CULQI_MOCK=true en .env)
+    if (process.env.CULQI_MOCK === 'true') {
+      logger.info(`🧪 [MODO PRUEBA MOCK] Simulando recarga exitosa de Yape: S/ ${numAmount.toFixed(2)} para ${discordId}`);
+      const mockChargeId = `chr_mock_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const newBalance = await db.updateUserBalance(
+        discordId,
+        numAmount,
+        guildId,
+        `Recarga Yape [MODO PRUEBA] (ID: ${mockChargeId})`
+      );
+
+      if (db && discordId && phoneNumber) {
+        try {
+          const existingUser = await db.getFullUser(discordId, guildId);
+          if (existingUser && !existingUser.phoneNumber) {
+            await db.setUserPhone(discordId, phoneNumber, guildId);
+            logger.info(`📱 Teléfono guardado confidencialmente para el usuario verificado ${discordId}`);
+          }
+        } catch (_) {}
+      }
+
+      return {
+        success: true,
+        chargeId: mockChargeId,
+        amount: numAmount,
+        newBalance,
+        referenceCode: mockChargeId
+      };
+    }
+
     // 1. Crear Token de Yape
     const token = await this.createYapeToken(phoneNumber, otp, numAmount);
     if (!token?.id) {
