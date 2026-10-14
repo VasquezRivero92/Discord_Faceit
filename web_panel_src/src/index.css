@@ -63,3 +63,66 @@ html {
 .text-\[12px\] {
   font-size: 15px !important;
 }
+
+/* Immediate acknowledgement for every action; requests can finish afterwards. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+input[type="button"]:not(:disabled),
+input[type="submit"]:not(:disabled) {
+  transition-property: transform, opacity, filter, box-shadow;
+  transition-duration: 120ms;
+  transition-timing-function: ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled):active,
+button[data-instant-pressed="true"],
+[role="button"]:not([aria-disabled="true"]):active,
+[role="button"][data-instant-pressed="true"],
+input[type="button"]:not(:disabled):active,
+input[type="submit"]:not(:disabled):active {
+  transform: scale(0.97);
+  filter: brightness(0.9);
+}
+
+button[data-request-pending="true"],
+[role="button"][data-request-pending="true"],
+select[data-request-pending="true"],
+input[data-request-pending="true"] {
+  cursor: progress !important;
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+html[data-network-pending="true"]::before {
+  content: "";
+  position: fixed;
+  z-index: 9999;
+  top: 0;
+  left: 0;
+  width: 35%;
+  height: 3px;
+  background: #ff5500;
+  box-shadow: 0 0 12px rgba(255, 85, 0, 0.85);
+  animation: request-progress 900ms ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes request-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(285%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  input[type="button"]:not(:disabled),
+  input[type="submit"]:not(:disabled) {
+    transition-duration: 0ms;
+  }
+
+  html[data-network-pending="true"]::before {
+    animation: none;
+    width: 100%;
+  }
+}

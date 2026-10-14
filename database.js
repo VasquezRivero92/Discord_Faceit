@@ -276,13 +276,21 @@ const ACTIVE_MATCHES_COLLECTION = 'faceit_active_matches';
 const CONFIG_COLLECTION = 'faceit_config';
 const MATCHES_HISTORY_COLLECTION = 'faceit_matches_history';
 // --- In-Memory Caching ---
-let mixtonLobbyStateCache = null;
+// These caches are deliberately short-lived. Writes made through this module
+// update or invalidate them immediately, so Firestore is only the source of
+// truth on a cache miss, after a restart, or after the TTL expires.
+const lobbyStateCache = new Map();
+const lobbyStateFetches = new Map();
+const LOBBY_STATE_TTL = 60 * 1000;
+
 let readyPlayersCache = null;
 let readyPlayersLastFetch = 0;
-const READY_PLAYERS_TTL = 30000; // 30 seconds
+let readyPlayersFetch = null;
+const READY_PLAYERS_TTL = 60 * 1000;
 
 let settingsCache = null;
 let settingsLastFetch = 0;
+let settingsFetch = null;
 const SETTINGS_TTL = 30000; // 30 seconds
 
 let nicknameToDiscordMapCache = null;
@@ -293,6 +301,7 @@ const NICKNAME_MAP_TTL = 300000; // 5 minutes
 const userByDiscordIdCache = new Map();
 const userByFaceitIdCache = new Map();
 const userByNicknameCache = new Map();
+const fullUserFetches = new Map();
 const USER_CACHE_TTL = 300000; // 5 minutos (evita lecturas constantes en eventos frecuentes)
 
 function cacheUser(docId, data) {
@@ -324,10 +333,25 @@ function invalidateUserCache(discordId, faceitPlayerId = null, faceitNickname = 
   if (faceitNickname) userByNicknameCache.delete(faceitNickname.toLowerCase());
 }
 
+function readCachedValue(cache, key, ttlMs) {
+  const entry = cache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() - entry.timestamp >= ttlMs) {
+    cache.delete(key);
+    return undefined;
+  }
+  return entry.data;
+}
+
+function cacheValue(cache, key, data) {
+  cache.set(key, { data, timestamp: Date.now() });
+}
+
 // Caché de Partidas Activas
 const activeMatchesCacheMap = new Map();
 let activeMatchesLastFetch = 0;
 let activeMatchesFetched = false;
+let activeMatchesFetch = null;
 const ACTIVE_MATCHES_TTL = 10000; // 10 segundos
 
 async function ensureActiveMatchesCache(forceRefresh = false) {
@@ -335,17 +359,25 @@ async function ensureActiveMatchesCache(forceRefresh = false) {
   if (!forceRefresh && activeMatchesFetched && (now - activeMatchesLastFetch < ACTIVE_MATCHES_TTL)) {
     return;
   }
-  try {
-    const snapshot = await firestore.collection(ACTIVE_MATCHES_COLLECTION).get();
-    activeMatchesCacheMap.clear();
-    snapshot.forEach(doc => {
-      activeMatchesCacheMap.set(doc.id, doc.data());
-    });
-    activeMatchesLastFetch = now;
-    activeMatchesFetched = true;
-  } catch (error) {
-    logger.error('Error al actualizar caché de partidas activas:', error);
-  }
+  if (activeMatchesFetch) return activeMatchesFetch;
+
+  activeMatchesFetch = (async () => {
+    try {
+      const snapshot = await firestore.collection(ACTIVE_MATCHES_COLLECTION).get();
+      activeMatchesCacheMap.clear();
+      snapshot.forEach(doc => {
+        activeMatchesCacheMap.set(doc.id, doc.data());
+      });
+      activeMatchesLastFetch = Date.now();
+      activeMatchesFetched = true;
+    } catch (error) {
+      logger.error('Error al actualizar caché de partidas activas:', error);
+    } finally {
+      activeMatchesFetch = null;
+    }
+  })();
+
+  return activeMatchesFetch;
 }
 
 function invalidateActiveMatchesCache() {
@@ -356,6 +388,7 @@ function invalidateActiveMatchesCache() {
 
 // Caché de Configuración por Servidor (Guild Settings)
 const guildSettingsCache = new Map();
+const guildSettingsFetches = new Map();
 const GUILD_SETTINGS_TTL = 30000; // 30 segundos
 const hubIdToGuildIdsCache = new Map();
 
@@ -453,6 +486,14 @@ export const db = {
             });
           }
         }
+      }
+      const cached = getCachedUserByDiscordId(docId);
+      if (cached) {
+        cacheUser(docId, { ...cached, phoneNumber: cleanPhone });
+      } else {
+        // The fallback above can update legacy documents with different IDs.
+        // Remove a possible negative cache entry so the next read is accurate.
+        invalidateUserCache(docId);
       }
       logger.info(`📱 Teléfono guardado de forma confidencial para Discord ID ${discordId}`);
       return true;
@@ -1072,21 +1113,23 @@ export const db = {
     if (settingsCache && (Date.now() - settingsLastFetch < SETTINGS_TTL)) {
       return settingsCache;
     }
-    try {
-      const doc = await firestore.collection(CONFIG_COLLECTION).doc('settings').get();
-      if (doc.exists) {
-        settingsCache = doc.data();
+    if (settingsFetch) return settingsFetch;
+
+    settingsFetch = (async () => {
+      try {
+        const doc = await firestore.collection(CONFIG_COLLECTION).doc('settings').get();
+        settingsCache = doc.exists ? doc.data() : getDefaultSettings();
         settingsLastFetch = Date.now();
         return settingsCache;
+      } catch (error) {
+        logger.error('Error al obtener settings:', error);
+        return settingsCache || getDefaultSettings();
+      } finally {
+        settingsFetch = null;
       }
-      const defaultSettings = getDefaultSettings();
-      settingsCache = defaultSettings;
-      settingsLastFetch = Date.now();
-      return defaultSettings;
-    } catch (error) {
-      logger.error('Error al obtener settings:', error);
-      return settingsCache || getDefaultSettings();
-    }
+    })();
+
+    return settingsFetch;
   },
 
   async setSettings(settings) {
@@ -1106,19 +1149,25 @@ export const db = {
 
   async getGuildSettings(guildId) {
     if (!guildId) return {};
-    const cached = guildSettingsCache.get(guildId);
-    if (cached && (Date.now() - cached.timestamp < GUILD_SETTINGS_TTL)) {
-      return cached.data;
-    }
-    try {
-      const doc = await firestore.collection('guild_settings').doc(guildId).get();
-      const data = doc.exists ? doc.data() : {};
-      guildSettingsCache.set(guildId, { data, timestamp: Date.now() });
-      return data;
-    } catch (error) {
-      logger.error(`Error al obtener settings de la guild ${guildId}:`, error);
-      return {};
-    }
+    const cached = readCachedValue(guildSettingsCache, guildId, GUILD_SETTINGS_TTL);
+    if (cached !== undefined) return cached;
+    if (guildSettingsFetches.has(guildId)) return guildSettingsFetches.get(guildId);
+
+    const fetchSettings = (async () => {
+      try {
+        const doc = await firestore.collection('guild_settings').doc(guildId).get();
+        const data = doc.exists ? doc.data() : {};
+        cacheValue(guildSettingsCache, guildId, data);
+        return data;
+      } catch (error) {
+        logger.error(`Error al obtener settings de la guild ${guildId}:`, error);
+        return {};
+      } finally {
+        guildSettingsFetches.delete(guildId);
+      }
+    })();
+    guildSettingsFetches.set(guildId, fetchSettings);
+    return fetchSettings;
   },
 
   async setGuildSettings(guildId, settings) {
@@ -1128,7 +1177,13 @@ export const db = {
         ...settings,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
-      guildSettingsCache.delete(guildId);
+      const cached = readCachedValue(guildSettingsCache, guildId, GUILD_SETTINGS_TTL);
+      if (cached !== undefined) {
+        cacheValue(guildSettingsCache, guildId, { ...cached, ...settings });
+      } else {
+        // A partial update cannot safely represent the whole settings document.
+        guildSettingsCache.delete(guildId);
+      }
       return true;
     } catch (error) {
       logger.error(`Error al guardar settings de la guild ${guildId}:`, error);
@@ -1139,7 +1194,9 @@ export const db = {
   invalidateSettingsCache() {
     settingsCache = null;
     settingsLastFetch = 0;
+    settingsFetch = null;
     guildSettingsCache.clear();
+    guildSettingsFetches.clear();
   },
 
   // --- Logs del Bot ---
@@ -1308,36 +1365,44 @@ export const db = {
   },
 
   async getMixtonLobbyState(guildId = null) {
-    if (!guildId && mixtonLobbyStateCache) {
-      return mixtonLobbyStateCache;
-    }
+    const cacheKey = guildId || 'global';
+    const cached = readCachedValue(lobbyStateCache, cacheKey, LOBBY_STATE_TTL);
+    if (cached !== undefined) return cached;
+    if (lobbyStateFetches.has(cacheKey)) return lobbyStateFetches.get(cacheKey);
+
     const docId = guildId ? `mixton_lobby_${guildId}` : 'mixton_lobby';
-    try {
-      const doc = await firestore.collection(CONFIG_COLLECTION).doc(docId).get();
-      if (doc.exists) {
-        const state = doc.data();
-        if (!guildId) mixtonLobbyStateCache = state;
-        return state;
+    const fetchState = (async () => {
+      try {
+        const doc = await firestore.collection(CONFIG_COLLECTION).doc(docId).get();
+        if (doc.exists) {
+          const state = doc.data();
+          cacheValue(lobbyStateCache, cacheKey, state);
+          return state;
+        }
+
+        const defaultState = {
+          teams: [
+            { id: 'team_1', name: 'Equipo 1', captain: null, players: [] },
+            { id: 'team_2', name: 'Equipo 2', captain: null, players: [] }
+          ],
+          pickOrder: [],
+          currentPickIndex: 0,
+          draftStarted: false,
+          draftFinished: false,
+          updatedAt: Date.now()
+        };
+        await firestore.collection(CONFIG_COLLECTION).doc(docId).set(defaultState);
+        cacheValue(lobbyStateCache, cacheKey, defaultState);
+        return defaultState;
+      } catch (error) {
+        logger.error('Error al obtener estado del lobby mixton:', error);
+        return null;
+      } finally {
+        lobbyStateFetches.delete(cacheKey);
       }
-      
-      const defaultState = {
-        teams: [
-          { id: 'team_1', name: 'Equipo 1', captain: null, players: [] },
-          { id: 'team_2', name: 'Equipo 2', captain: null, players: [] }
-        ],
-        pickOrder: [],
-        currentPickIndex: 0,
-        draftStarted: false,
-        draftFinished: false,
-        updatedAt: Date.now()
-      };
-      await firestore.collection(CONFIG_COLLECTION).doc(docId).set(defaultState);
-      if (!guildId) mixtonLobbyStateCache = defaultState;
-      return defaultState;
-    } catch (error) {
-      logger.error('Error al obtener estado del lobby mixton:', error);
-      return null;
-    }
+    })();
+    lobbyStateFetches.set(cacheKey, fetchState);
+    return fetchState;
   },
 
   async saveMixtonLobbyState(state, guildId = null) {
@@ -1348,7 +1413,7 @@ export const db = {
         updatedAt: Date.now()
       };
       await firestore.collection(CONFIG_COLLECTION).doc(docId).set(updatedState);
-      if (!guildId) mixtonLobbyStateCache = updatedState;
+      cacheValue(lobbyStateCache, guildId || 'global', updatedState);
       return true;
     } catch (error) {
       logger.error('Error al guardar estado del lobby mixton:', error);
@@ -1366,28 +1431,35 @@ export const db = {
     if (readyPlayersCache && (Date.now() - readyPlayersLastFetch < READY_PLAYERS_TTL)) {
       return readyPlayersCache;
     }
-    try {
-      const snapshot = await firestore.collection(USERS_COLLECTION).where('mixton_ready', '==', true).get();
-      const players = [];
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        players.push({
-          discordId: data.discordId || doc.id,
-          faceit_player_id: data.faceit_player_id || '',
-          faceit_nickname: data.faceit_nickname || '',
-          faceit_level: data.faceit_level || 1,
-          faceit_elo: data.faceit_elo || 1000,
-          mixton_tier_override: data.mixton_tier_override || null,
-          mixton_guild_id: data.mixton_guild_id || data.guild_id || null
+    if (readyPlayersFetch) return readyPlayersFetch;
+
+    readyPlayersFetch = (async () => {
+      try {
+        const snapshot = await firestore.collection(USERS_COLLECTION).where('mixton_ready', '==', true).get();
+        const players = [];
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          players.push({
+            discordId: data.discordId || doc.id,
+            faceit_player_id: data.faceit_player_id || '',
+            faceit_nickname: data.faceit_nickname || '',
+            faceit_level: data.faceit_level || 1,
+            faceit_elo: data.faceit_elo || 1000,
+            mixton_tier_override: data.mixton_tier_override || null,
+            mixton_guild_id: data.mixton_guild_id || data.guild_id || null
+          });
         });
-      });
-      readyPlayersCache = players;
-      readyPlayersLastFetch = Date.now();
-      return players;
-    } catch (error) {
-      logger.error('Error al obtener jugadores listos de Firestore:', error);
-      return readyPlayersCache || [];
-    }
+        readyPlayersCache = players;
+        readyPlayersLastFetch = Date.now();
+        return players;
+      } catch (error) {
+        logger.error('Error al obtener jugadores listos de Firestore:', error);
+        return readyPlayersCache || [];
+      } finally {
+        readyPlayersFetch = null;
+      }
+    })();
+    return readyPlayersFetch;
   },
 
   async setPlayerReadyStatus(discordId, ready, guildId = null) {
@@ -1404,6 +1476,17 @@ export const db = {
         updates.mixton_guild_id = admin.firestore.FieldValue.delete();
       }
       await userRef.update(updates);
+      const cached = getCachedUserByDiscordId(docId);
+      if (cached) {
+        const updatedCachedUser = { ...cached, mixton_ready: ready };
+        if (ready) {
+          updatedCachedUser.mixton_ready_at = updates.mixton_ready_at;
+          if (guildId) updatedCachedUser.mixton_guild_id = guildId;
+        } else {
+          delete updatedCachedUser.mixton_guild_id;
+        }
+        cacheUser(docId, updatedCachedUser);
+      }
       this.invalidateReadyPlayersCache();
       return true;
     } catch (error) {
@@ -1471,27 +1554,49 @@ export const db = {
   },
   async getFullUser(discordId, guildId = null) {
     if (!discordId) return null;
-    try {
-      if (guildId) {
-        const doc = await firestore.collection(USERS_COLLECTION).doc(`${guildId}_${discordId}`).get();
-        if (doc.exists) return doc.data();
-      }
-      const doc = await firestore.collection(USERS_COLLECTION).doc(discordId).get();
-      if (doc.exists) return doc.data();
+    const docId = guildId ? `${guildId}_${discordId}` : discordId;
+    const cached = getCachedUserByDiscordId(docId);
+    if (cached !== undefined) return cached;
+    if (fullUserFetches.has(docId)) return fullUserFetches.get(docId);
 
-      // Fallback: buscar cualquier documento con el mismo discordId en la colección
-      const snapshot = await firestore.collection(USERS_COLLECTION).where('discordId', '==', discordId).get();
-      if (!snapshot.empty) {
-        // Priorizar el documento que contenga privilegios administrativos
-        const adminDoc = snapshot.docs.find(d => d.data().rol === 'admin' || d.data().rol === 'global_admin');
-        if (adminDoc) return adminDoc.data();
-        return snapshot.docs[0].data();
+    const fetchUser = (async () => {
+      try {
+        if (guildId) {
+          const guildDoc = await firestore.collection(USERS_COLLECTION).doc(docId).get();
+          if (guildDoc.exists) {
+            const data = guildDoc.data();
+            cacheUser(docId, data);
+            return data;
+          }
+        }
+
+        const globalDoc = await firestore.collection(USERS_COLLECTION).doc(discordId).get();
+        if (globalDoc.exists) {
+          const data = globalDoc.data();
+          cacheUser(docId, data);
+          return data;
+        }
+
+        // Fallback para documentos antiguos cuyo ID no sigue el formato actual.
+        const snapshot = await firestore.collection(USERS_COLLECTION).where('discordId', '==', discordId).get();
+        if (!snapshot.empty) {
+          const selectedDoc = snapshot.docs.find(d => d.data().rol === 'admin' || d.data().rol === 'global_admin') || snapshot.docs[0];
+          const data = selectedDoc.data();
+          cacheUser(docId, data);
+          return data;
+        }
+
+        cacheUser(docId, null);
+        return null;
+      } catch (error) {
+        logger.error(`Error al obtener usuario completo ${discordId}:`, error);
+        return null;
+      } finally {
+        fullUserFetches.delete(docId);
       }
-      return null;
-    } catch (error) {
-      logger.error(`Error al obtener usuario completo ${discordId}:`, error);
-      return null;
-    }
+    })();
+    fullUserFetches.set(docId, fetchUser);
+    return fetchUser;
   },
 
   async setUserRoleAndGuild(discordId, role, guildId) {
@@ -1516,6 +1621,7 @@ export const db = {
           createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
       }
+      cacheUser(docId, { ...(doc.exists ? doc.data() : {}), discordId, ...updateData });
       this.invalidateReadyPlayersCache();
       return true;
     } catch (error) {
@@ -1638,6 +1744,13 @@ export const db = {
           last_balance_reason: reason
         });
       }
+      cacheUser(docId, {
+        ...(doc.exists ? doc.data() : {}),
+        discordId,
+        guild_id: guildId || null,
+        wallet_balance: newBalance,
+        last_balance_reason: reason
+      });
       return newBalance;
     } catch (err) {
       logger.error(`Error al actualizar balance de ${discordId}:`, err);
@@ -1658,6 +1771,14 @@ export const db = {
         last_balance_update: Date.now(),
         last_balance_reason: reason
       }, { merge: true });
+      const cached = getCachedUserByDiscordId(docId);
+      cacheUser(docId, {
+        ...(cached || {}),
+        discordId,
+        guild_id: guildId || null,
+        wallet_balance: newBalance,
+        last_balance_reason: reason
+      });
       return newBalance;
     } catch (err) {
       logger.error(`Error al establecer balance de ${discordId}:`, err);
