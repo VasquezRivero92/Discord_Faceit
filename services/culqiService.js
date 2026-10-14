@@ -175,6 +175,19 @@ export const culqiService = {
         `Recarga Yape confirmada (ID: ${charge.id})`
       );
       logger.success(`✅ Saldo acreditado con éxito a ${discordId}: +S/ ${numAmount.toFixed(2)} (Nuevo saldo: S/ ${newBalance.toFixed(2)})`);
+
+      // 5. Si el usuario registrado no tiene número guardado, autoguardar este número
+      if (db && discordId && phoneNumber) {
+        try {
+          const existingUser = await db.getFullUser(discordId, guildId);
+          if (existingUser && !existingUser.phoneNumber) {
+            await db.setUserPhone(discordId, phoneNumber, guildId);
+            logger.info(`📱 Teléfono ${phoneNumber} guardado automáticamente para el usuario verificado ${discordId}`);
+          }
+        } catch (phoneErr) {
+          logger.warn(`No se pudo autoguardar el teléfono del usuario ${discordId}: ${phoneErr.message}`);
+        }
+      }
     }
 
     return {

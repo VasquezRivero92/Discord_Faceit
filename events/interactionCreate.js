@@ -67,9 +67,13 @@ export async function onInteractionCreate(interaction, db, commandMap) {
 
     if (customId === 'verificar_modal') {
       const nickname = interaction.fields.getTextInputValue('faceit_nickname');
+      let phoneNumber = null;
+      try {
+        phoneNumber = interaction.fields.getTextInputValue('phone_number');
+      } catch (e) {}
       try {
         const { processVerification } = await import('../commands/verificar.js');
-        await processVerification(interaction, db, nickname);
+        await processVerification(interaction, db, nickname, phoneNumber);
       } catch (err) {
         logger.error('Error al procesar verificación desde modal:', err);
         if (interaction.deferred || interaction.replied) {
@@ -255,8 +259,19 @@ export async function onInteractionCreate(interaction, db, commandMap) {
           .setMaxLength(50)
           .setRequired(true);
 
-        const row = new ActionRowBuilder().addComponents(nicknameInput);
-        modal.addComponents(row);
+        const phoneInput = new TextInputBuilder()
+          .setCustomId('phone_number')
+          .setLabel('Número de celular (Opcional)')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('Ej: 987654321 (Para depósitos Yape)')
+          .setMinLength(0)
+          .setMaxLength(15)
+          .setRequired(false);
+
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(nicknameInput),
+          new ActionRowBuilder().addComponents(phoneInput)
+        );
 
         await interaction.showModal(modal);
       } catch (err) {
@@ -269,6 +284,16 @@ export async function onInteractionCreate(interaction, db, commandMap) {
     // --- Botón de Iniciar Recarga de Saldo con Yape ---
     if (customId === 'iniciar_recarga_btn') {
       try {
+        let savedPhone = '';
+        try {
+          if (db) {
+            const user = await db.getFullUser(interaction.user.id, interaction.guildId);
+            if (user?.phoneNumber) {
+              savedPhone = String(user.phoneNumber);
+            }
+          }
+        } catch (e) {}
+
         const modal = new ModalBuilder()
           .setCustomId('recargar_yape_modal')
           .setTitle('Recargar Saldo con Yape');
@@ -291,6 +316,10 @@ export async function onInteractionCreate(interaction, db, commandMap) {
           .setMinLength(9)
           .setMaxLength(9)
           .setRequired(true);
+
+        if (savedPhone) {
+          phoneInput.setValue(savedPhone);
+        }
 
         const otpInput = new TextInputBuilder()
           .setCustomId('otp_input')

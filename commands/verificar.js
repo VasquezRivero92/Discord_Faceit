@@ -13,14 +13,20 @@ export const data = new SlashCommandBuilder()
     option.setName('nickname')
       .setDescription('Tu nickname exacto en Faceit')
       .setRequired(true)
+  )
+  .addStringOption(option =>
+    option.setName('telefono')
+      .setDescription('Tu número de celular para recargas Yape (Opcional)')
+      .setRequired(false)
   );
 
 export async function execute(interaction, db) {
   const nickname = interaction.options.getString('nickname');
-  return processVerification(interaction, db, nickname);
+  const telefono = interaction.options.getString('telefono');
+  return processVerification(interaction, db, nickname, telefono);
 }
 
-export async function processVerification(interaction, db, nickname) {
+export async function processVerification(interaction, db, nickname, phoneNumber = null) {
   if (!interaction.deferred && !interaction.replied) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   }
@@ -60,6 +66,8 @@ export async function processVerification(interaction, db, nickname) {
     const guildConfig = await getEffectiveConfigForGuild(interaction.guildId);
     const currentSeason = await fetchCurrentHubSeason(guildConfig.faceitLeaderboardId || guildConfig.faceitHubId).catch(() => null);
 
+    const cleanPhone = phoneNumber ? String(phoneNumber).replace(/\D/g, '').trim() : null;
+
     const existingDiscordId = await db.getDiscordIdByFaceitId(player.player_id, interaction.guildId);
     if (existingDiscordId) {
       if (existingDiscordId === discordId) {
@@ -76,7 +84,11 @@ export async function processVerification(interaction, db, nickname) {
             await syncMemberNickname(interaction.guild, discordId, player.nickname);
           }
         }
-        return interaction.editReply(`ℹ️ Tu cuenta de Discord ya está vinculada al perfil de Faceit **${player.nickname}**. Se han sincronizado tus roles y apodo.`);
+        if (cleanPhone) {
+          await db.setUserPhone(discordId, cleanPhone, interaction.guildId);
+        }
+        const phoneNotice = cleanPhone ? `\n📱 Se actualizó tu celular para recargas Yape: **${cleanPhone}**.` : '';
+        return interaction.editReply(`ℹ️ Tu cuenta de Discord ya está vinculada al perfil de Faceit **${player.nickname}**. Se han sincronizado tus roles y apodo.${phoneNotice}`);
       } else {
         return interaction.editReply(`❌ La cuenta de Faceit **${player.nickname}** ya está vinculada al usuario de Discord <@${existingDiscordId}>.`);
       }
@@ -89,9 +101,9 @@ export async function processVerification(interaction, db, nickname) {
       return interaction.editReply(`❌ No se encontró nivel de CS2/CS:GO activo para tu perfil.`);
     }
 
-    // Enlazar cuentas guardando nivel y elo
-    await db.linkAccounts(discordId, player.player_id, player.nickname, skillLevel, elo, interaction.guildId, currentSeason);
-    await db.addLogEntry('success', `El usuario ${interaction.user.tag} vinculó su cuenta directamente con Faceit ID ${player.nickname}`, 'bot', interaction.guildId);
+    // Enlazar cuentas guardando nivel, elo y número telefónico opcional
+    await db.linkAccounts(discordId, player.player_id, player.nickname, skillLevel, elo, interaction.guildId, currentSeason, cleanPhone);
+    await db.addLogEntry('success', `El usuario ${interaction.user.tag} vinculó su cuenta directamente con Faceit ID ${player.nickname}${cleanPhone ? ` (Cel: ${cleanPhone})` : ''}`, 'bot', interaction.guildId);
     playerCache.set(`${interaction.guildId}_${discordId}`, { faceitId: player.player_id, nickname: player.nickname, level: skillLevel });
 
     // Sincronizar roles y apodo
@@ -105,11 +117,12 @@ export async function processVerification(interaction, db, nickname) {
     }
 
     const faceitProfileUrl = `https://www.faceit.com/en/players/${player.nickname}`;
+    const phoneNotice = cleanPhone ? `\n📱 Celular registrado para recargas Yape: **${cleanPhone}**` : '';
 
     // Responder con éxito (efímero al usuario)
     await interaction.editReply({
       content: `✅ ¡Vinculación exitosa!\n\n` +
-        `Tu cuenta de Discord ahora está vinculada al perfil de Faceit **[${player.nickname}](${faceitProfileUrl})** (Nivel ${skillLevel}).`
+        `Tu cuenta de Discord ahora está vinculada al perfil de Faceit **[${player.nickname}](${faceitProfileUrl})** (Nivel ${skillLevel}).${phoneNotice}`
     });
 
     // Enviar mensaje público al canal de vinculación para notificar al servidor

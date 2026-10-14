@@ -116,7 +116,7 @@ export default function App() {
   const [betPlayers, setBetPlayers] = useState<PlayerBetStatus[]>([]);
   const [isLoadingBetStatus, setIsLoadingBetStatus] = useState(false);
   const [manualPaidMap, setManualPaidMap] = useState<{ [discordId: string]: boolean }>({});
-  const [quickTopUpUser, setQuickTopUpUser] = useState<{ discordId: string; nickname: string } | null>(null);
+  const [quickTopUpUser, setQuickTopUpUser] = useState<{ discordId: string; nickname: string; phoneNumber?: string | null } | null>(null);
   const [quickTopUpAmount, setQuickTopUpAmount] = useState<string>('10');
   const [isSubmittingTopUp, setIsSubmittingTopUp] = useState(false);
   const [yapePhoneInput, setYapePhoneInput] = useState<string>('');
@@ -3282,8 +3282,10 @@ export default function App() {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setQuickTopUpUser({ discordId: p.discordId, nickname: p.faceit_nickname });
+                                      setQuickTopUpUser({ discordId: p.discordId, nickname: p.faceit_nickname, phoneNumber: p.phoneNumber });
                                       setQuickTopUpAmount(p.deficit > 0 ? p.deficit.toFixed(2) : '5.00');
+                                      setYapePhoneInput(p.phoneNumber || '');
+                                      setYapeOtpInput('');
                                     }}
                                     title="Recargar saldo a este usuario"
                                     className="px-1.5 py-1 text-[9px] font-bold bg-[#262626] border border-[#444] text-[#FF5500] hover:border-[#FF5500] transition-all cursor-pointer"
@@ -3397,8 +3399,10 @@ export default function App() {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setQuickTopUpUser({ discordId: p.discordId, nickname: p.faceit_nickname });
+                                      setQuickTopUpUser({ discordId: p.discordId, nickname: p.faceit_nickname, phoneNumber: p.phoneNumber });
                                       setQuickTopUpAmount(p.deficit > 0 ? p.deficit.toFixed(2) : '5.00');
+                                      setYapePhoneInput(p.phoneNumber || '');
+                                      setYapeOtpInput('');
                                     }}
                                     title="Recargar saldo a este usuario"
                                     className="px-1.5 py-1 text-[9px] font-bold bg-[#262626] border border-[#444] text-[#FF5500] hover:border-[#FF5500] transition-all cursor-pointer"
@@ -3541,7 +3545,12 @@ export default function App() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Celular de Yape (9 dígitos):</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] text-neutral-400 uppercase font-bold">Celular de Yape (9 dígitos):</label>
+                    {quickTopUpUser?.phoneNumber && (
+                      <span className="text-[9px] text-[#A855F7] font-bold">✓ Celular guardado</span>
+                    )}
+                  </div>
                   <input
                     type="text"
                     maxLength={9}

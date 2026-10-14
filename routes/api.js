@@ -110,8 +110,15 @@ export function createApiRouter(client, db, config) {
   };
 
   // --- Información del usuario logueado ---
-  router.get('/me', requireAuth, (req, res) => {
-    res.json({ user: req.user });
+  router.get('/me', requireAuth, async (req, res) => {
+    let phoneNumber = null;
+    try {
+      if (req.user?.userId) {
+        const u = await db.getFullUser(req.user.userId, req.guildId);
+        if (u?.phoneNumber) phoneNumber = u.phoneNumber;
+      }
+    } catch (_) {}
+    res.json({ user: { ...req.user, phoneNumber } });
   });
 
   // --- Información del Sistema (Uptime y Hub) ---

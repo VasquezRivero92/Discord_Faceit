@@ -393,10 +393,11 @@ export const db = {
     }
   },
 
-  async linkAccounts(discordId, faceitPlayerId, faceitNickname, skillLevel = null, elo = null, guildId = null, season = null) {
+  async linkAccounts(discordId, faceitPlayerId, faceitNickname, skillLevel = null, elo = null, guildId = null, season = null, phoneNumber = null) {
     try {
       const docId = guildId ? `${guildId}_${discordId}` : discordId;
       const userRef = firestore.collection(USERS_COLLECTION).doc(docId);
+      const cleanPhone = phoneNumber ? String(phoneNumber).replace(/\D/g, '').trim() : null;
       const userData = {
         discordId: discordId,
         guild_id: guildId || null,
@@ -406,13 +407,16 @@ export const db = {
         faceit_level: skillLevel,
         faceit_elo: elo
       };
+      if (cleanPhone) {
+        userData.phoneNumber = cleanPhone;
+      }
       if (season !== null && season !== undefined) {
         userData.faceit_level_season = season;
       }
       await userRef.set({
         ...userData,
         linkedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+      }, { merge: true });
       const pendingRef = firestore.collection(PENDING_COLLECTION).doc(discordId);
       await pendingRef.delete();
       readyPlayersCache = null;
@@ -420,9 +424,41 @@ export const db = {
       nicknameToDiscordMapCache = null;
       nicknameToDiscordMapLastFetch = 0;
       cacheUser(docId, userData);
-      logger.success(`Cuenta vinculada en Firestore: Server(${guildId}) Discord(${discordId}) <-> Faceit(${faceitNickname})`);
+      logger.success(`Cuenta vinculada en Firestore: Server(${guildId}) Discord(${discordId}) <-> Faceit(${faceitNickname})${cleanPhone ? ` Cel(${cleanPhone})` : ''}`);
     } catch (error) {
       logger.error('Error al vincular cuentas en Firestore:', error);
+    }
+  },
+
+  async setUserPhone(discordId, phoneNumber, guildId = null) {
+    if (!discordId || !phoneNumber) return false;
+    const cleanPhone = String(phoneNumber).replace(/\D/g, '').trim();
+    if (!cleanPhone) return false;
+    try {
+      const docId = guildId ? `${guildId}_${discordId}` : discordId;
+      const userRef = firestore.collection(USERS_COLLECTION).doc(docId);
+      const doc = await userRef.get();
+      if (doc.exists) {
+        await userRef.update({
+          phoneNumber: cleanPhone,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      } else {
+        const snapshot = await firestore.collection(USERS_COLLECTION).where('discordId', '==', discordId).get();
+        if (!snapshot.empty) {
+          for (const d of snapshot.docs) {
+            await d.ref.update({
+              phoneNumber: cleanPhone,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
+        }
+      }
+      logger.info(`📱 Teléfono ${cleanPhone} guardado para Discord ID ${discordId}`);
+      return true;
+    } catch (err) {
+      logger.error(`Error al guardar teléfono para usuario ${discordId}:`, err);
+      return false;
     }
   },
 

@@ -20,8 +20,18 @@ export const data = new SlashCommandBuilder()
       .setMinValue(1)
   );
 
-export async function execute(interaction) {
+export async function execute(interaction, db) {
   const defaultAmount = interaction.options.getNumber('monto');
+
+  let savedPhone = '';
+  try {
+    if (db) {
+      const user = await db.getFullUser(interaction.user.id, interaction.guildId);
+      if (user?.phoneNumber) {
+        savedPhone = String(user.phoneNumber);
+      }
+    }
+  } catch (e) {}
 
   const modal = new ModalBuilder()
     .setCustomId('recargar_yape_modal')
@@ -45,6 +55,10 @@ export async function execute(interaction) {
     .setMinLength(9)
     .setMaxLength(9)
     .setRequired(true);
+
+  if (savedPhone) {
+    phoneInput.setValue(savedPhone);
+  }
 
   const otpInput = new TextInputBuilder()
     .setCustomId('otp_input')

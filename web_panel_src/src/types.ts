@@ -36,6 +36,7 @@ export interface CurrentUser {
   isAdmin: boolean;
   role?: string;
   servidor?: string;
+  phoneNumber?: string | null;
 }
 
 export interface Guild {
@@ -69,6 +70,7 @@ export interface PlayerBetStatus {
   faceit_nickname: string;
   displayName: string;
   avatarURL?: string | null;
+  phoneNumber?: string | null;
   team: 'A' | 'B';
   teamName: string;
   isCaptain: boolean;

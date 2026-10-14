@@ -275,8 +275,15 @@ export function createLobbyRouter(client, db, config, wss) {
   }
 
   // --- Información del usuario autenticado ---
-  router.get('/me', requireAuth, (req, res) => {
-    res.json({ user: req.user });
+  router.get('/me', requireAuth, async (req, res) => {
+    let phoneNumber = null;
+    try {
+      if (req.user?.userId) {
+        const u = await db.getFullUser(req.user.userId, req.guildId);
+        if (u?.phoneNumber) phoneNumber = u.phoneNumber;
+      }
+    } catch (_) {}
+    res.json({ user: { ...req.user, phoneNumber } });
   });
 
   // --- Lista de servidores (Guilds) para administrador ---
@@ -999,11 +1006,18 @@ export function createLobbyRouter(client, db, config, wss) {
 
       for (const p of rosterA) {
         const balance = await db.getUserBalance(p.discordId, guildIdToUse);
+        let phoneNumber = null;
+        try {
+          const u = await db.getFullUser(p.discordId, guildIdToUse);
+          if (u?.phoneNumber) phoneNumber = u.phoneNumber;
+        } catch (_) {}
+
         playerStatusList.push({
           discordId: p.discordId,
           faceit_nickname: p.faceit_nickname,
           displayName: p.discordUser?.displayName || p.discordUser?.username || p.faceit_nickname,
           avatarURL: p.discordUser?.avatarURL || null,
+          phoneNumber,
           team: 'A',
           teamName: teamA.name,
           isCaptain: p.discordId === teamA.captain.discordId,
@@ -1015,11 +1029,18 @@ export function createLobbyRouter(client, db, config, wss) {
 
       for (const p of rosterB) {
         const balance = await db.getUserBalance(p.discordId, guildIdToUse);
+        let phoneNumber = null;
+        try {
+          const u = await db.getFullUser(p.discordId, guildIdToUse);
+          if (u?.phoneNumber) phoneNumber = u.phoneNumber;
+        } catch (_) {}
+
         playerStatusList.push({
           discordId: p.discordId,
           faceit_nickname: p.faceit_nickname,
           displayName: p.discordUser?.displayName || p.discordUser?.username || p.faceit_nickname,
           avatarURL: p.discordUser?.avatarURL || null,
+          phoneNumber,
           team: 'B',
           teamName: teamB.name,
           isCaptain: p.discordId === teamB.captain.discordId,
