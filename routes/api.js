@@ -1439,7 +1439,7 @@ export function createApiRouter(client, db, config) {
   router.get('/guilds', requireAuth, async (req, res) => {
     try {
       let guilds = [{
-        id: DISCORD_GUILD_ID || '1472731390675255410',
+        id: (DISCORD_GUILD_ID && DISCORD_GUILD_ID !== '1472731390675255410') ? DISCORD_GUILD_ID : '1274598531759345674',
         name: 'MachuPeek',
         icon: null,
         memberCount: 0

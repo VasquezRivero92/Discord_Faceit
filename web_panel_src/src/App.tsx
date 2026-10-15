@@ -84,7 +84,7 @@ export default function App() {
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [currentGuildId, setCurrentGuildId] = useState<string>(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('guild') || '';
+    return urlParams.get('guild') || '1274598531759345674';
   });
   const [guildName, setGuildName] = useState('MachuPeek');
 

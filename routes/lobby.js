@@ -137,8 +137,10 @@ export function createLobbyRouter(client, db, config, wss) {
     return null;
   }
 
+  const MACHUPEEK_GUILD_ID = '1274598531759345674';
+
   async function getLobbyData(guildId = null) {
-    const effectiveGuildId = guildId || DISCORD_GUILD_ID;
+    const effectiveGuildId = guildId || (DISCORD_GUILD_ID && DISCORD_GUILD_ID !== '1472731390675255410' ? DISCORD_GUILD_ID : MACHUPEEK_GUILD_ID);
     const state = await db.getMixtonLobbyState(effectiveGuildId);
     const settings = await db.getGuildSettings(effectiveGuildId).catch(() => ({}));
     const commandEnabled = settings.command_mixton_listo !== false;
@@ -311,7 +313,7 @@ export function createLobbyRouter(client, db, config, wss) {
         return res.status(403).json({ error: 'Se requieren permisos de administrador.' });
       }
       let guilds = [{
-        id: DISCORD_GUILD_ID,
+        id: (DISCORD_GUILD_ID && DISCORD_GUILD_ID !== '1472731390675255410') ? DISCORD_GUILD_ID : MACHUPEEK_GUILD_ID,
         name: 'MachuPeek'
       }];
 

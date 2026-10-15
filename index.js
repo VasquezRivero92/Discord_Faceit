@@ -327,6 +327,8 @@ const publicSpaRoutes = [
   '/libro-de-reclamaciones/*',
   '/arena',
   '/draft',
+  '/mixton',
+  '/mixton/*',
   '/checkout'
 ];
 
