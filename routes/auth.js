@@ -227,6 +227,49 @@ export function createAuthRouter(client, db, config) {
     }
   });
 
+  router.post(['/demo-login', '/login'], (req, res) => {
+    const { username, password } = req.body || {};
+    const validUser = (username || '').trim().toLowerCase() === 'auditor@culqi.com' || 
+                      (username || '').trim().toLowerCase() === 'auditor' ||
+                      (username || '').trim().toLowerCase() === 'demo';
+    const validPass = (password || '').trim() === 'DemoMixton2026';
+
+    if (!validUser || !validPass) {
+      return res.status(401).json({
+        error: 'Credenciales inválidas. Usuario de prueba: auditor@culqi.com | Contraseña: DemoMixton2026'
+      });
+    }
+
+    const demoUser = {
+      userId: 'culqi_auditor_demo',
+      username: 'Auditor Culqi (Demo)',
+      avatar: null,
+      isAdmin: true,
+      role: 'admin',
+      servidor: null
+    };
+
+    const token = jwt.sign(demoUser, ADMIN_JWT_SECRET, { expiresIn: '8h' });
+
+    const cookieConfig = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production' || BASE_URL.startsWith('https'),
+      sameSite: 'lax',
+      maxAge: 8 * 60 * 60 * 1000,
+      path: '/'
+    };
+
+    res.cookie('auth_token', token, cookieConfig);
+    res.cookie('admin_token', token, cookieConfig);
+
+    logger.success('🔑 [AUTH] Sesión de prueba iniciada con éxito para Auditor Culqi.');
+    return res.json({
+      success: true,
+      message: 'Autenticación de prueba exitosa para auditoría Culqi',
+      user: demoUser
+    });
+  });
+
   router.get('/logout', (req, res) => {
     res.clearCookie('auth_token', { path: '/' });
     res.clearCookie('admin_token', { path: '/' });

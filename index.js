@@ -8,6 +8,7 @@ import { logger } from './utils/logger.js';
 import { createAuthRouter } from './routes/auth.js';
 import { createApiRouter } from './routes/api.js';
 import { createLobbyRouter } from './routes/lobby.js';
+import { createPublicApiRouter } from './routes/publicApi.js';
 import { WebSocketServer } from 'ws';
 import { loadCommands, onInteractionCreate } from './events/interactionCreate.js';
 import { onReady } from './events/ready.js';
@@ -125,6 +126,15 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static('public'));
 app.set('trust proxy', 1); // Confiar en el proxy reverso (Nginx/Wisp)
+
+// Redirección forzosa a HTTPS para cumplir con los estándares de seguridad SSL exigidos por Culqi
+app.use((req, res, next) => {
+  const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  if (!isHttps && (process.env.NODE_ENV === 'production' || (env.BASE_URL && env.BASE_URL.startsWith('https')))) {
+    return res.redirect(301, `https://${req.headers.host}${req.url}`);
+  }
+  next();
+});
 
 // Rate limiting global
 const globalLimiter = rateLimit({
@@ -289,6 +299,8 @@ app.use('/api/lobby', createLobbyRouter(client, db, {
   ADMIN_JWT_SECRET: env.ADMIN_JWT_SECRET,
   DISCORD_GUILD_ID: env.DISCORD_GUILD_ID,
 }, wss));
+app.use('/api', createPublicApiRouter(db));
+
 app.get('/admin', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.sendFile(new URL('public/admin/index.html', import.meta.url).pathname);
@@ -296,6 +308,31 @@ app.get('/admin', (req, res) => {
 app.get('/admin/*', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.sendFile(new URL('public/admin/index.html', import.meta.url).pathname);
+});
+
+// Rutas públicas de Tienda, Términos, Devoluciones, Libro de Reclamaciones INDECOPI y Contacto
+const publicSpaRoutes = [
+  '/',
+  '/tienda',
+  '/tienda/*',
+  '/productos',
+  '/productos/*',
+  '/contacto',
+  '/terminos',
+  '/terminos-y-condiciones',
+  '/devoluciones',
+  '/politica-de-devoluciones',
+  '/reclamaciones',
+  '/libro-de-reclamaciones',
+  '/libro-de-reclamaciones/*',
+  '/arena',
+  '/draft',
+  '/checkout'
+];
+
+app.get(publicSpaRoutes, (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, private');
+  res.sendFile(new URL('public/index.html', import.meta.url).pathname);
 });
 
 const server = app.listen(env.PORT, '0.0.0.0', () => {

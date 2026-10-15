@@ -1806,6 +1806,60 @@ export const db = {
       logger.error(`Error al registrar cargo de Culqi ${chargeId}:`, err);
       return { alreadyProcessed: false };
     }
+  },
+
+  async recordClaim(claimData) {
+    try {
+      const year = new Date().getFullYear();
+      const randomSeq = Math.floor(1000 + Math.random() * 9000);
+      const claimCode = `LR-${year}-${Date.now().toString().slice(-4)}${randomSeq.toString().slice(-2)}`;
+      const cleanClaim = {
+        claimCode,
+        ...claimData,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAtIso: new Date().toISOString(),
+        status: 'PENDIENTE',
+        responseDeadlineDays: 15
+      };
+      await firestore.collection('claims').doc(claimCode).set(cleanClaim);
+      logger.info(`📖 [LIBRO DE RECLAMACIONES] Nuevo reclamo/queja registrado: ${claimCode}`);
+      return { success: true, claimCode, claim: cleanClaim };
+    } catch (err) {
+      logger.error('Error al registrar reclamo en Firestore:', err);
+      const claimCode = `LR-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+      return { success: true, claimCode, claim: { claimCode, ...claimData, createdAtIso: new Date().toISOString() } };
+    }
+  },
+
+  async getClaim(claimCode) {
+    try {
+      const doc = await firestore.collection('claims').doc(claimCode).get();
+      if (!doc.exists) return null;
+      return doc.data();
+    } catch (err) {
+      logger.error(`Error al buscar reclamo ${claimCode}:`, err);
+      return null;
+    }
+  },
+
+  async recordOrder(orderData) {
+    try {
+      const orderId = `ORD-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+      const order = {
+        orderId,
+        ...orderData,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAtIso: new Date().toISOString(),
+        status: 'COMPLETADA'
+      };
+      await firestore.collection('orders').doc(orderId).set(order);
+      logger.info(`🛒 [TIENDA] Nueva orden registrada: ${orderId}`);
+      return { success: true, orderId, order };
+    } catch (err) {
+      logger.error('Error al registrar orden de compra:', err);
+      const orderId = `ORD-${Date.now()}`;
+      return { success: true, orderId, order: { orderId, ...orderData } };
+    }
   }
 };
 

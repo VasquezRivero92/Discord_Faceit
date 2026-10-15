@@ -25,14 +25,82 @@ import {
   DollarSign,
   Wallet,
   Layers,
-  Radio
+  Radio,
+  KeyRound,
+  User
 } from 'lucide-react';
-import { Player, Team, LobbyState, CurrentUser, Guild, ToastMessage, PlayerBetStatus, BetStatusResponse, MixtonQueue } from './types';
+import {
+  Player, 
+  Team, 
+  LobbyState, 
+  CurrentUser, 
+  Guild, 
+  ToastMessage, 
+  PlayerBetStatus, 
+  BetStatusResponse, 
+  MixtonQueue,
+  ActiveView,
+  StoreProduct,
+  CartItem 
+} from './types';
+import { Header } from './components/Header';
+import { Footer } from './components/Footer';
+import { LandingHomeView } from './components/LandingHomeView';
+import { StoreView } from './components/StoreView';
+import { UserWalletView } from './components/UserWalletView';
+import { CartDrawer } from './components/CartDrawer';
+import { CheckoutModal } from './components/CheckoutModal';
+import { LibroReclamacionesView } from './components/LibroReclamacionesView';
+import { TerminosCondicionesView } from './components/TerminosCondicionesView';
+import { DevolucionesView } from './components/DevolucionesView';
+import { ContactoView } from './components/ContactoView';
+import { DemoLoginModal } from './components/DemoLoginModal';
 
 export default function App() {
   // Authentication & Loading states
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
+
+  // Active Navigation View (SPA Routing compatible with Culqi requirements)
+  const getInitialView = (): ActiveView => {
+    const p = window.location.pathname.toLowerCase();
+    if (p.includes('libro-de-reclamaciones') || p.includes('reclamaciones')) return 'libro-de-reclamaciones';
+    if (p.includes('terminos')) return 'terminos';
+    if (p.includes('devoluciones') || p.includes('reembolsos')) return 'devoluciones';
+    if (p.includes('contacto')) return 'contacto';
+    if (p.includes('cuenta') || p.includes('saldo') || p.includes('billetera')) return 'cuenta';
+    if (p.includes('login') || p.includes('acceso')) return 'login';
+    if (p.includes('tienda') || p.includes('productos')) return 'tienda';
+    if (p.includes('mixton') || p.includes('arena') || p.includes('draft')) return 'mixton';
+    return 'inicio';
+  };
+
+  const [activeView, setActiveView] = useState<ActiveView>(getInitialView);
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('mixton_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isDemoLoginOpen, setIsDemoLoginOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mixton_cart', JSON.stringify(cartItems));
+    } catch {}
+  }, [cartItems]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setActiveView(getInitialView());
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
   
   // Guild configurations
   const [guilds, setGuilds] = useState<Guild[]>([]);
@@ -146,6 +214,76 @@ export default function App() {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 4500);
   }, []);
+
+  const handleSelectView = (view: ActiveView) => {
+    setActiveView(view);
+    const targetPath = view === 'inicio' ? '/' : `/${view}`;
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState(null, '', targetPath);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleRefreshCurrentUser = async () => {
+    try {
+      const res = await fetch('/api/lobby/me');
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentUser(data.user);
+      }
+    } catch (err) {
+      console.error('Error al actualizar usuario:', err);
+    }
+  };
+
+  const handleAddToCart = (product: StoreProduct) => {
+    setCartItems(prev => {
+      const existing = prev.find(i => i.product.id === product.id);
+      if (existing) {
+        return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [...prev, { product, quantity: 1 }];
+    });
+    showToast(`"${product.name}" añadido al carrito`, 'success');
+  };
+
+  const handleBuyNow = (product: StoreProduct) => {
+    handleAddToCart(product);
+    setIsCheckoutOpen(true);
+  };
+
+  const handleUpdateCartQuantity = (productId: string, newQty: number) => {
+    if (newQty <= 0) {
+      handleRemoveCartItem(productId);
+      return;
+    }
+    setCartItems(prev => prev.map(i => i.product.id === productId ? { ...i, quantity: newQty } : i));
+  };
+
+  const handleRemoveCartItem = (productId: string) => {
+    setCartItems(prev => prev.filter(i => i.product.id !== productId));
+    showToast('Producto eliminado del carrito', 'info');
+  };
+
+  const handleClearCart = () => {
+    setCartItems([]);
+    showToast('Carrito vaciado', 'info');
+  };
+
+  const handleLogout = () => {
+    window.location.href = '/auth/logout';
+  };
+
+  const handleLoginSuccess = async (user: CurrentUser) => {
+    setCurrentUser(user);
+    showToast(`Sesión iniciada con éxito como ${user.username}`, 'success');
+    if (user.isAdmin) {
+      await loadGuildsSelector();
+    }
+    await fetchState();
+    await fetchHistory();
+    setActiveView('cuenta');
+  };
 
   // Helper: fetch wrapper that automatically appends guildId
   const apiFetch = useCallback(async (path: string, options?: RequestInit) => {
@@ -341,7 +479,8 @@ export default function App() {
       try {
         const res = await fetch('/api/lobby/me');
         if (res.status === 401) {
-          window.location.href = `/auth/discord?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+          setCurrentUser(null);
+          setAuthChecking(false);
           return;
         }
         const data = await res.json();
@@ -357,7 +496,8 @@ export default function App() {
         setAuthChecking(false);
       } catch (err) {
         console.error('Auth check error:', err);
-        showToast('Error al verificar sesión con Discord. Recarga la página.', 'error');
+        setCurrentUser(null);
+        setAuthChecking(false);
       }
     };
     checkAuth();
@@ -1789,88 +1929,152 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white font-sans flex flex-col relative lg:overflow-hidden overflow-y-auto">
+    <div className="min-h-screen bg-[#0A0A0A] text-white font-sans flex flex-col relative overflow-y-auto">
       {/* Subtle tech grid background to match admin web */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.012)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
 
-      {/* Header (Admin Panel Bar style) */}
-      <header className="border-b-4 border-[#1A1A1A] bg-[#111] px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 relative z-10 shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white text-black flex items-center justify-center font-bold rotate-3 shadow-md">
-            <Gamepad2 className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-black italic tracking-tighter uppercase leading-none text-white">
-              MIXTÓN <span className="text-[#FF5500]">{guildName.toUpperCase()}</span>
-            </h1>
-            <p className="text-[9px] text-neutral-500 uppercase tracking-widest font-mono font-bold">MATCHMAKING DRAFT ARENA // LOBBY LIVE</p>
-          </div>
-        </div>
-        
-        {/* Status Banner */}
-        <div className="flex-1 max-w-lg md:mx-6">
-          <div className={statusInfo.className}>
-            <span 
-              className="text-[10px] font-mono tracking-wide"
-              dangerouslySetInnerHTML={{ __html: statusInfo.text }} 
-            />
-          </div>
-        </div>
+      {/* Global Culqi-compliant Header */}
+      <Header
+        activeView={activeView}
+        setActiveView={handleSelectView}
+        cartCount={cartItems.reduce((acc, i) => acc + i.quantity, 0)}
+        cartTotal={cartItems.reduce((acc, i) => acc + (i.product.price * i.quantity), 0)}
+        onOpenCart={() => setIsCartOpen(true)}
+        currentUser={currentUser}
+        onOpenDemoLogin={() => setIsDemoLoginOpen(true)}
+        onLogout={handleLogout}
+      />
 
-        {/* Guild Selector for Admins */}
-        {currentUser?.isAdmin && guilds.length > 0 && (
-          <div className="flex items-center gap-2">
-            <select 
-              id="guild-select" 
-              className="bg-[#1A1A1A] border-2 border-[#2D2D2D] rounded-none px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-white cursor-pointer"
-              value={currentGuildId}
-              onChange={handleGuildChange}
-            >
-              {guilds.map(g => (
-                <option key={g.id} value={g.id}>{g.name.toUpperCase()}</option>
-              ))}
-            </select>
-          </div>
-        )}
+      {/* Page Routing Views */}
+      {activeView === 'inicio' && (
+        <LandingHomeView
+          setActiveView={handleSelectView}
+          onAddToCart={handleAddToCart}
+          onBuyNow={handleBuyNow}
+          currentUser={currentUser}
+        />
+      )}
 
-        <a 
-          href="https://www.faceit.com/es/hub/52a88f17-1660-42ae-8322-76592f0c6f23/Mixtones"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5500]/10 border-2 border-[#FF5500]/40 text-[#FF5500] hover:bg-[#FF5500] hover:text-white transition-colors text-xs font-mono font-bold uppercase tracking-wider"
-          title="Abrir Hub de Faceit en una pestaña nueva"
-        >
-          <span className="w-2 h-2 rounded-full bg-[#FF5500] animate-pulse" />
-          Hub Faceit
-        </a>
+      {activeView === 'tienda' && (
+        <StoreView
+          onAddToCart={handleAddToCart}
+          onBuyNow={handleBuyNow}
+        />
+      )}
 
-        {currentUser && (
-          <div className="flex items-center gap-4 border-l border-[#2D2D2D] pl-4">
-            <div className="flex items-center gap-3">
-              <img 
-                className="w-8 h-8 rounded-none border-2 border-[#2D2D2D]"
-                src={currentUser.avatar ? `https://cdn.discordapp.com/avatars/${currentUser.userId}/${currentUser.avatar}.png?size=64` : 'https://cdn.discordapp.com/embed/avatars/0.png'} 
-                alt="Avatar" 
-              />
-              <div className="text-right">
-                <p className="text-xs font-bold leading-none font-mono text-white">{currentUser.username}</p>
-                <span className={`inline-block mt-0.5 border text-[8px] px-1 font-mono uppercase tracking-wider font-bold ${
-                  currentUser.isAdmin ? 'border-white text-white bg-white/5' : 'border-neutral-600 text-neutral-400'
-                }`}>
-                  {currentUser.isAdmin ? 'ADMINISTRADOR' : 'MIEMBRO'}
-                </span>
-              </div>
+      {(activeView === 'cuenta' || activeView === 'login') && (
+        <UserWalletView
+          currentUser={currentUser}
+          onRefreshUser={handleRefreshCurrentUser}
+          setActiveView={handleSelectView}
+          onOpenDemoLogin={() => setIsDemoLoginOpen(true)}
+          onLogout={handleLogout}
+          showToast={showToast}
+        />
+      )}
+
+      {activeView === 'terminos' && (
+        <TerminosCondicionesView />
+      )}
+
+      {activeView === 'devoluciones' && (
+        <DevolucionesView />
+      )}
+
+      {activeView === 'libro-de-reclamaciones' && (
+        <LibroReclamacionesView />
+      )}
+
+      {activeView === 'contacto' && (
+        <ContactoView />
+      )}
+
+      {/* Arena / Mixton View: requires login, or shows demo/discord gate */}
+      {(activeView === 'arena' || activeView === 'mixton') && (
+        !currentUser ? (
+          <div className="max-w-xl mx-auto my-16 p-8 bg-[#121212] border-2 border-[#2C2C2C] text-center shadow-2xl font-mono relative z-10">
+            <div className="w-16 h-16 bg-[#FF5500]/15 border-2 border-[#FF5500] flex items-center justify-center mx-auto text-[#FF5500] mb-4">
+              <Gamepad2 className="w-8 h-8" />
             </div>
-            <a 
-              href="/auth/logout" 
-              className="p-1.5 bg-[#1C1C1C] border border-[#2D2D2D] text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
-              title="Salir"
-            >
-              <LogOut className="w-4 h-4" />
-            </a>
+            <h2 className="text-2xl font-black italic tracking-tighter uppercase text-white mb-2">
+              ARENA DE MATCHMAKING & DRAFTS
+            </h2>
+            <p className="text-xs text-neutral-400 mb-6 leading-relaxed font-sans">
+              Esta sección interactiva permite a los capitanes seleccionar jugadores en tiempo real por tiers y lanzar servidores 128 tickrate en FACEIT. Para acceder, inicia sesión con tu cuenta de Discord o usa las credenciales de demostración asignadas a los auditores de Culqi.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                type="button"
+                onClick={() => setIsDemoLoginOpen(true)}
+                className="px-6 py-3 bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] text-white text-xs font-black uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <KeyRound className="w-4 h-4" />
+                <span>Acceso Auditor Culqi (Demo)</span>
+              </button>
+
+              <a
+                href="/auth/discord"
+                className="px-6 py-3 bg-[#5865F2] hover:bg-[#4752C4] border border-[#5865F2] text-white text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 shadow-lg"
+              >
+                <Users className="w-4 h-4" />
+                <span>Conectar con Discord</span>
+              </a>
+            </div>
           </div>
-        )}
-      </header>
+        ) : (
+          <>
+            {/* Arena Subheader Bar */}
+            <div className="border-b-2 border-[#1A1A1A] bg-[#111] px-6 py-3 flex flex-col md:flex-row justify-between items-center gap-4 relative z-10 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-white text-black flex items-center justify-center font-bold rotate-3 shadow-md">
+                  <Gamepad2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black italic tracking-tighter uppercase leading-none text-white">
+                    SALA: <span className="text-[#FF5500]">{guildName.toUpperCase()}</span>
+                  </h2>
+                  <p className="text-[9px] text-neutral-500 uppercase tracking-widest font-mono font-bold">MATCHMAKING DRAFT ARENA // LOBBY LIVE</p>
+                </div>
+              </div>
+              
+              {/* Status Banner */}
+              <div className="flex-1 max-w-lg md:mx-6">
+                <div className={statusInfo.className}>
+                  <span 
+                    className="text-[10px] font-mono tracking-wide"
+                    dangerouslySetInnerHTML={{ __html: statusInfo.text }} 
+                  />
+                </div>
+              </div>
+
+              {/* Guild Selector for Admins */}
+              {currentUser?.isAdmin && guilds.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <select 
+                    id="guild-select" 
+                    className="bg-[#1A1A1A] border-2 border-[#2D2D2D] rounded-none px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-white cursor-pointer"
+                    value={currentGuildId}
+                    onChange={handleGuildChange}
+                  >
+                    {guilds.map(g => (
+                      <option key={g.id} value={g.id}>{g.name.toUpperCase()}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <a 
+                href="https://www.faceit.com/es/hub/52a88f17-1660-42ae-8322-76592f0c6f23/Mixtones"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5500]/10 border-2 border-[#FF5500]/40 text-[#FF5500] hover:bg-[#FF5500] hover:text-white transition-colors text-xs font-mono font-bold uppercase tracking-wider"
+                title="Abrir Hub de Faceit en una pestaña nueva"
+              >
+                <span className="w-2 h-2 rounded-full bg-[#FF5500] animate-pulse" />
+                Hub Faceit
+              </a>
+            </div>
 
       {/* Main Content Grid */}
       <main className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 p-6 relative z-10 lg:overflow-hidden overflow-y-auto lg:max-h-[calc(100vh-80px)]">
@@ -3630,6 +3834,46 @@ export default function App() {
           </div>
         </div>
       )}
+
+          </>
+        )
+      )}
+
+      {/* Global Culqi-compliant Footer */}
+      <Footer setActiveView={handleSelectView} />
+
+      {/* Cart Slide-Over Drawer */}
+      <CartDrawer
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        items={cartItems}
+        onUpdateQuantity={handleUpdateCartQuantity}
+        onRemoveItem={handleRemoveCartItem}
+        onClearCart={handleClearCart}
+        onProceedToCheckout={() => {
+          setIsCartOpen(false);
+          setIsCheckoutOpen(true);
+        }}
+      />
+
+      {/* Checkout Modal with Culqi Integration */}
+      <CheckoutModal
+        isOpen={isCheckoutOpen}
+        onClose={() => setIsCheckoutOpen(false)}
+        items={cartItems}
+        currentUser={currentUser}
+        onPurchaseSuccess={() => {
+          setCartItems([]);
+          showToast('¡Compra realizada con éxito! Comprobante emitido.', 'success');
+        }}
+      />
+
+      {/* Demo Login Modal for Culqi Auditors */}
+      <DemoLoginModal
+        isOpen={isDemoLoginOpen}
+        onClose={() => setIsDemoLoginOpen(false)}
+        onLoginSuccess={handleLoginSuccess}
+      />
 
       {/* Notification Toast Stack (Admin Style) */}
       <div id="toast-container" className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3">

@@ -277,13 +277,29 @@ export function createLobbyRouter(client, db, config, wss) {
   // --- Información del usuario autenticado ---
   router.get('/me', requireAuth, async (req, res) => {
     let hasSavedPhone = false;
+    let balance = 0;
+    let fullUser = null;
     try {
       if (req.user?.userId) {
-        const u = await db.getFullUser(req.user.userId, req.guildId);
-        if (u?.phoneNumber) hasSavedPhone = true;
+        fullUser = await db.getFullUser(req.user.userId, req.guildId);
+        if (fullUser?.phoneNumber) hasSavedPhone = true;
+        balance = await db.getUserBalance(req.user.userId, req.guildId);
       }
-    } catch (_) {}
-    res.json({ user: { ...req.user, hasSavedPhone } });
+    } catch (err) {
+      logger.warn('Error al obtener perfil completo en /me:', err.message);
+    }
+    res.json({ 
+      user: { 
+        ...req.user, 
+        hasSavedPhone,
+        balance,
+        faceit_nickname: fullUser?.faceit_nickname || null,
+        skillLevel: fullUser?.skillLevel || null,
+        elo: fullUser?.elo || null,
+        tier: fullUser?.mixton_tier || null,
+        phoneNumber: hasSavedPhone ? fullUser.phoneNumber : null
+      } 
+    });
   });
 
   // --- Lista de servidores (Guilds) para administrador ---

@@ -37,6 +37,12 @@ export interface CurrentUser {
   role?: string;
   servidor?: string;
   hasSavedPhone?: boolean;
+  balance?: number;
+  faceit_nickname?: string | null;
+  skillLevel?: number | null;
+  elo?: number | null;
+  tier?: string | null;
+  phoneNumber?: string | null;
 }
 
 export interface Guild {
@@ -97,3 +103,52 @@ export interface MixtonQueue {
   status: 'free' | 'busy';
   activeMatch?: { id: string; teamA: string; teamB: string; startedAt: number } | null;
 }
+
+export interface StoreProduct {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  currency: string;
+  badge?: string;
+  description: string;
+  features: string[];
+  image: string;
+}
+
+export interface CartItem {
+  product: StoreProduct;
+  quantity: number;
+}
+
+export interface ClaimFormData {
+  consumerName: string;
+  consumerDocType: string;
+  consumerDocNumber: string;
+  consumerEmail: string;
+  consumerPhone: string;
+  consumerAddress: string;
+  isMinor: boolean;
+  parentName?: string;
+  parentDocNumber?: string;
+  contractedType: 'PRODUCTO' | 'SERVICIO';
+  claimedAmount: string;
+  goodsDescription: string;
+  claimType: 'RECLAMO' | 'QUEJA';
+  claimDetail: string;
+  consumerRequest: string;
+  acceptTerms: boolean;
+}
+
+export type ActiveView = 
+  | 'inicio'
+  | 'mixton'
+  | 'arena'
+  | 'tienda'
+  | 'cuenta'
+  | 'login'
+  | 'terminos'
+  | 'devoluciones'
+  | 'libro-de-reclamaciones'
+  | 'contacto';
+
