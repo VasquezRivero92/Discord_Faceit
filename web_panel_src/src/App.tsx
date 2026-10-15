@@ -39,17 +39,12 @@ import {
   PlayerBetStatus, 
   BetStatusResponse, 
   MixtonQueue,
-  ActiveView,
-  StoreProduct,
-  CartItem 
+  ActiveView
 } from './types';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { LandingHomeView } from './components/LandingHomeView';
-import { StoreView } from './components/StoreView';
 import { UserWalletView } from './components/UserWalletView';
-import { CartDrawer } from './components/CartDrawer';
-import { CheckoutModal } from './components/CheckoutModal';
 import { LibroReclamacionesView } from './components/LibroReclamacionesView';
 import { TerminosCondicionesView } from './components/TerminosCondicionesView';
 import { DevolucionesView } from './components/DevolucionesView';
@@ -71,28 +66,11 @@ export default function App() {
     if (p.includes('contacto')) return 'contacto';
     if (p.includes('cuenta') || p.includes('saldo') || p.includes('billetera')) return 'cuenta';
     if (p.includes('login') || p.includes('acceso')) return 'login';
-    if (p.includes('tienda') || p.includes('productos')) return 'tienda';
     if (p.includes('mixton') || p.includes('arena') || p.includes('draft')) return 'mixton';
     return 'inicio';
   };
 
   const [activeView, setActiveView] = useState<ActiveView>(getInitialView);
-  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('mixton_cart');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('mixton_cart', JSON.stringify(cartItems));
-    } catch {}
-  }, [cartItems]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -234,40 +212,6 @@ export default function App() {
     } catch (err) {
       console.error('Error al actualizar usuario:', err);
     }
-  };
-
-  const handleAddToCart = (product: StoreProduct) => {
-    setCartItems(prev => {
-      const existing = prev.find(i => i.product.id === product.id);
-      if (existing) {
-        return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
-      }
-      return [...prev, { product, quantity: 1 }];
-    });
-    showToast(`"${product.name}" añadido al carrito`, 'success');
-  };
-
-  const handleBuyNow = (product: StoreProduct) => {
-    handleAddToCart(product);
-    setIsCheckoutOpen(true);
-  };
-
-  const handleUpdateCartQuantity = (productId: string, newQty: number) => {
-    if (newQty <= 0) {
-      handleRemoveCartItem(productId);
-      return;
-    }
-    setCartItems(prev => prev.map(i => i.product.id === productId ? { ...i, quantity: newQty } : i));
-  };
-
-  const handleRemoveCartItem = (productId: string) => {
-    setCartItems(prev => prev.filter(i => i.product.id !== productId));
-    showToast('Producto eliminado del carrito', 'info');
-  };
-
-  const handleClearCart = () => {
-    setCartItems([]);
-    showToast('Carrito vaciado', 'info');
   };
 
   const handleLogout = () => {
@@ -1924,9 +1868,6 @@ export default function App() {
       <Header
         activeView={activeView}
         setActiveView={handleSelectView}
-        cartCount={cartItems.reduce((acc, i) => acc + i.quantity, 0)}
-        cartTotal={cartItems.reduce((acc, i) => acc + (i.product.price * i.quantity), 0)}
-        onOpenCart={() => setIsCartOpen(true)}
         currentUser={currentUser}
         onLogout={handleLogout}
       />
@@ -1935,8 +1876,6 @@ export default function App() {
       {activeView === 'inicio' && (
         <LandingHomeView
           setActiveView={handleSelectView}
-          onAddToCart={handleAddToCart}
-          onBuyNow={handleBuyNow}
           currentUser={currentUser}
         />
       )}
@@ -1945,13 +1884,6 @@ export default function App() {
         <GuiaFaceitView
           setActiveView={handleSelectView}
           currentUser={currentUser}
-        />
-      )}
-
-      {activeView === 'tienda' && (
-        <StoreView
-          onAddToCart={handleAddToCart}
-          onBuyNow={handleBuyNow}
         />
       )}
 
@@ -3804,31 +3736,6 @@ export default function App() {
       {/* Global Culqi-compliant Footer */}
       <Footer setActiveView={handleSelectView} />
 
-      {/* Cart Slide-Over Drawer */}
-      <CartDrawer
-        isOpen={isCartOpen}
-        onClose={() => setIsCartOpen(false)}
-        items={cartItems}
-        onUpdateQuantity={handleUpdateCartQuantity}
-        onRemoveItem={handleRemoveCartItem}
-        onClearCart={handleClearCart}
-        onProceedToCheckout={() => {
-          setIsCartOpen(false);
-          setIsCheckoutOpen(true);
-        }}
-      />
-
-      {/* Checkout Modal */}
-      <CheckoutModal
-        isOpen={isCheckoutOpen}
-        onClose={() => setIsCheckoutOpen(false)}
-        items={cartItems}
-        currentUser={currentUser}
-        onPurchaseSuccess={() => {
-          setCartItems([]);
-          showToast('¡Compra realizada con éxito! Comprobante emitido.', 'success');
-        }}
-      />
 
       {/* Notification Toast Stack (Admin Style) */}
       <div id="toast-container" className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3">

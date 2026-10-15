@@ -1,6 +1,5 @@
 import React from 'react';
-import { ActiveView, StoreProduct } from '../types';
-import { INITIAL_PRODUCTS } from './StoreView';
+import { ActiveView } from '../types';
 import { 
   Gamepad2, 
   Trophy, 
@@ -16,20 +15,17 @@ import {
   Server,
   Layers,
   Flame,
-  HelpCircle
+  HelpCircle,
+  BookOpen
 } from 'lucide-react';
 
 interface LandingHomeViewProps {
   setActiveView: (view: ActiveView) => void;
-  onAddToCart: (product: StoreProduct) => void;
-  onBuyNow: (product: StoreProduct) => void;
   currentUser: any;
 }
 
 export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
   setActiveView,
-  onAddToCart,
-  onBuyNow,
   currentUser
 }) => {
   return (
@@ -90,12 +86,11 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveView('tienda')}
-              className="px-6 py-3.5 bg-[#161616] hover:bg-[#222] border border-[#333] hover:border-neutral-400 text-white tracking-wider transition-all flex items-center gap-2 cursor-pointer"
+              onClick={() => setActiveView('guia-faceit')}
+              className="px-6 py-3.5 bg-[#161616] hover:bg-[#222] border border-[#333] hover:border-[#FF5500] text-white tracking-wider transition-all flex items-center gap-2 cursor-pointer"
             >
-              <span>Tienda Oficial</span>
-              <span className="text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/40 px-1.5 py-0.2 rounded font-mono uppercase">Próx.</span>
-              <ArrowRight className="w-4 h-4 text-neutral-400" />
+              <BookOpen className="w-4 h-4 text-[#FF5500]" />
+              <span>Guía FACEIT</span>
             </button>
           </div>
 
@@ -328,85 +323,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
         </div>
       </section>
 
-      {/* 4. PRODUCTOS Y SERVICIOS DESTACADOS (PRÓXIMAMENTE) */}
-      <section className="py-16 px-4 sm:px-6 max-w-6xl mx-auto">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/15 border border-amber-500/40 text-amber-400 text-xs font-mono font-bold uppercase mb-1">
-              <Sparkles className="w-3.5 h-3.5" /> TIENDA OFICIAL // PRÓXIMAMENTE
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-black italic tracking-tighter uppercase font-mono text-white">
-              SERVICIOS Y PRODUCTOS MACHUPEEK
-            </h2>
-          </div>
 
-          <button
-            type="button"
-            onClick={() => setActiveView('tienda')}
-            className="px-4 py-2 bg-[#1A1A1A] hover:bg-[#252525] border border-[#333] hover:border-amber-500 text-xs font-mono font-bold uppercase transition-all flex items-center gap-2 cursor-pointer"
-          >
-            <span>Ver Catálogo (Próximamente)</span>
-            <ArrowRight className="w-4 h-4 text-amber-500" />
-          </button>
-        </div>
-
-        {/* 3 Featured Products (Próximamente) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {INITIAL_PRODUCTS.slice(0, 3).map(product => (
-            <div
-              key={product.id}
-              className="bg-[#121212] border-2 border-[#242424] hover:border-amber-500/40 transition-all flex flex-col justify-between shadow-xl group relative overflow-hidden"
-            >
-              <div>
-                <div className="relative h-44 w-full overflow-hidden bg-[#181818]">
-                  <img
-                    src={product.image}
-                    alt={product.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-80"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-transparent to-transparent opacity-80" />
-                  
-                  <span className="absolute top-3 left-3 px-2 py-0.5 bg-black/70 border border-neutral-700 text-neutral-300 text-[10px] font-mono uppercase">
-                    {product.category}
-                  </span>
-
-                  <span className="absolute top-3 right-3 px-2 py-0.5 bg-amber-500/20 border border-amber-500/50 text-amber-300 text-[10px] font-mono font-black uppercase tracking-wider">
-                    PRÓXIMAMENTE
-                  </span>
-
-                  <div className="absolute bottom-3 left-3 flex items-baseline gap-1">
-                    <span className="text-2xl font-black italic tracking-tighter text-white font-mono">
-                      S/ {product.price.toFixed(2)}
-                    </span>
-                    <span className="text-[10px] text-neutral-400 uppercase font-mono">PEN</span>
-                  </div>
-                </div>
-
-                <div className="p-4">
-                  <h3 className="text-sm font-black uppercase text-white tracking-tight mb-2 group-hover:text-amber-400 transition-colors">
-                    {product.name}
-                  </h3>
-                  <p className="text-neutral-400 text-xs leading-relaxed line-clamp-2">
-                    {product.description}
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-4 pt-0 font-mono text-xs">
-                <button
-                  type="button"
-                  onClick={() => setActiveView('tienda')}
-                  className="w-full py-2.5 px-3 bg-[#1C1C1C] hover:bg-[#252525] border border-[#333] hover:border-amber-500/50 text-amber-400 font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <span>Próximamente Disponible</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
       {/* 5. PAYMENT & COMPLIANCE BANNER */}
       <section className="bg-[#121212] border-t-2 border-[#1A1A1A] py-10 px-4 sm:px-6">

@@ -1,14 +1,11 @@
 import React from 'react';
 import { 
-  ShoppingCart, 
   ShieldCheck, 
   Gamepad2, 
   User, 
   LogOut, 
-  KeyRound, 
   Coins, 
   Trophy, 
-  Store,
   PhoneCall,
   FileText,
   BookOpen
@@ -18,9 +15,6 @@ import { ActiveView, CurrentUser } from '../types';
 interface HeaderProps {
   activeView: ActiveView;
   setActiveView: (view: ActiveView) => void;
-  cartCount: number;
-  cartTotal: number;
-  onOpenCart: () => void;
   currentUser: CurrentUser | null;
   onLogout: () => void;
 }
@@ -28,9 +22,6 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   activeView,
   setActiveView,
-  cartCount,
-  cartTotal,
-  onOpenCart,
   currentUser,
   onLogout
 }) => {
@@ -128,21 +119,6 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Guía FACEIT</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveView('tienda')}
-            className={`px-3 py-1.5 border transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeView === 'tienda'
-                ? 'bg-[#FF5500] text-white border-[#FF5500] shadow-sm'
-                : 'bg-[#161616] text-neutral-300 border-[#262626] hover:border-neutral-500 hover:text-white'
-            }`}
-          >
-            <Store className="w-3.5 h-3.5 text-neutral-400" />
-            <span>Tienda</span>
-            <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1 py-0.2 uppercase font-black">
-              Próx.
-            </span>
-          </button>
 
           <button
             type="button"
@@ -186,24 +162,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Action: Cart & Auth */}
         <div className="flex items-center gap-3">
-          {/* Cart Button */}
-          <button
-            type="button"
-            onClick={onOpenCart}
-            className="flex items-center gap-2 px-3 py-1.5 bg-[#1A1A1A] hover:bg-[#252525] border-2 border-[#333] hover:border-[#FF5500] text-white text-xs font-mono font-bold transition-all relative cursor-pointer"
-            title="Ver carrito de compras"
-          >
-            <ShoppingCart className="w-4 h-4 text-[#FF5500]" />
-            <span className="hidden sm:inline">Carrito</span>
-            {cartCount > 0 && (
-              <span className="px-1.5 py-0.2 bg-[#FF5500] text-white text-[10px] font-black rounded-full">
-                {cartCount}
-              </span>
-            )}
-            <span className="text-[#FF5500] ml-1 font-mono">
-              S/ {cartTotal.toFixed(2)}
-            </span>
-          </button>
+
 
           {/* User profile or Login Button */}
           {currentUser ? (

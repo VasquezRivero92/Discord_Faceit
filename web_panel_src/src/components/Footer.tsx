@@ -102,10 +102,10 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
               <li>
                 <button
                   type="button"
-                  onClick={() => setActiveView('tienda')}
+                  onClick={() => setActiveView('guia-faceit')}
                   className="text-neutral-400 hover:text-white transition-colors cursor-pointer text-left block"
                 >
-                  › Catálogo de Productos y Servicios
+                  › Guía de Vinculación FACEIT
                 </button>
               </li>
               <li>

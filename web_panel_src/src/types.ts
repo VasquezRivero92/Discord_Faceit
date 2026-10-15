@@ -104,22 +104,6 @@ export interface MixtonQueue {
   activeMatch?: { id: string; teamA: string; teamB: string; startedAt: number } | null;
 }
 
-export interface StoreProduct {
-  id: string;
-  name: string;
-  category: string;
-  price: number;
-  currency: string;
-  badge?: string;
-  description: string;
-  features: string[];
-  image: string;
-}
-
-export interface CartItem {
-  product: StoreProduct;
-  quantity: number;
-}
 
 export interface ClaimFormData {
   consumerName: string;
@@ -144,7 +128,6 @@ export type ActiveView =
   | 'inicio'
   | 'mixton'
   | 'arena'
-  | 'tienda'
   | 'cuenta'
   | 'login'
   | 'terminos'
