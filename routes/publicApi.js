@@ -10,7 +10,7 @@ export const STORE_PRODUCTS = [
     price: 5.00,
     currency: 'PEN',
     badge: 'Popular',
-    description: 'Pase de acceso individual para 1 jornada completa de torneos Mixtón en servidores de 128 tickrate con anticheat FACEIT. Emparejamiento por Tiers competitivos (S, A, B, C) y registro de estadísticas.',
+    description: 'Pase de acceso individual para 1 jornada completa de torneos Mixtón en servidores oficiales con anticheat FACEIT. Emparejamiento por Tiers competitivos (S, A, B, C) y registro de estadísticas.',
     features: [
       'Acceso a partidas clasificatorias del día',
       'Servidores dedicados de bajo ping en Lima',
@@ -90,10 +90,10 @@ export const STORE_PRODUCTS = [
     price: 40.00,
     currency: 'PEN',
     badge: 'Pro',
-    description: 'Clase táctica de 60 minutos con un jugador de nivel 10 FACEIT. Incluye revisión de demos grabadas, posicionamiento, crosshair placement, utilidades y optimización de binds.',
+    description: 'Clase táctica de 60 minutos con un jugador de nivel 10 FACEIT. Incluye revisión de repeticiones de partidas, posicionamiento, crosshair placement, utilidades y optimización de binds.',
     features: [
       '60 minutos de análisis 1 a 1 por voz y pantalla',
-      'Revisión profunda de tus demos de CS2',
+      'Revisión profunda de repeticiones de tus partidas de CS2',
       'Guía personalizada de utilidades y setups',
       'Plan de mejora individual de puntería y juego'
     ],

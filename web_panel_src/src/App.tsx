@@ -54,7 +54,7 @@ import { LibroReclamacionesView } from './components/LibroReclamacionesView';
 import { TerminosCondicionesView } from './components/TerminosCondicionesView';
 import { DevolucionesView } from './components/DevolucionesView';
 import { ContactoView } from './components/ContactoView';
-import { DemoLoginModal } from './components/DemoLoginModal';
+import { GuiaFaceitView } from './components/GuiaFaceitView';
 
 export default function App() {
   // Authentication & Loading states
@@ -64,6 +64,7 @@ export default function App() {
   // Active Navigation View (SPA Routing compatible with Culqi requirements)
   const getInitialView = (): ActiveView => {
     const p = window.location.pathname.toLowerCase();
+    if (p.includes('guia') || p.includes('faceit')) return 'guia-faceit';
     if (p.includes('libro-de-reclamaciones') || p.includes('reclamaciones')) return 'libro-de-reclamaciones';
     if (p.includes('terminos')) return 'terminos';
     if (p.includes('devoluciones') || p.includes('reembolsos')) return 'devoluciones';
@@ -86,7 +87,6 @@ export default function App() {
   });
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [isDemoLoginOpen, setIsDemoLoginOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -108,7 +108,7 @@ export default function App() {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get('guild') || '';
   });
-  const [guildName, setGuildName] = useState('Mixton Arena');
+  const [guildName, setGuildName] = useState('MachuPeek');
 
   const getTeamName = (team: any) => {
     if (team && team.captain) {
@@ -1920,7 +1920,7 @@ export default function App() {
       {/* Subtle tech grid background to match admin web */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.012)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
 
-      {/* Global Culqi-compliant Header */}
+      {/* Global Header */}
       <Header
         activeView={activeView}
         setActiveView={handleSelectView}
@@ -1928,7 +1928,6 @@ export default function App() {
         cartTotal={cartItems.reduce((acc, i) => acc + (i.product.price * i.quantity), 0)}
         onOpenCart={() => setIsCartOpen(true)}
         currentUser={currentUser}
-        onOpenDemoLogin={() => setIsDemoLoginOpen(true)}
         onLogout={handleLogout}
       />
 
@@ -1938,6 +1937,13 @@ export default function App() {
           setActiveView={handleSelectView}
           onAddToCart={handleAddToCart}
           onBuyNow={handleBuyNow}
+          currentUser={currentUser}
+        />
+      )}
+
+      {activeView === 'guia-faceit' && (
+        <GuiaFaceitView
+          setActiveView={handleSelectView}
           currentUser={currentUser}
         />
       )}
@@ -1954,7 +1960,6 @@ export default function App() {
           currentUser={currentUser}
           onRefreshUser={handleRefreshCurrentUser}
           setActiveView={handleSelectView}
-          onOpenDemoLogin={() => setIsDemoLoginOpen(true)}
           onLogout={handleLogout}
           showToast={showToast}
         />
@@ -2006,7 +2011,7 @@ export default function App() {
                 </div>
                 <div>
                   <h2 className="text-lg font-black italic tracking-tighter uppercase leading-none text-white">
-                    SALA: <span className="text-[#FF5500]">{guildName.toUpperCase()}</span>
+                    SALA: <span className="text-[#FF5500]">MACHUPEEK</span>
                   </h2>
                   <p className="text-[9px] text-neutral-500 uppercase tracking-widest font-mono font-bold">MATCHMAKING DRAFT ARENA // LOBBY LIVE</p>
                 </div>
@@ -2021,22 +2026,6 @@ export default function App() {
                   />
                 </div>
               </div>
-
-              {/* Guild Selector for Admins */}
-              {currentUser?.isAdmin && guilds.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <select 
-                    id="guild-select" 
-                    className="bg-[#1A1A1A] border-2 border-[#2D2D2D] rounded-none px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-white cursor-pointer"
-                    value={currentGuildId}
-                    onChange={handleGuildChange}
-                  >
-                    {guilds.map(g => (
-                      <option key={g.id} value={g.id}>{g.name.toUpperCase()}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
 
               <a 
                 href="https://www.faceit.com/es/hub/52a88f17-1660-42ae-8322-76592f0c6f23/Mixtones"
@@ -3829,7 +3818,7 @@ export default function App() {
         }}
       />
 
-      {/* Checkout Modal with Culqi Integration */}
+      {/* Checkout Modal */}
       <CheckoutModal
         isOpen={isCheckoutOpen}
         onClose={() => setIsCheckoutOpen(false)}
@@ -3839,13 +3828,6 @@ export default function App() {
           setCartItems([]);
           showToast('¡Compra realizada con éxito! Comprobante emitido.', 'success');
         }}
-      />
-
-      {/* Demo Login Modal for Culqi Auditors */}
-      <DemoLoginModal
-        isOpen={isDemoLoginOpen}
-        onClose={() => setIsDemoLoginOpen(false)}
-        onLoginSuccess={handleLoginSuccess}
       />
 
       {/* Notification Toast Stack (Admin Style) */}

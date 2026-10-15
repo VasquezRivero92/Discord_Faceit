@@ -65,7 +65,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
           </h1>
 
           <p className="text-neutral-300 text-sm sm:text-base max-w-2xl leading-relaxed mb-8">
-            La plataforma líder de <strong className="text-white">Counter-Strike 2</strong> en Perú. Disfruta de partidas mixtón con anticheat oficial de FACEIT, servidores 128 tickrate en Lima, drafts balanceados por capitanes y torneos con premios en Soles (PEN).
+            La plataforma líder de <strong className="text-white">Counter-Strike 2</strong> en Perú. Disfruta de partidas mixtón exclusivamente en servidores oficiales de FACEIT con anticheat obligatorio, drafts balanceados por capitanes y torneos con premios en Soles (PEN).
           </p>
 
           {/* Action CTAs */}
@@ -104,8 +104,8 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
             <div className="p-3 bg-[#141414] border border-[#262626] flex items-center gap-3">
               <Server className="w-6 h-6 text-[#FF5500] shrink-0" />
               <div>
-                <span className="text-white font-bold block">128 TICKRATE</span>
-                <span className="text-[10px] text-neutral-400">Servidores en Lima (15ms)</span>
+                <span className="text-white font-bold block">SERVIDORES FACEIT</span>
+                <span className="text-[10px] text-neutral-400">Oficiales de bajo ping</span>
               </div>
             </div>
 
@@ -201,7 +201,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-[#222] text-[10px] font-mono text-neutral-500 uppercase">
-              128 Tick / Anticheat Activo
+              Oficial FACEIT / Anticheat Obligatorio
             </div>
           </div>
 
@@ -261,9 +261,13 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
               <p className="text-neutral-400 text-[11px] leading-relaxed font-sans mb-3">
                 En el canal de Discord escribe el comando <code>/verificar_fc</code> con tu nickname para sincronizar tu nivel y roles.
               </p>
-              <span className="text-emerald-400 font-bold block text-[10px]">
-                Sincronización automática
-              </span>
+              <button
+                type="button"
+                onClick={() => setActiveView('guia-faceit')}
+                className="text-[#FF5500] hover:underline font-bold text-[10px] block cursor-pointer"
+              >
+                Ver Guía de Vinculación →
+              </button>
             </div>
 
             <div className="p-5 bg-[#141414] border-2 border-[#262626] relative">
@@ -296,6 +300,30 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
               </button>
             </div>
 
+          </div>
+
+          {/* Banner Guía FACEIT & Anticheat */}
+          <div className="mt-8 p-5 bg-[#141414] border-2 border-[#FF5500]/60 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#FF5500]/20 border border-[#FF5500] flex items-center justify-center text-[#FF5500] shrink-0">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white uppercase">
+                  PARTIDAS 100% EN FACEIT CON ANTICHEAT OBLIGATORIO
+                </h4>
+                <p className="text-neutral-400 text-xs font-sans mt-0.5">
+                  Los mixtones son exclusivos de MachuPeek. Consulta nuestra guía para vincular tu Discord con FACEIT.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveView('guia-faceit')}
+              className="px-5 py-2.5 bg-[#FF5500] hover:bg-[#FF7733] text-white text-xs font-black uppercase tracking-wider shrink-0 cursor-pointer shadow-lg transition-all"
+            >
+              Ver Guía de Vinculación →
+            </button>
           </div>
         </div>
       </section>

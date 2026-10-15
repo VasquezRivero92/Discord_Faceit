@@ -147,7 +147,7 @@ export function createLobbyRouter(client, db, config, wss) {
     const readyPlayers = allReadyPlayers.filter(p => p.mixton_guild_id === effectiveGuildId);
 
     const guild = client.guilds.cache.get(effectiveGuildId) || await client.guilds.fetch(effectiveGuildId).catch(() => null);
-    const guildName = guild ? guild.name : 'Mixton Arena';
+    const guildName = 'MachuPeek';
 
     // Encontrar todos los discordIds ocupados
     const occupiedIds = new Set();
@@ -310,14 +310,10 @@ export function createLobbyRouter(client, db, config, wss) {
       if (!isAllowed) {
         return res.status(403).json({ error: 'Se requieren permisos de administrador.' });
       }
-      let guilds = client.guilds.cache.map(g => ({
-        id: g.id,
-        name: g.name
-      }));
-
-      if (req.user?.role === 'admin') {
-        guilds = guilds.filter(g => g.id === req.user.servidor);
-      }
+      let guilds = [{
+        id: DISCORD_GUILD_ID,
+        name: 'MachuPeek'
+      }];
 
       res.json({ guilds });
     } catch (err) {

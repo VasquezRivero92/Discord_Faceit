@@ -1438,16 +1438,12 @@ export function createApiRouter(client, db, config) {
   // --- Servidores (Guilds) ---
   router.get('/guilds', requireAuth, async (req, res) => {
     try {
-      let guilds = client.guilds.cache.map(g => ({
-        id: g.id,
-        name: g.name,
-        icon: g.iconURL() || null,
-        memberCount: g.memberCount
-      }));
-
-      if (req.user?.role === 'admin') {
-        guilds = guilds.filter(g => g.id === req.user.servidor);
-      }
+      let guilds = [{
+        id: DISCORD_GUILD_ID || '1472731390675255410',
+        name: 'MachuPeek',
+        icon: null,
+        memberCount: 0
+      }];
 
       res.json({ guilds });
     } catch (err) {

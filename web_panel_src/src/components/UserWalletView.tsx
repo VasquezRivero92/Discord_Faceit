@@ -24,7 +24,6 @@ interface UserWalletViewProps {
   currentUser: CurrentUser | null;
   onRefreshUser: () => Promise<void>;
   setActiveView: (view: ActiveView) => void;
-  onOpenDemoLogin: () => void;
   onLogout: () => void;
   showToast: (text: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -35,7 +34,6 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
   currentUser,
   onRefreshUser,
   setActiveView,
-  onOpenDemoLogin,
   onLogout,
   showToast
 }) => {
@@ -146,53 +144,29 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
             </p>
           </div>
 
-          {/* Action Login Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto mb-10">
+          {/* Action Login: Discord OAuth2 */}
+          <div className="max-w-md mx-auto mb-10">
             {/* Discord Login Option */}
-            <div className="bg-[#181818] border-2 border-[#2E2E2E] hover:border-[#5865F2] p-6 flex flex-col justify-between transition-all group">
-              <div>
-                <div className="w-12 h-12 bg-[#5865F2]/20 border border-[#5865F2] flex items-center justify-center text-[#5865F2] mb-4 group-hover:scale-105 transition-transform">
-                  <User className="w-6 h-6" />
+            <div className="bg-[#181818] border-2 border-[#2E2E2E] hover:border-[#5865F2] p-8 flex flex-col justify-between transition-all group shadow-xl">
+              <div className="text-center">
+                <div className="w-14 h-14 bg-[#5865F2]/20 border-2 border-[#5865F2] flex items-center justify-center text-[#5865F2] mb-4 mx-auto group-hover:scale-105 transition-transform">
+                  <User className="w-7 h-7" />
                 </div>
-                <h3 className="text-sm font-black uppercase text-white mb-1">
+                <h3 className="text-base font-black uppercase text-white mb-2">
                   Jugadores de la Comunidad
                 </h3>
-                <p className="text-[11px] text-neutral-400 font-sans leading-relaxed mb-6">
-                  Conexión directa mediante OAuth2 de Discord. Vincula automáticamente tu rol, ELO y estadísticas en los servidores de MachuPeek.
+                <p className="text-xs text-neutral-400 font-sans leading-relaxed mb-6">
+                  Conexión segura mediante OAuth2 oficial de Discord. Vincula automáticamente tu perfil, rango, ELO de FACEIT y saldo en MachuPeek.
                 </p>
               </div>
 
               <a
                 href="/auth/discord"
-                className="w-full py-3 bg-[#5865F2] hover:bg-[#4752C4] border border-[#5865F2] text-white text-xs font-black uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-lg transition-all"
+                className="w-full py-3.5 bg-[#5865F2] hover:bg-[#4752C4] border border-[#5865F2] text-white text-xs font-black uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-lg transition-all"
               >
                 <span>Conectar con Discord</span>
                 <ArrowRight className="w-4 h-4" />
               </a>
-            </div>
-
-            {/* Demo Login Option */}
-            <div className="bg-[#181818] border-2 border-[#2E2E2E] hover:border-[#FF5500] p-6 flex flex-col justify-between transition-all group">
-              <div>
-                <div className="w-12 h-12 bg-[#FF5500]/20 border border-[#FF5500] flex items-center justify-center text-[#FF5500] mb-4 group-hover:scale-105 transition-transform">
-                  <KeyRound className="w-6 h-6" />
-                </div>
-                <h3 className="text-sm font-black uppercase text-white mb-1">
-                  Acceso de Prueba (Demo)
-                </h3>
-                <p className="text-[11px] text-neutral-400 font-sans leading-relaxed mb-6">
-                  Credenciales de demostración de prueba para la verificación técnica y revisión de funcionalidades.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={onOpenDemoLogin}
-                className="w-full py-3 bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] text-white text-xs font-black uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
-              >
-                <span>Acceso Auditor / Demo</span>
-                <KeyRound className="w-4 h-4" />
-              </button>
             </div>
           </div>
 
@@ -210,8 +184,8 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
             </div>
             <div className="p-3 bg-[#161616] border border-[#262626]">
               <Gamepad2 className="w-5 h-5 text-cyan-400 mx-auto mb-1.5" />
-              <div className="text-[11px] font-bold text-white uppercase">CS2 128 Tickrate</div>
-              <div className="text-[10px] text-neutral-400 font-sans">Servidores en Lima con anticheat oficial FACEIT</div>
+              <div className="text-[11px] font-bold text-white uppercase">Servidores FACEIT</div>
+              <div className="text-[10px] text-neutral-400 font-sans">Partidas con anticheat oficial obligatorio de FACEIT</div>
             </div>
           </div>
         </div>

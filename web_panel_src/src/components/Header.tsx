@@ -10,7 +10,8 @@ import {
   Trophy, 
   Store,
   PhoneCall,
-  FileText
+  FileText,
+  BookOpen
 } from 'lucide-react';
 import { ActiveView, CurrentUser } from '../types';
 
@@ -21,7 +22,6 @@ interface HeaderProps {
   cartTotal: number;
   onOpenCart: () => void;
   currentUser: CurrentUser | null;
-  onOpenDemoLogin: () => void;
   onLogout: () => void;
 }
 
@@ -32,7 +32,6 @@ export const Header: React.FC<HeaderProps> = ({
   cartTotal,
   onOpenCart,
   currentUser,
-  onOpenDemoLogin,
   onLogout
 }) => {
   return (
@@ -54,19 +53,9 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="flex items-center gap-3 ml-auto">
-          <span className="text-[10px] text-neutral-400 hidden lg:inline">
+          <span className="text-[10px] text-neutral-400">
             Atención al cliente: <strong className="text-white">+51 949 165 677</strong>
           </span>
-          {!currentUser && (
-            <button
-              type="button"
-              onClick={onOpenDemoLogin}
-              className="text-[10px] bg-[#FF5500]/15 hover:bg-[#FF5500] text-[#FF5500] hover:text-white px-2.5 py-0.5 border border-[#FF5500]/40 font-mono font-bold uppercase transition-all flex items-center gap-1 cursor-pointer"
-              title="Credenciales de prueba para revisión"
-            >
-              <KeyRound className="w-3 h-3" /> Acceso Auditor (Demo)
-            </button>
-          )}
         </div>
       </div>
 
@@ -124,6 +113,19 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Trophy className="w-3.5 h-3.5 text-[#FF5500]" />
             <span>El Mixtón</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveView('guia-faceit')}
+            className={`px-3 py-1.5 border transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeView === 'guia-faceit'
+                ? 'bg-[#FF5500] text-white border-[#FF5500] shadow-sm'
+                : 'bg-[#161616] text-neutral-300 border-[#262626] hover:border-[#FF5500] hover:text-white'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5 text-[#FF5500]" />
+            <span>Guía FACEIT</span>
           </button>
 
           <button

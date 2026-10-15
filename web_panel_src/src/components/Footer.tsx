@@ -30,7 +30,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
             </p>
             <div className="text-[11px] font-mono text-neutral-400 space-y-1">
               <div><strong className="text-white">Modalidad:</strong> Plataforma Digital Online</div>
-              <div><strong className="text-white">Servidores:</strong> CS2 128 Tickrate en Lima</div>
+              <div><strong className="text-white">Servidores:</strong> Oficiales FACEIT con Anticheat</div>
             </div>
           </div>
 

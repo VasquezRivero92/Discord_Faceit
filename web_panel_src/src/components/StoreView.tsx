@@ -10,7 +10,7 @@ export const INITIAL_PRODUCTS: StoreProduct[] = [
     price: 5.00,
     currency: 'PEN',
     badge: 'Más Vendido',
-    description: 'Pase de acceso individual válido para 1 jornada completa de torneos Mixtón en servidores de 128 tickrate con anticheat FACEIT. Emparejamiento balanceado por Tiers competitivos (S, A, B, C) y registro oficial de estadísticas en el portal.',
+    description: 'Pase de acceso individual válido para 1 jornada completa de torneos Mixtón en servidores oficiales con anticheat FACEIT. Emparejamiento balanceado por Tiers competitivos (S, A, B, C) y registro oficial de estadísticas en el portal.',
     features: [
       'Acceso a todas las partidas clasificatorias de la fecha',
       'Servidores dedicados de bajo ping ubicados en Lima',
@@ -90,15 +90,15 @@ export const INITIAL_PRODUCTS: StoreProduct[] = [
   },
   {
     id: 'prod_coaching_1h',
-    name: 'Sesión de Coaching Táctico & Demo Review (1 Hora)',
+    name: 'Sesión de Coaching Táctico & Análisis de Partidas (1 Hora)',
     category: 'Entrenamiento',
     price: 40.00,
     currency: 'PEN',
     badge: 'Masterclass',
-    description: 'Clase táctica individual de 60 minutos con un analista o jugador de nivel 10 FACEIT. Incluye revisión profunda de tus grabaciones (demos), corrección de posicionamiento, mira, utilidades y optimización de configuraciones.',
+    description: 'Clase táctica individual de 60 minutos con un analista o jugador de nivel 10 FACEIT. Incluye revisión profunda de tus grabaciones y repeticiones oficiales, corrección de posicionamiento, mira, utilidades y optimización de configuraciones.',
     features: [
       '60 minutos de sesión individual por voz y pantalla compartida',
-      'Análisis cuadro a cuadro de 2 demos de tus partidas',
+      'Análisis cuadro a cuadro de 2 repeticiones de tus partidas',
       'Guía estratégica de utilidades (humos, flashes, molotovs)',
       'Plan individual de práctica y entrenamiento de puntería',
       'Documento de resumen con recomendaciones clave'
@@ -151,7 +151,7 @@ export const StoreView: React.FC<StoreViewProps> = ({ onAddToCart, onBuyNow }) =
               <Sparkles className="w-3.5 h-3.5 text-[#A855F7]" /> Yape Automático
             </div>
             <div className="flex items-center gap-1.5 bg-[#1F1F1F] p-2 border border-[#333]">
-              <Award className="w-3.5 h-3.5 text-amber-400" /> Servidores 128 Tick
+              <Award className="w-3.5 h-3.5 text-amber-400" /> Servidores FACEIT
             </div>
           </div>
         </div>

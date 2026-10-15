@@ -150,5 +150,6 @@ export type ActiveView =
   | 'terminos'
   | 'devoluciones'
   | 'libro-de-reclamaciones'
-  | 'contacto';
+  | 'contacto'
+  | 'guia-faceit';
 

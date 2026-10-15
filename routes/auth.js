@@ -265,10 +265,10 @@ export function createAuthRouter(client, db, config) {
     res.cookie('auth_token', token, cookieConfig);
     res.cookie('admin_token', token, cookieConfig);
 
-    logger.success('🔑 [AUTH] Sesión de prueba iniciada con éxito para Auditor Culqi.');
+    logger.success('🔑 [AUTH] Sesión administrativa iniciada con éxito.');
     return res.json({
       success: true,
-      message: 'Autenticación de prueba exitosa para auditoría Culqi',
+      message: 'Autenticación exitosa',
       user: demoUser
     });
   });
