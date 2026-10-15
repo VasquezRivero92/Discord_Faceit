@@ -29,6 +29,24 @@ export function verifyAdminToken(secret) {
   };
 }
 
+export function optionalUserToken(secret) {
+  return (req, res, next) => {
+    const token = req.cookies?.auth_token || req.cookies?.admin_token;
+    if (!token) {
+      req.user = null;
+      return next();
+    }
+
+    try {
+      const decoded = jwt.verify(token, secret);
+      req.user = decoded;
+    } catch {
+      req.user = null;
+    }
+    next();
+  };
+}
+
 export function verifyUserToken(secret) {
   return (req, res, next) => {
     const token = req.cookies?.auth_token || req.cookies?.admin_token;

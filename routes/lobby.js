@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import admin from 'firebase-admin';
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { verifyUserToken } from '../middleware/auth.js';
+import { verifyUserToken, optionalUserToken } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
 import { getEffectiveConfig, getEffectiveConfigForGuild } from '../config/index.js';
 import { updateLivePanel } from '../services/matchMessages.js';
@@ -19,6 +19,7 @@ export function createLobbyRouter(client, db, config, wss) {
   const router = Router();
   const { ADMIN_JWT_SECRET, DISCORD_GUILD_ID } = config;
   const requireAuth = verifyUserToken(ADMIN_JWT_SECRET);
+  const optionalAuth = optionalUserToken(ADMIN_JWT_SECRET);
 
   // Middleware to attach guildId to req
   router.use((req, res, next) => {
@@ -652,8 +653,8 @@ export function createLobbyRouter(client, db, config, wss) {
   // --- ENDPOINTS MIXTON COMPETITIVO ---
   // ==========================================
 
-  // 1. Obtener estado del lobby mixton, jugadores disponibles y Tiers
-  router.get('/mixton-state', requireAuth, verifyGuildAccess, async (req, res) => {
+  // 1. Obtener estado del lobby mixton, jugadores disponibles y Tiers (Público / Espectadores y Jugadores)
+  router.get('/mixton-state', optionalAuth, async (req, res) => {
     try {
       const { state, availablePlayers, commandEnabled, guildName, guildId } = await getLobbyData(req.guildId);
       
@@ -663,12 +664,12 @@ export function createLobbyRouter(client, db, config, wss) {
         commandEnabled,
         guildName,
         guildId,
-        currentUser: {
+        currentUser: req.user ? {
           userId: req.user.userId,
           username: req.user.username,
           avatar: req.user.avatar || null,
           isAdmin: req.user.role === 'global_admin' || req.user.role === 'admin' || req.user.isAdmin === true
-        }
+        } : null
       });
     } catch (err) {
       logger.error('Error al obtener estado mixton:', err);
@@ -1802,8 +1803,8 @@ export function createLobbyRouter(client, db, config, wss) {
     }
   });
 
-  // --- Obtener historial de partidas para el lobby mixton ---
-  router.get('/matches-history', requireAuth, verifyGuildAccess, async (req, res) => {
+  // --- Obtener historial de partidas para el lobby mixton (Público / Espectadores y Jugadores) ---
+  router.get('/matches-history', optionalAuth, async (req, res) => {
     try {
       const limit = parseInt(req.query.limit) || 10;
       const targetGuildId = req.guildId || DISCORD_GUILD_ID;

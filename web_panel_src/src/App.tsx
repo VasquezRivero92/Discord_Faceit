@@ -475,6 +475,10 @@ export default function App() {
 
   // Check Session with Server on Mount
   useEffect(() => {
+    // Fetch live state and matches history immediately for all visitors (guests & logged in)
+    fetchState();
+    fetchHistory();
+
     const checkAuth = async () => {
       try {
         const res = await fetch('/api/lobby/me');
@@ -1911,23 +1915,6 @@ export default function App() {
 
   const captainEligiblePlayers = getCaptainEligiblePlayers();
 
-  if (authChecking) {
-    return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center p-4 relative overflow-hidden">
-        {/* Subtle grid background */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
-        
-        <div className="w-full max-w-sm p-10 bg-[#111] rounded-none border-4 border-[#1A1A1A] shadow-2xl text-center relative z-10">
-          <div className="w-12 h-12 bg-white text-black mx-auto flex items-center justify-center shadow-lg mb-6 rotate-3">
-            <Gamepad2 className="w-6 h-6 animate-pulse" />
-          </div>
-          <h2 className="text-xl font-black italic tracking-tighter uppercase text-white mb-2">AUTENTICANDO</h2>
-          <p className="text-[10px] text-neutral-500 uppercase tracking-widest font-mono font-bold">Comprobando sesión con Discord...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white font-sans flex flex-col relative overflow-y-auto">
       {/* Subtle tech grid background to match admin web */}
@@ -1989,42 +1976,29 @@ export default function App() {
         <ContactoView />
       )}
 
-      {/* Arena / Mixton View: requires login, or shows demo/discord gate */}
+      {/* Arena / Mixton View: libre acceso para espectadores y jugadores */}
       {(activeView === 'arena' || activeView === 'mixton') && (
-        !currentUser ? (
-          <div className="max-w-xl mx-auto my-16 p-8 bg-[#121212] border-2 border-[#2C2C2C] text-center shadow-2xl font-mono relative z-10">
-            <div className="w-16 h-16 bg-[#FF5500]/15 border-2 border-[#FF5500] flex items-center justify-center mx-auto text-[#FF5500] mb-4">
-              <Gamepad2 className="w-8 h-8" />
-            </div>
-            <h2 className="text-2xl font-black italic tracking-tighter uppercase text-white mb-2">
-              ARENA DE MATCHMAKING & DRAFTS
-            </h2>
-            <p className="text-xs text-neutral-400 mb-6 leading-relaxed font-sans">
-              Esta sección interactiva permite a los capitanes seleccionar jugadores en tiempo real por tiers y lanzar servidores 128 tickrate en FACEIT. Para acceder, inicia sesión con tu cuenta de Discord o usa las credenciales de demostración asignadas a los auditores de Culqi.
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <>
+          {/* Aviso para espectadores no autenticados */}
+          {!currentUser && (
+            <div className="bg-[#141414] border-b border-[#2C2C2C] px-6 py-2.5 text-xs font-mono text-neutral-300 flex flex-wrap items-center justify-between gap-3 relative z-10 shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
+                <span>
+                  <strong className="text-white">Modo Espectador en Vivo:</strong> Estás visualizando la sala del Mixtón y los drafts en tiempo real. Para participar como jugador o recargar saldo, accede a tu cuenta.
+                </span>
+              </div>
               <button
                 type="button"
-                onClick={() => setIsDemoLoginOpen(true)}
-                className="px-6 py-3 bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] text-white text-xs font-black uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                onClick={() => setActiveView('login')}
+                className="px-3.5 py-1 bg-[#742284] hover:bg-[#8B2FA0] border border-[#A855F7]/60 text-white text-[11px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
               >
-                <KeyRound className="w-4 h-4" />
-                <span>Acceso Auditor Culqi (Demo)</span>
+                <span>Entrar a Mi Cuenta</span>
               </button>
-
-              <a
-                href="/auth/discord"
-                className="px-6 py-3 bg-[#5865F2] hover:bg-[#4752C4] border border-[#5865F2] text-white text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 shadow-lg"
-              >
-                <Users className="w-4 h-4" />
-                <span>Conectar con Discord</span>
-              </a>
             </div>
-          </div>
-        ) : (
-          <>
-            {/* Arena Subheader Bar */}
+          )}
+
+          {/* Arena Subheader Bar */}
             <div className="border-b-2 border-[#1A1A1A] bg-[#111] px-6 py-3 flex flex-col md:flex-row justify-between items-center gap-4 relative z-10 shadow-md">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-white text-black flex items-center justify-center font-bold rotate-3 shadow-md">
@@ -3835,8 +3809,7 @@ export default function App() {
         </div>
       )}
 
-          </>
-        )
+        </>
       )}
 
       {/* Global Culqi-compliant Footer */}
