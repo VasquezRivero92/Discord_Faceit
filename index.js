@@ -337,6 +337,21 @@ app.get(publicSpaRoutes, (req, res) => {
   res.sendFile(new URL('public/index.html', import.meta.url).pathname);
 });
 
+// Fallback universal para SPA: cualquier ruta GET no de API ni Admin devuelve index.html
+app.get('*', (req, res, next) => {
+  if (
+    req.path.startsWith('/api') ||
+    req.path.startsWith('/auth') ||
+    req.path.startsWith('/admin') ||
+    req.path.startsWith('/webhook') ||
+    req.path.startsWith('/webhooks')
+  ) {
+    return next();
+  }
+  res.setHeader('Cache-Control', 'no-cache, private');
+  res.sendFile(new URL('public/index.html', import.meta.url).pathname);
+});
+
 const server = app.listen(env.PORT, '0.0.0.0', () => {
   logger.success(`Servidor Express escuchando en http://0.0.0.0:${env.PORT}`);
   // Iniciar el Bot de Steam en el mismo proceso
