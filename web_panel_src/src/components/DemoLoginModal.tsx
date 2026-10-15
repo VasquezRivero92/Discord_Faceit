@@ -13,7 +13,7 @@ export const DemoLoginModal: React.FC<DemoLoginModalProps> = ({
   onClose,
   onLoginSuccess
 }) => {
-  const [username, setUsername] = useState('auditor@culqi.com');
+  const [username, setUsername] = useState('demo@machupeek.com');
   const [password, setPassword] = useState('DemoMixton2026');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -56,7 +56,7 @@ export const DemoLoginModal: React.FC<DemoLoginModalProps> = ({
           <div className="flex items-center gap-2">
             <KeyRound className="w-5 h-5 text-[#FF5500]" />
             <h3 className="text-sm font-mono font-black uppercase text-white tracking-wider">
-              CREDENCIALES DE PRUEBA // AUDITOR CULQI
+              CREDENCIALES DE PRUEBA // ACCESO DEMO
             </h3>
           </div>
           <button
@@ -73,10 +73,10 @@ export const DemoLoginModal: React.FC<DemoLoginModalProps> = ({
           <div className="bg-[#1E140C] border border-[#FF5500]/40 p-3 text-[11px] text-amber-200 space-y-1">
             <div className="font-bold flex items-center gap-1.5 text-white">
               <ShieldCheck className="w-4 h-4 text-[#FF5500]" />
-              <span>REQUISITO DE HOMOLOGACIÓN CULQI</span>
+              <span>ENTORNO DE PRUEBAS Y REVISIÓN</span>
             </div>
             <p className="text-neutral-300 leading-relaxed">
-              En cumplimiento del lineamiento oficial de Culqi ("En caso el flujo solicite acceso con credenciales, debes proporcionarnos un usuario y contraseña de prueba"), estas credenciales permiten auditar el entorno completo de torneos y draft arena.
+              Estas credenciales permiten revisar y auditar el entorno completo de la plataforma, billetera de jugador y sala de torneos.
             </p>
           </div>
 
@@ -88,7 +88,7 @@ export const DemoLoginModal: React.FC<DemoLoginModalProps> = ({
             <div className="flex justify-between items-center text-xs">
               <span className="text-neutral-400">Usuario / Correo:</span>
               <strong className="text-white font-mono bg-[#111] px-2 py-0.5 border border-[#333]">
-                auditor@culqi.com
+                demo@machupeek.com
               </strong>
             </div>
             <div className="flex justify-between items-center text-xs">
@@ -141,10 +141,10 @@ export const DemoLoginModal: React.FC<DemoLoginModalProps> = ({
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Autenticando Auditor...</span>
+                  <span>Autenticando...</span>
                 </>
               ) : (
-                <span>Ingresar como Auditor Culqi (1 Clic)</span>
+                <span>Ingresar a Cuenta Demo (1 Clic)</span>
               )}
             </button>
           </form>

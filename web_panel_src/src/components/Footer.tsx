@@ -29,14 +29,12 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
               Comunidad peruana de Counter-Strike 2 y plataforma competitiva Mixtón en FACEIT. Brindamos servicios competitivos, matchmaking por tiers, membresías VIP y recarga de créditos gamer en Soles (PEN).
             </p>
             <div className="text-[11px] font-mono text-neutral-400 space-y-1">
-              <div><strong className="text-white">Comunidad:</strong> MachuPeek Esports Perú</div>
-              <div><strong className="text-white">Razón Social:</strong> Mixton Arena E.I.R.L.</div>
-              <div><strong className="text-white">RUC:</strong> 20608934125</div>
-              <div><strong className="text-white">País:</strong> Perú</div>
+              <div><strong className="text-white">Modalidad:</strong> Plataforma Digital Online</div>
+              <div><strong className="text-white">Servidores:</strong> CS2 128 Tickrate en Lima</div>
             </div>
           </div>
 
-          {/* Column 2: Contacto y Horarios (Requisito Culqi) */}
+          {/* Column 2: Contacto y Horarios */}
           <div>
             <h4 className="text-white font-mono font-bold uppercase tracking-wider text-xs border-b border-[#222] pb-2 mb-3 flex items-center gap-1.5">
               <Phone className="w-3.5 h-3.5 text-[#FF5500]" /> Datos de Contacto
@@ -46,15 +44,15 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
                 <MapPin className="w-4 h-4 text-[#FF5500] shrink-0 mt-0.5" />
                 <span>
                   <strong className="text-white block">Dirección Fiscal / Atención:</strong>
-                  Av. Los Conquistadores 1144, San Isidro, Lima 15073, Perú
+                  Online
                 </span>
               </li>
               <li className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span>
                   <strong className="text-white">Teléfono / WhatsApp:</strong>{' '}
-                  <a href="https://wa.me/51924812739" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">
-                    +51 924 812 739
+                  <a href="https://wa.me/51949165677" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">
+                    +51 949 165 677
                   </a>
                 </span>
               </li>
@@ -62,8 +60,8 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
                 <Mail className="w-4 h-4 text-[#0088FF] shrink-0" />
                 <span>
                   <strong className="text-white">Correo:</strong>{' '}
-                  <a href="mailto:soporte@apphub.wisp.uno" className="text-[#0088FF] hover:underline">
-                    soporte@apphub.wisp.uno
+                  <a href="mailto:machupeek@gmail.com" className="text-[#0088FF] hover:underline">
+                    machupeek@gmail.com
                   </a>
                 </span>
               </li>
@@ -141,7 +139,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
                   FACEIT Hub <ExternalLink className="w-2.5 h-2.5" />
                 </a>
                 <a
-                  href="https://discord.gg/vKj45F6e"
+                  href="https://discord.gg/xsWwaNjQ"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-2 py-1 bg-[#1A1A1A] border border-[#333] hover:border-[#5865F2] text-neutral-300 hover:text-white text-[10px] font-mono flex items-center gap-1 transition-all"
@@ -157,7 +155,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
                   Steam <ExternalLink className="w-2.5 h-2.5" />
                 </a>
                 <a
-                  href="https://wa.me/51924812739"
+                  href="https://wa.me/51949165677"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-2 py-1 bg-[#1A1A1A] border border-[#333] hover:border-emerald-500 text-neutral-300 hover:text-white text-[10px] font-mono flex items-center gap-1 transition-all"
@@ -168,7 +166,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
             </div>
           </div>
 
-          {/* Column 4: Libro de Reclamaciones INDECOPI (Requisito estricto Culqi) */}
+          {/* Column 4: Libro de Reclamaciones INDECOPI */}
           <div className="bg-[#121212] border-2 border-[#1E3A5F] p-4 text-center flex flex-col justify-between">
             <div>
               <div className="w-12 h-12 mx-auto mb-2 bg-[#0088FF]/10 border border-[#0088FF]/40 rounded-full flex items-center justify-center text-[#0088FF]">
@@ -203,14 +201,14 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
             </span>
             <span className="text-neutral-600">|</span>
             <span className="flex items-center gap-1">
-              Pasarela de Pago Segura: <strong className="text-white font-mono">Culqi</strong>
+              Pasarela de Pago Segura: <strong className="text-white font-mono">Yape & Tarjetas</strong>
             </span>
             <span className="text-neutral-600">|</span>
             <span className="text-[#A855F7] font-bold font-mono">Yape Automático</span>
           </div>
 
           <div className="text-[10px] text-neutral-500 font-mono text-center sm:text-right">
-            © {new Date().getFullYear()} MachuPeek Esports - Mixton Arena E.I.R.L. Todos los derechos reservados.
+            © {new Date().getFullYear()} MachuPeek. Todos los derechos reservados.
           </div>
         </div>
       </div>

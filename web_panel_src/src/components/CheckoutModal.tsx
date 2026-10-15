@@ -94,7 +94,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setSuccessReceipt(data);
       onPurchaseSuccess();
     } catch (err: any) {
-      setErrorMessage(err.message || 'No se pudo completar el pago con Culqi. Intenta nuevamente.');
+      setErrorMessage(err.message || 'No se pudo completar el pago. Intenta nuevamente.');
     } finally {
       setIsSubmitting(false);
     }
@@ -113,7 +113,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-emerald-400" />
             <h3 className="text-sm font-mono font-black uppercase text-white tracking-wider">
-              CHECKOUT SEGURO // PASARELA CULQI
+              CHECKOUT SEGURO // PAGO EN LÍNEA
             </h3>
           </div>
           <button
@@ -279,7 +279,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               {/* Payment Methods */}
               <div className="space-y-3">
                 <h4 className="text-xs font-mono font-bold uppercase text-neutral-300 border-b border-[#222] pb-1">
-                  2. Método de Pago (Pasarela Culqi)
+                  2. Método de Pago (Yape o Tarjeta)
                 </h4>
 
                 <div className="grid grid-cols-2 gap-2 font-mono">
@@ -429,7 +429,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Procesando con Culqi...</span>
+                      <span>Procesando pago...</span>
                     </>
                   ) : (
                     <span>

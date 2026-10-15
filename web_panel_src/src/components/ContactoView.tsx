@@ -46,7 +46,7 @@ export const ContactoView: React.FC = () => {
                   <MapPin className="w-5 h-5 text-[#FF5500] shrink-0 mt-0.5" />
                   <div>
                     <strong className="text-white block">Dirección Fiscal y Atención:</strong>
-                    Av. Los Conquistadores 1144, San Isidro, Lima 15073, Perú
+                    Online
                   </div>
                 </div>
 
@@ -55,12 +55,12 @@ export const ContactoView: React.FC = () => {
                   <div>
                     <strong className="text-white block">Teléfono / WhatsApp de Soporte:</strong>
                     <a
-                      href="https://wa.me/51924812739"
+                      href="https://wa.me/51949165677"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-emerald-400 hover:underline flex items-center gap-1 font-bold"
                     >
-                      +51 924 812 739 <ExternalLink className="w-3 h-3" />
+                      +51 949 165 677 <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
                 </div>
@@ -69,8 +69,8 @@ export const ContactoView: React.FC = () => {
                   <Mail className="w-5 h-5 text-[#0088FF] shrink-0" />
                   <div>
                     <strong className="text-white block">Correo Electrónico de Contacto:</strong>
-                    <a href="mailto:soporte@apphub.wisp.uno" className="text-[#0088FF] hover:underline font-bold">
-                      soporte@apphub.wisp.uno
+                    <a href="mailto:machupeek@gmail.com" className="text-[#0088FF] hover:underline font-bold">
+                      machupeek@gmail.com
                     </a>
                   </div>
                 </div>
@@ -85,13 +85,12 @@ export const ContactoView: React.FC = () => {
               </div>
 
               <div className="pt-3 border-t border-[#2A2A2A] text-[11px] text-neutral-400 space-y-1">
-                <div><strong>Razón Social:</strong> Mixton Arena E.I.R.L.</div>
-                <div><strong>RUC:</strong> 20608934125</div>
-                <div><strong>Registro de Comercio:</strong> Lima, Perú</div>
+                <div><strong>Plataforma:</strong> MachuPeek CS2 Perú</div>
+                <div><strong>Atención al Usuario:</strong> Canal Oficial Online & WhatsApp</div>
               </div>
             </div>
 
-            {/* Official Social Links (Requisito estricto Culqi: Redes reales correspondientes) */}
+            {/* Official Social Links */}
             <div className="bg-[#181818] border border-[#2D2D2D] p-5 space-y-3 font-mono text-xs">
               <h3 className="text-sm font-black uppercase text-white border-b border-[#2A2A2A] pb-2">
                 Canales Oficiales
@@ -102,7 +101,7 @@ export const ContactoView: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                 <a
-                  href="https://discord.gg/vKj45F6e"
+                  href="https://discord.gg/xsWwaNjQ"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-2.5 bg-[#5865F2]/10 border border-[#5865F2]/40 hover:bg-[#5865F2] hover:text-white text-neutral-200 transition-all flex items-center justify-between"
@@ -132,7 +131,7 @@ export const ContactoView: React.FC = () => {
                 </a>
 
                 <a
-                  href="https://wa.me/51924812739"
+                  href="https://wa.me/51949165677"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-2.5 bg-emerald-900/20 border border-emerald-500/40 hover:bg-emerald-600 hover:text-white text-neutral-200 transition-all flex items-center justify-between"
@@ -246,7 +245,7 @@ export const ContactoView: React.FC = () => {
         {/* Footer Seal */}
         <div className="pt-6 border-t border-[#2C2C2C] flex items-center gap-2 text-xs font-mono text-emerald-400">
           <ShieldCheck className="w-5 h-5" />
-          <span>Información de contacto verificada de conformidad con los requisitos de la pasarela Culqi.</span>
+          <span>Información de contacto y atención al cliente verificada. Canal de atención 100% online.</span>
         </div>
       </div>
     </div>

@@ -108,7 +108,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
       setOtp('');
       await onRefreshUser();
     } catch (err: any) {
-      showToast(err.message || 'Error al conectar con la pasarela Culqi', 'error');
+      showToast(err.message || 'Error al conectar con la pasarela de pagos', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -142,7 +142,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
             </h1>
             
             <p className="text-xs sm:text-sm text-neutral-400 leading-relaxed font-sans">
-              Para recargar saldo con <strong>Culqi / Yape</strong>, consultar tu historial de transacciones y unirte a los lobbies competitivos de CS2, conecta tu cuenta de Discord.
+              Para recargar saldo con <strong>Yape</strong>, consultar tu historial de transacciones y unirte a los lobbies competitivos de CS2, conecta tu cuenta de Discord.
             </p>
           </div>
 
@@ -171,17 +171,17 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
               </a>
             </div>
 
-            {/* Culqi Auditor / Demo Login Option */}
+            {/* Demo Login Option */}
             <div className="bg-[#181818] border-2 border-[#2E2E2E] hover:border-[#FF5500] p-6 flex flex-col justify-between transition-all group">
               <div>
                 <div className="w-12 h-12 bg-[#FF5500]/20 border border-[#FF5500] flex items-center justify-center text-[#FF5500] mb-4 group-hover:scale-105 transition-transform">
                   <KeyRound className="w-6 h-6" />
                 </div>
                 <h3 className="text-sm font-black uppercase text-white mb-1">
-                  Auditor / Revisor Culqi
+                  Acceso de Prueba (Demo)
                 </h3>
                 <p className="text-[11px] text-neutral-400 font-sans leading-relaxed mb-6">
-                  Credenciales de demostración de prueba (<code className="text-[#FF5500]">auditor@culqi.com</code>) para la verificación de conformidad técnica y pasarela.
+                  Credenciales de demostración de prueba para la verificación técnica y revisión de funcionalidades.
                 </p>
               </div>
 
@@ -190,7 +190,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                 onClick={onOpenDemoLogin}
                 className="w-full py-3 bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] text-white text-xs font-black uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
               >
-                <span>Acceso Auditor Demo</span>
+                <span>Acceso Auditor / Demo</span>
                 <KeyRound className="w-4 h-4" />
               </button>
             </div>
@@ -205,8 +205,8 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
             </div>
             <div className="p-3 bg-[#161616] border border-[#262626]">
               <ShieldCheck className="w-5 h-5 text-emerald-400 mx-auto mb-1.5" />
-              <div className="text-[11px] font-bold text-white uppercase">Pasarela Segura</div>
-              <div className="text-[10px] text-neutral-400 font-sans">Cumplimiento Culqi y cifrado bancario SSL</div>
+              <div className="text-[11px] font-bold text-white uppercase">Plataforma Segura</div>
+              <div className="text-[10px] text-neutral-400 font-sans">Transacciones protegidas con cifrado SSL 256-Bit</div>
             </div>
             <div className="p-3 bg-[#161616] border border-[#262626]">
               <Gamepad2 className="w-5 h-5 text-cyan-400 mx-auto mb-1.5" />
@@ -359,7 +359,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
               <span>Reglas de Billetera MachuPeek</span>
             </div>
             <p>
-              • Las recargas con Yape se procesan en tiempo real vía la pasarela <strong className="text-white">Culqi</strong>.
+              • Las recargas con Yape se procesan en tiempo real de forma inmediata.
             </p>
             <p>
               • Toda recarga mínima es de <strong>S/ 1.00</strong>. No cobramos comisión por depósito de saldo.
@@ -371,7 +371,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
 
         </div>
 
-        {/* RIGHT COLUMN: Culqi / Yape Recharge Form */}
+        {/* RIGHT COLUMN: Yape Recharge Form */}
         <div className="lg:col-span-7">
           <div className="bg-[#141414] border-2 border-[#742284] p-6 sm:p-8 shadow-2xl relative">
             
@@ -379,10 +379,10 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6 pb-4 border-b border-[#2D2033]">
               <div>
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-[#742284]/20 border border-[#742284] text-[#A855F7] text-[10px] font-bold uppercase mb-1">
-                  <Zap className="w-3 h-3" /> PASARELA OFICIAL CULQI // ACREDITACIÓN EN VIVO
+                  <Zap className="w-3 h-3" /> ACREDITACIÓN EN TIEMPO REAL // AUTOMÁTICA
                 </div>
                 <h3 className="text-lg sm:text-xl font-black italic tracking-tighter uppercase text-white">
-                  RECARGAR SALDO CON <span className="text-[#A855F7]">YAPE & CULQI</span>
+                  RECARGAR SALDO CON <span className="text-[#A855F7]">YAPE</span>
                 </h3>
               </div>
               <span className="text-[10px] text-neutral-400 font-sans border border-[#333] px-2 py-1">
@@ -484,7 +484,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                 <p className="text-[10px] text-neutral-500 mt-1 font-sans">
                   {currentUser?.hasSavedPhone 
                     ? '🔒 Ya tienes un número registrado. Puedes dejarlo tal como está o ingresar uno nuevo.'
-                    : 'Ingresa tu número de 9 dígitos. La transacción es 100% segura mediante Culqi.'}
+                    : 'Ingresa tu número de 9 dígitos. La transacción es 100% segura con cifrado SSL 256-Bit.'}
                 </p>
               </div>
 
@@ -537,7 +537,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                   {isSubmitting ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Procesando pago con Culqi & Yape...</span>
+                      <span>Procesando recarga con Yape...</span>
                     </>
                   ) : (
                     <>
@@ -548,11 +548,11 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                 </button>
               </div>
 
-              {/* Security & Gateways Guarantee */}
+              {/* Security Guarantee */}
               <div className="text-center pt-2">
                 <p className="text-[10px] text-neutral-500 font-sans flex items-center justify-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Procesado por Culqi (Compañía de Medios de Pago Perú S.A.). Cifrado bancario SSL.</span>
+                  <span>Transacciones 100% seguras con cifrado bancario SSL 256-Bit.</span>
                 </p>
               </div>
 

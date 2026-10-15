@@ -15,7 +15,7 @@ export const TerminosCondicionesView: React.FC = () => {
             TÉRMINOS Y CONDICIONES DE USO
           </h1>
           <p className="text-neutral-400 text-xs font-mono mt-1">
-            Última actualización: Octubre 2026 // MachuPeek Esports & Mixton Arena E.I.R.L.
+            Última actualización: Octubre 2026 // Plataforma MachuPeek
           </p>
         </div>
 
@@ -24,13 +24,13 @@ export const TerminosCondicionesView: React.FC = () => {
           
           <section className="space-y-2">
             <h2 className="text-sm font-black uppercase text-white font-mono flex items-center gap-2">
-              <span className="text-[#FF5500]">1.</span> INFORMACIÓN GENERAL Y TITULARIDAD DEL SITIO
+              <span className="text-[#FF5500]">1.</span> INFORMACIÓN GENERAL Y CANAL DE ATENCIÓN
             </h2>
             <p>
-              El presente sitio web <strong>https://apphub.wisp.uno</strong> es la plataforma oficial de la comunidad <strong>MachuPeek</strong>, operada y administrada por <strong>Mixton Arena E.I.R.L.</strong> (en adelante, "MachuPeek" o "La Empresa"), sociedad mercantil constituida bajo las leyes de la República del Perú, identificada con <strong>RUC N° 20608934125</strong> y domicilio fiscal en <strong>Av. Los Conquistadores 1144, San Isidro, Lima, Perú</strong>.
+              El presente sitio web <strong>https://apphub.wisp.uno</strong> es la plataforma oficial de la comunidad <strong>MachuPeek</strong> (en adelante, "MachuPeek"). Modalidad de operación y atención al usuario: <strong>Online</strong>.
             </p>
             <p>
-              Para cualquier consulta, asistencia o comunicación formal, ponemos a disposición de los usuarios nuestro canal de atención: correo electrónico <strong>soporte@apphub.wisp.uno</strong> y WhatsApp <strong>+51 924 812 739</strong>.
+              Para cualquier consulta, asistencia o comunicación formal, ponemos a disposición de los usuarios nuestro canal de atención: correo electrónico <strong>machupeek@gmail.com</strong> y WhatsApp <strong>+51 949 165 677</strong>.
             </p>
           </section>
 
@@ -39,7 +39,7 @@ export const TerminosCondicionesView: React.FC = () => {
               <span className="text-[#FF5500]">2.</span> OBJETO DEL SERVICIO
             </h2>
             <p>
-              Mixton Arena es una plataforma en línea de entretenimiento y esports que ofrece servicios de organización de torneos, emparejamiento competitivo balanceado (matchmaking draft) para jugadores del videojuego Counter-Strike 2 en servidores de bajo ping ubicados en Lima, venta de pases de acceso a torneos, suscripciones VIP, créditos gamer para cuotas y retos, y sesiones de asesoría y coaching individual.
+              MachuPeek es una plataforma en línea de entretenimiento y esports que ofrece servicios de organización de torneos, emparejamiento competitivo balanceado (matchmaking draft) para jugadores del videojuego Counter-Strike 2 en servidores de bajo ping ubicados en Lima, venta de pases de acceso a torneos, suscripciones VIP, créditos gamer para cuotas y retos, y sesiones de asesoría y coaching individual.
             </p>
           </section>
 
@@ -54,16 +54,16 @@ export const TerminosCondicionesView: React.FC = () => {
 
           <section className="space-y-2">
             <h2 className="text-sm font-black uppercase text-white font-mono flex items-center gap-2">
-              <span className="text-[#FF5500]">4.</span> PRECIOS, MEDIOS DE PAGO Y PASARELA CULQI
+              <span className="text-[#FF5500]">4.</span> PRECIOS Y MEDIOS DE PAGO (YAPE Y TARJETAS)
             </h2>
             <p>
               Todos los precios de los productos y servicios ofrecidos en el sitio web están expresados en <strong>Soles peruanos (PEN)</strong> e incluyen el Impuesto General a las Ventas (IGV - 18%), de conformidad con la legislación tributaria peruana vigente.
             </p>
             <p>
-              Las transacciones y cobros electrónicos se procesan de manera cifrada e inmediata mediante la pasarela de pagos autorizada <strong>Culqi</strong> (compañía debidamente autorizada en el Perú). Los medios de pago habilitados incluyen:
+              Las transacciones y cobros electrónicos se procesan de manera cifrada e inmediata mediante pasarela de pagos segura y certificada SSL. Los medios de pago habilitados incluyen:
             </p>
             <ul className="list-disc pl-5 space-y-1 text-neutral-300">
-              <li><strong>Yape:</strong> Cobro automático mediante número de celular y Código de Aprobación OTP generado en la app de Yape.</li>
+              <li><strong>Yape:</strong> Cobro y recarga automática mediante número de celular y Código de Aprobación OTP generado en la app de Yape.</li>
               <li><strong>Tarjetas de Débito y Crédito:</strong> Visa, Mastercard, American Express y Diners Club con tecnología de autenticación segura 3D Secure y SSL.</li>
             </ul>
           </section>
@@ -73,7 +73,7 @@ export const TerminosCondicionesView: React.FC = () => {
               <span className="text-[#FF5500]">5.</span> ENTREGA DE BIENES Y SERVICIOS DIGITALES
             </h2>
             <p>
-              Por tratarse de servicios y productos estrictamente digitales (créditos, suscripciones, pases de torneo, membresías), la acreditación o activación del servicio adquirido se realiza de forma automática e inmediata en la cuenta del usuario tras la confirmación de la pasarela Culqi.
+              Por tratarse de servicios y productos estrictamente digitales (créditos, suscripciones, pases de torneo, membresías), la acreditación o activación del servicio adquirido se realiza de forma automática e inmediata en la cuenta del usuario tras la confirmación de la pasarela de pagos.
             </p>
           </section>
 
@@ -82,7 +82,7 @@ export const TerminosCondicionesView: React.FC = () => {
               <span className="text-[#FF5500]">6.</span> POLÍTICA DE JUEGO LIMPIO Y ANTI-TRAMPAS
             </h2>
             <p>
-              Para preservar la integridad de las competencias, es obligatorio el uso del cliente anticheat oficial de FACEIT. Queda estrictamente prohibido el uso de hacks, scripts, cheats, bugs, colusión deliberada o conductas tóxicas. Mixton Arena se reserva el derecho de suspender indefinidamente a cualquier jugador que infrinja estas reglas sin derecho a reembolso de fondos derivados de sanciones por trampas.
+              Para preservar la integridad de las competencias, es obligatorio el uso del cliente anticheat oficial de FACEIT. Queda estrictamente prohibido el uso de hacks, scripts, cheats, bugs, colusión deliberada o conductas tóxicas. MachuPeek se reserva el derecho de suspender indefinidamente a cualquier jugador que infrinja estas reglas sin derecho a reembolso de fondos derivados de sanciones por trampas.
             </p>
           </section>
 
@@ -100,7 +100,7 @@ export const TerminosCondicionesView: React.FC = () => {
               <span className="text-[#FF5500]">8.</span> LIBRO DE RECLAMACIONES Y RESOLUCIÓN DE CONTROVERSIAS
             </h2>
             <p>
-              En cumplimiento del Código de Protección y Defensa del Consumidor (Ley N° 29571) y el D.S. 011-2011-PCM, Mixton Arena cuenta con un <strong>Libro de Reclamaciones Virtual nativo</strong> a disposición de todos los consumidores, accesible directamente en el pie de página o en la ruta <code>/libro-de-reclamaciones</code>. Toda queja o reclamo será atendida en un plazo máximo de quince (15) días hábiles.
+              En cumplimiento del Código de Protección y Defensa del Consumidor (Ley N° 29571) y el D.S. 011-2011-PCM, MachuPeek cuenta con un <strong>Libro de Reclamaciones Virtual nativo</strong> a disposición de todos los consumidores, accesible directamente en el pie de página o en la ruta <code>/libro-de-reclamaciones</code>. Toda queja o reclamo será atendida en un plazo máximo de quince (15) días hábiles.
             </p>
           </section>
 
@@ -117,7 +117,7 @@ export const TerminosCondicionesView: React.FC = () => {
         {/* Seal */}
         <div className="pt-6 border-t border-[#2C2C2C] flex items-center gap-2 text-xs font-mono text-emerald-400">
           <ShieldCheck className="w-5 h-5" />
-          <span>Términos y Condiciones conformes a la normativa de INDECOPI y lineamientos de Culqi.</span>
+          <span>Términos y Condiciones conformes a la normativa de comercio electrónico e INDECOPI.</span>
         </div>
       </div>
     </div>

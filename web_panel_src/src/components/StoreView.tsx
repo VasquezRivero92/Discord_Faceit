@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StoreProduct } from '../types';
-import { ShoppingCart, Zap, Check, ShieldCheck, Sparkles, Trophy, Award, Search, Filter } from 'lucide-react';
+import { ShoppingCart, Zap, Check, ShieldCheck, Sparkles, Trophy, Award, Search, Filter, Clock, AlertCircle } from 'lucide-react';
 
 export const INITIAL_PRODUCTS: StoreProduct[] = [
   {
@@ -127,25 +127,25 @@ export const StoreView: React.FC<StoreViewProps> = ({ onAddToCart, onBuyNow }) =
 
   return (
     <div className="py-8 px-4 sm:px-6 max-w-7xl mx-auto text-white">
-      {/* Hero Banner Tienda */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-[#181818] via-[#121212] to-[#181818] border-2 border-[#2A2A2A] p-6 sm:p-10 mb-8 shadow-2xl">
+      {/* Hero Banner Tienda // Próximamente */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-[#181818] via-[#121212] to-[#181818] border-2 border-[#2A2A2A] p-6 sm:p-10 mb-6 shadow-2xl">
         <div className="relative z-10 max-w-3xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#FF5500]/20 border border-[#FF5500]/50 text-[#FF5500] text-xs font-mono font-bold uppercase mb-3">
-            <Trophy className="w-3.5 h-3.5" /> TIENDA Y SERVICIOS OFICIALES DE MIXTON ARENA
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/20 border border-amber-500/50 text-amber-400 text-xs font-mono font-bold uppercase mb-3">
+            <Clock className="w-3.5 h-3.5" /> TIENDA OFICIAL MACHUPEEK // PRÓXIMAMENTE
           </div>
           <h2 className="text-2xl sm:text-4xl font-black italic tracking-tighter uppercase leading-tight mb-3">
-            POTENCIA TU EXPERIENCIA <span className="text-[#FF5500]">COMPETITIVA</span>
+            CATÁLOGO DE PRODUCTOS & SERVICIOS <span className="text-amber-500">[PRÓX.]</span>
           </h2>
           <p className="text-neutral-300 text-xs sm:text-sm leading-relaxed mb-6">
-            Adquiere entradas a torneos diarios, créditos para pozos de partidas, membresías VIP del club y sesiones de coaching profesional para Counter-Strike 2. Todos los precios se encuentran en Soles (PEN) con impuestos incluidos y procesamiento seguro a través de Culqi y Yape.
+            Adquiere entradas a torneos diarios, créditos para pozos de partidas, membresías VIP del club y sesiones de coaching profesional para Counter-Strike 2. Todos los precios se encuentran en Soles (PEN) con impuestos incluidos. La tienda se encuentra en preparación y estará habilitada muy pronto con pagos automáticos mediante Yape.
           </p>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px] font-mono text-neutral-300">
             <div className="flex items-center gap-1.5 bg-[#1F1F1F] p-2 border border-[#333]">
-              <Zap className="w-3.5 h-3.5 text-[#FF5500]" /> Entrega Inmediata
+              <Clock className="w-3.5 h-3.5 text-amber-400" /> Lanzamiento Próximo
             </div>
             <div className="flex items-center gap-1.5 bg-[#1F1F1F] p-2 border border-[#333]">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Pagos Seguros Culqi
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Cifrado SSL 256-Bit
             </div>
             <div className="flex items-center gap-1.5 bg-[#1F1F1F] p-2 border border-[#333]">
               <Sparkles className="w-3.5 h-3.5 text-[#A855F7]" /> Yape Automático
@@ -154,6 +154,17 @@ export const StoreView: React.FC<StoreViewProps> = ({ onAddToCart, onBuyNow }) =
               <Award className="w-3.5 h-3.5 text-amber-400" /> Servidores 128 Tick
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Notice Banner */}
+      <div className="p-4 bg-amber-950/30 border border-amber-500/40 text-amber-200 text-xs font-mono mb-8 flex items-start sm:items-center gap-3">
+        <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+        <div>
+          <strong className="text-white block uppercase">MÓDULO DE TIENDA EN PREPARACIÓN // EXHIBICIÓN INFORMATIVA</strong>
+          <span className="text-neutral-300">
+            El catálogo se encuentra en modo exhibición previa. Las compras directas estarán disponibles muy pronto. Si deseas recargar saldo para jugar mixtones, puedes ingresar a la sección de Billetera con Yape o unirte a nuestro servidor de Discord.
+          </span>
         </div>
       </div>
 
@@ -212,11 +223,9 @@ export const StoreView: React.FC<StoreViewProps> = ({ onAddToCart, onBuyNow }) =
                 <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-transparent to-transparent opacity-80" />
 
                 {/* Badge */}
-                {product.badge && (
-                  <span className="absolute top-3 right-3 px-2 py-0.5 bg-[#FF5500] text-black text-[10px] font-mono font-black uppercase tracking-wider shadow-md">
-                    {product.badge}
-                  </span>
-                )}
+                <span className="absolute top-3 right-3 px-2 py-0.5 bg-amber-500 text-black text-[10px] font-mono font-black uppercase tracking-wider shadow-md">
+                  {product.badge ? `${product.badge} · PRÓX.` : 'PRÓXIMAMENTE'}
+                </span>
 
                 <span className="absolute top-3 left-3 px-2 py-0.5 bg-black/70 backdrop-blur-sm border border-neutral-700 text-neutral-300 text-[10px] font-mono uppercase">
                   {product.category}
@@ -235,7 +244,7 @@ export const StoreView: React.FC<StoreViewProps> = ({ onAddToCart, onBuyNow }) =
 
               {/* Product Info */}
               <div className="p-5">
-                <h3 className="text-base font-black uppercase text-white tracking-tight mb-2 group-hover:text-[#FF5500] transition-colors">
+                <h3 className="text-base font-black uppercase text-white tracking-tight mb-2 group-hover:text-amber-400 transition-colors">
                   {product.name}
                 </h3>
                 
@@ -258,26 +267,12 @@ export const StoreView: React.FC<StoreViewProps> = ({ onAddToCart, onBuyNow }) =
               </div>
             </div>
 
-            {/* Action Buttons (Cumplimiento Culqi: Carrito y Botón de Comprar) */}
-            <div className="p-5 pt-0 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => onAddToCart(product)}
-                className="py-2.5 px-3 bg-[#1F1F1F] hover:bg-[#282828] border border-[#333] hover:border-neutral-400 text-white text-xs font-mono font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                title="Añadir al carrito para seguir comprando"
-              >
-                <ShoppingCart className="w-3.5 h-3.5 text-[#FF5500]" />
-                <span>+ Carrito</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onBuyNow(product)}
-                className="py-2.5 px-3 bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] text-white text-xs font-mono font-black uppercase tracking-wider transition-all shadow-lg shadow-[#FF5500]/20 flex items-center justify-center gap-1.5 cursor-pointer"
-                title="Comprar inmediatamente con Culqi o Yape"
-              >
-                <span>Comprar</span>
-              </button>
+            {/* Action Buttons (Modo Próximamente) */}
+            <div className="p-5 pt-0">
+              <div className="w-full py-2.5 px-3 bg-[#1A1A1A] border border-[#333] hover:border-amber-500/40 text-amber-400 text-xs font-mono font-bold uppercase flex items-center justify-center gap-2 select-none transition-colors">
+                <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <span>Próximamente Disponible</span>
+              </div>
             </div>
           </div>
         ))}

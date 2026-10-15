@@ -125,19 +125,19 @@ export const LibroReclamacionesView: React.FC = () => {
           </div>
         </div>
 
-        {/* Company Legal Information Required by INDECOPI */}
+        {/* Company Legal Information */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono text-neutral-300 bg-[#0E1520] p-3 border border-[#1E3A5F]/50">
           <div>
-            <strong className="text-white block text-[10px] uppercase text-neutral-400">Razón Social:</strong>
-            Mixton Arena E.I.R.L.
+            <strong className="text-white block text-[10px] uppercase text-neutral-400">Plataforma:</strong>
+            MachuPeek CS2
           </div>
           <div>
-            <strong className="text-white block text-[10px] uppercase text-neutral-400">RUC:</strong>
-            20608934125
+            <strong className="text-white block text-[10px] uppercase text-neutral-400">Atención al Usuario:</strong>
+            Online (Perú)
           </div>
           <div>
-            <strong className="text-white block text-[10px] uppercase text-neutral-400">Domicilio Legal:</strong>
-            Av. Los Conquistadores 1144, San Isidro, Lima, Perú
+            <strong className="text-white block text-[10px] uppercase text-neutral-400">Canal de Contacto:</strong>
+            machupeek@gmail.com
           </div>
         </div>
       </div>
@@ -181,7 +181,7 @@ export const LibroReclamacionesView: React.FC = () => {
               <div className="grid grid-cols-2 gap-2 text-neutral-300">
                 <div><span>Tipo de bien:</span> <strong className="text-white">{formData.contractedType}</strong></div>
                 <div><span>Monto reclamado:</span> <strong className="text-white">S/ {formData.claimedAmount || '0.00'} PEN</strong></div>
-                <div className="col-span-2"><span>Descripción:</span> <strong className="text-white">{formData.goodsDescription || 'Servicios competitivos de Mixton Arena'}</strong></div>
+                <div className="col-span-2"><span>Descripción:</span> <strong className="text-white">{formData.goodsDescription || 'Servicios competitivos de MachuPeek'}</strong></div>
               </div>
             </div>
 
@@ -207,7 +207,7 @@ export const LibroReclamacionesView: React.FC = () => {
                 <span>PLAZO MÁXIMO DE RESPUESTA: 15 DÍAS HÁBILES</span>
               </div>
               <p>
-                De acuerdo al Código de Protección y Defensa del Consumidor, Mixton Arena E.I.R.L. dará respuesta formal por escrito al correo consignado en un plazo no mayor a 15 días hábiles improrrogables.
+                De acuerdo al Código de Protección y Defensa del Consumidor, MachuPeek dará respuesta formal por escrito al correo consignado en un plazo no mayor a 15 días hábiles improrrogables.
               </p>
             </div>
           </div>
@@ -518,7 +518,7 @@ export const LibroReclamacionesView: React.FC = () => {
                   rows={2}
                   value={formData.consumerRequest}
                   onChange={(e) => setFormData({ ...formData, consumerRequest: e.target.value })}
-                  placeholder="Indica la solución concreta que solicitas a Mixton Arena..."
+                  placeholder="Indica la solución concreta que solicitas a MachuPeek..."
                   className="w-full bg-[#181818] border border-[#333] px-3 py-2 text-white focus:outline-none focus:border-[#0088FF]"
                 />
               </div>

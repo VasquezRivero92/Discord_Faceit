@@ -45,7 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
           <span className="hidden sm:inline text-neutral-600">|</span>
           <span className="hidden sm:inline text-neutral-300">
-            Pagos procesados por <strong className="text-white">Culqi</strong> & <strong className="text-[#A855F7]">Yape</strong>
+            Pagos y recargas automáticas con <strong className="text-[#A855F7]">Yape</strong>
           </span>
           <span className="hidden md:inline text-neutral-600">|</span>
           <span className="hidden md:inline text-neutral-300">
@@ -55,16 +55,16 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className="flex items-center gap-3 ml-auto">
           <span className="text-[10px] text-neutral-400 hidden lg:inline">
-            Atención al cliente: <strong className="text-white">+51 924 812 739</strong>
+            Atención al cliente: <strong className="text-white">+51 949 165 677</strong>
           </span>
           {!currentUser && (
             <button
               type="button"
               onClick={onOpenDemoLogin}
               className="text-[10px] bg-[#FF5500]/15 hover:bg-[#FF5500] text-[#FF5500] hover:text-white px-2.5 py-0.5 border border-[#FF5500]/40 font-mono font-bold uppercase transition-all flex items-center gap-1 cursor-pointer"
-              title="Credenciales de prueba para revisión de Culqi"
+              title="Credenciales de prueba para revisión"
             >
-              <KeyRound className="w-3 h-3" /> Acceso Auditor Culqi
+              <KeyRound className="w-3 h-3" /> Acceso Auditor (Demo)
             </button>
           )}
         </div>
@@ -129,7 +129,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => setActiveView('tienda')}
-            className={`px-3 py-1.5 border transition-all cursor-pointer flex items-center gap-1 ${
+            className={`px-3 py-1.5 border transition-all cursor-pointer flex items-center gap-1.5 ${
               activeView === 'tienda'
                 ? 'bg-[#FF5500] text-white border-[#FF5500] shadow-sm'
                 : 'bg-[#161616] text-neutral-300 border-[#262626] hover:border-neutral-500 hover:text-white'
@@ -137,6 +137,9 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Store className="w-3.5 h-3.5 text-neutral-400" />
             <span>Tienda</span>
+            <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1 py-0.2 uppercase font-black">
+              Próx.
+            </span>
           </button>
 
           <button
@@ -149,7 +152,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Coins className="w-3.5 h-3.5 text-[#A855F7]" />
-            <span>{currentUser ? 'Mi Saldo' : 'Login / Recargas'}</span>
+            <span>{currentUser ? 'Mi Saldo' : 'Recargar / Login'}</span>
           </button>
 
           <button
@@ -247,7 +250,7 @@ export const Header: React.FC<HeaderProps> = ({
                 className="px-3 py-1.5 bg-[#742284] hover:bg-[#8B2FA0] border border-[#A855F7]/40 text-white text-xs font-mono font-bold uppercase transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
               >
                 <Coins className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Mi Saldo & Login</span>
+                <span className="hidden sm:inline">Recargar & Login</span>
               </button>
 
               <a

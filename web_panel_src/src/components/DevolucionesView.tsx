@@ -15,7 +15,7 @@ export const DevolucionesView: React.FC = () => {
             POLÍTICA DE CAMBIOS, CANCELACIONES Y DEVOLUCIONES
           </h1>
           <p className="text-neutral-400 text-xs font-mono mt-1">
-            Garantía de Transparencia // MachuPeek Esports & Mixton Arena E.I.R.L.
+            Garantía de Transparencia // Plataforma MachuPeek
           </p>
         </div>
 
@@ -27,7 +27,7 @@ export const DevolucionesView: React.FC = () => {
               <span className="text-[#FF5500]">1.</span> DERECHO A SOLICITAR DEVOLUCIÓN O REEMBOLSO
             </h2>
             <p>
-              En la comunidad <strong>MachuPeek</strong> (operada por <strong>Mixton Arena E.I.R.L.</strong>) nuestro compromiso es brindar una experiencia competitiva transparente y justa. De conformidad con las normas de comercio electrónico y las disposiciones del Código de Protección y Defensa del Consumidor (Ley N° 29571), todo usuario que adquiera productos, créditos o servicios en nuestro portal tiene derecho a solicitar la devolución de su dinero bajo las condiciones descritas en este documento.
+              En la comunidad y plataforma <strong>MachuPeek</strong> nuestro compromiso es brindar una experiencia competitiva transparente y justa. De conformidad con las normas de comercio electrónico y las disposiciones del Código de Protección y Defensa del Consumidor (Ley N° 29571), todo usuario que adquiera productos, créditos o servicios en nuestro portal tiene derecho a solicitar la devolución de su dinero bajo las condiciones descritas en este documento.
             </p>
           </section>
 
@@ -106,12 +106,12 @@ export const DevolucionesView: React.FC = () => {
               Para iniciar el trámite de devolución, el titular de la compra debe remitir un mensaje a cualquiera de nuestros canales oficiales:
             </p>
             <div className="bg-[#181818] border border-[#2D2D2D] p-4 space-y-2 font-mono text-xs">
-              <div><strong className="text-white">Correo electrónico:</strong> <span className="text-[#0088FF]">soporte@apphub.wisp.uno</span></div>
-              <div><strong className="text-white">WhatsApp de Soporte:</strong> <span className="text-emerald-400">+51 924 812 739</span></div>
+              <div><strong className="text-white">Correo electrónico:</strong> <span className="text-[#0088FF]">machupeek@gmail.com</span></div>
+              <div><strong className="text-white">WhatsApp de Soporte:</strong> <span className="text-emerald-400">+51 949 165 677</span></div>
               <div className="border-t border-[#262626] pt-2 text-neutral-400">
                 <strong>Datos requeridos en la solicitud:</strong>
                 <ul className="list-disc pl-5 mt-1 text-[11px]">
-                  <li>Código de Referencia o ID de cargo emitido por Culqi (visible en tu comprobante).</li>
+                  <li>Código de Referencia o ID de pago (visible en tu comprobante).</li>
                   <li>Nombre completo y correo del comprador.</li>
                   <li>Motivo de la solicitud de devolución.</li>
                 </ul>
@@ -121,7 +121,7 @@ export const DevolucionesView: React.FC = () => {
 
           <section className="space-y-2">
             <h2 className="text-sm font-black uppercase text-white font-mono flex items-center gap-2">
-              <span className="text-[#FF5500]">6.</span> TIEMPOS Y PLAZOS DE EXTORNOS BANCARIOS (CULQI)
+              <span className="text-[#FF5500]">6.</span> TIEMPOS Y PLAZOS DE EXTORNOS Y REINTEGROS
             </h2>
             <div className="p-4 bg-[#141820] border border-[#1E3A5F] space-y-2 font-mono text-xs text-neutral-300">
               <div className="flex items-center gap-2 text-white font-bold">
@@ -129,9 +129,9 @@ export const DevolucionesView: React.FC = () => {
                 <span>Cronograma de procesamiento:</span>
               </div>
               <ul className="list-disc pl-5 space-y-1 text-[11px] text-neutral-300">
-                <li><strong>Aprobación por Mixton Arena:</strong> 24 a 48 horas hábiles tras recibir la solicitud.</li>
+                <li><strong>Aprobación por MachuPeek:</strong> 24 a 48 horas hábiles tras recibir la solicitud.</li>
                 <li><strong>Reintegro vía Yape:</strong> Se procesa dentro de las 24 a 48 horas siguientes a la aprobación.</li>
-                <li><strong>Reversión en Tarjetas (Débito o Crédito):</strong> Una vez procesado por la pasarela Culqi, el tiempo en que se refleja en tu estado de cuenta depende de la entidad bancaria emisora (usualmente entre <strong>5 a 15 días hábiles</strong>).</li>
+                <li><strong>Reversión en Tarjetas (Débito o Crédito):</strong> Una vez procesada la reversión, el tiempo en que se refleja en tu estado de cuenta depende de la entidad bancaria emisora (usualmente entre <strong>5 a 15 días hábiles</strong>).</li>
               </ul>
             </div>
           </section>
@@ -140,7 +140,7 @@ export const DevolucionesView: React.FC = () => {
         {/* Guarantee Seal */}
         <div className="pt-6 border-t border-[#2C2C2C] flex items-center gap-2 text-xs font-mono text-emerald-400">
           <ShieldCheck className="w-5 h-5" />
-          <span>Política de Devoluciones conforme a las políticas de pasarela Culqi y normativa de INDECOPI.</span>
+          <span>Política de Devoluciones conforme al Código de Protección y Defensa del Consumidor (Ley N° 29571).</span>
         </div>
       </div>
     </div>

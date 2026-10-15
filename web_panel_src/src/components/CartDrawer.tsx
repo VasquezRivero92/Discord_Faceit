@@ -149,7 +149,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
             <div className="flex items-center gap-2 text-[10px] text-emerald-400 font-mono">
               <ShieldCheck className="w-4 h-4 shrink-0" />
-              <span>Transacción cifrada y protegida por la pasarela Culqi</span>
+              <span>Transacción cifrada y protegida con SSL 256-Bit</span>
             </div>
 
             <div className="flex gap-2">

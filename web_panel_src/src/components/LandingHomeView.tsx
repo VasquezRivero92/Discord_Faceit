@@ -85,7 +85,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
               className="px-6 py-3.5 bg-[#742284] hover:bg-[#8B2FA0] border border-[#A855F7]/40 text-white font-black tracking-wider shadow-lg shadow-purple-900/30 transition-all flex items-center gap-2 cursor-pointer"
             >
               <Coins className="w-4 h-4" />
-              <span>{currentUser ? 'Mi Billetera & Recarga Culqi' : 'Login & Recarga Culqi'}</span>
+              <span>{currentUser ? 'Mi Billetera & Recargar' : 'Login & Recargar'}</span>
             </button>
 
             <button
@@ -94,7 +94,8 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
               className="px-6 py-3.5 bg-[#161616] hover:bg-[#222] border border-[#333] hover:border-neutral-400 text-white tracking-wider transition-all flex items-center gap-2 cursor-pointer"
             >
               <span>Tienda Oficial</span>
-              <ArrowRight className="w-4 h-4" />
+              <span className="text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/40 px-1.5 py-0.2 rounded font-mono uppercase">Próx.</span>
+              <ArrowRight className="w-4 h-4 text-neutral-400" />
             </button>
           </div>
 
@@ -119,8 +120,8 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
             <div className="p-3 bg-[#141414] border border-[#262626] flex items-center gap-3">
               <Coins className="w-6 h-6 text-[#A855F7] shrink-0" />
               <div>
-                <span className="text-white font-bold block">PAGOS CON CULQI</span>
-                <span className="text-[10px] text-neutral-400">Yape y Tarjetas en Soles</span>
+                <span className="text-white font-bold block">RECARGAS CON YAPE</span>
+                <span className="text-[10px] text-neutral-400">Acreditación automática</span>
               </div>
             </div>
 
@@ -217,7 +218,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-[#222] text-[10px] font-mono text-neutral-500 uppercase">
-              Pagos automáticos vía Culqi
+              Recargas y pozos en tiempo real
             </div>
           </div>
 
@@ -245,7 +246,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
                 Ingresa al servidor oficial de MachuPeek donde se organizan las salas de voz y los avisos de partidas.
               </p>
               <a 
-                href="https://discord.gg/vKj45F6e" 
+                href="https://discord.gg/xsWwaNjQ" 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="text-[#5865F2] hover:underline font-bold inline-flex items-center gap-1"
@@ -269,14 +270,14 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
               <span className="text-3xl font-black text-[#FF5500] block mb-2 font-mono">03</span>
               <h4 className="text-sm font-bold text-white uppercase mb-2">Recarga tu Saldo</h4>
               <p className="text-neutral-400 text-[11px] leading-relaxed font-sans mb-3">
-                Entra al apartado de Login / Billetera y recarga saldo en Soles con Yape o Tarjeta a través de la pasarela Culqi.
+                Entra al apartado de Login / Billetera y recarga saldo en Soles con Yape de forma rápida y segura.
               </p>
               <button
                 type="button"
                 onClick={() => setActiveView(currentUser ? 'cuenta' : 'login')}
                 className="text-[#A855F7] hover:underline font-bold text-[11px] cursor-pointer"
               >
-                Ir a Recarga Culqi →
+                Ir a Recargar Saldo →
               </button>
             </div>
 
@@ -299,47 +300,53 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
         </div>
       </section>
 
-      {/* 4. PRODUCTOS Y SERVICIOS DESTACADOS (CUMPLIMIENTO CULQI) */}
+      {/* 4. PRODUCTOS Y SERVICIOS DESTACADOS (PRÓXIMAMENTE) */}
       <section className="py-16 px-4 sm:px-6 max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#FF5500]/15 border border-[#FF5500]/40 text-[#FF5500] text-xs font-mono font-bold uppercase mb-1">
-              <Sparkles className="w-3.5 h-3.5" /> TIENDA OFICIAL
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/15 border border-amber-500/40 text-amber-400 text-xs font-mono font-bold uppercase mb-1">
+              <Sparkles className="w-3.5 h-3.5" /> TIENDA OFICIAL // PRÓXIMAMENTE
             </div>
             <h2 className="text-2xl sm:text-3xl font-black italic tracking-tighter uppercase font-mono text-white">
-              SERVICIOS Y RECARGAS MACHUPEEK
+              SERVICIOS Y PRODUCTOS MACHUPEEK
             </h2>
           </div>
 
           <button
             type="button"
             onClick={() => setActiveView('tienda')}
-            className="px-4 py-2 bg-[#1A1A1A] hover:bg-[#252525] border border-[#333] hover:border-[#FF5500] text-xs font-mono font-bold uppercase transition-all flex items-center gap-2 cursor-pointer"
+            className="px-4 py-2 bg-[#1A1A1A] hover:bg-[#252525] border border-[#333] hover:border-amber-500 text-xs font-mono font-bold uppercase transition-all flex items-center gap-2 cursor-pointer"
           >
-            <span>Ver Catálogo Completo (6 Productos)</span>
-            <ArrowRight className="w-4 h-4 text-[#FF5500]" />
+            <span>Ver Catálogo (Próximamente)</span>
+            <ArrowRight className="w-4 h-4 text-amber-500" />
           </button>
         </div>
 
-        {/* 3 Featured Products */}
+        {/* 3 Featured Products (Próximamente) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {INITIAL_PRODUCTS.slice(0, 3).map(product => (
             <div
               key={product.id}
-              className="bg-[#121212] border-2 border-[#242424] hover:border-[#FF5500]/60 transition-all flex flex-col justify-between shadow-xl group"
+              className="bg-[#121212] border-2 border-[#242424] hover:border-amber-500/40 transition-all flex flex-col justify-between shadow-xl group relative overflow-hidden"
             >
               <div>
                 <div className="relative h-44 w-full overflow-hidden bg-[#181818]">
                   <img
                     src={product.image}
                     alt={product.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-80"
                     loading="lazy"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-transparent to-transparent opacity-80" />
+                  
                   <span className="absolute top-3 left-3 px-2 py-0.5 bg-black/70 border border-neutral-700 text-neutral-300 text-[10px] font-mono uppercase">
                     {product.category}
                   </span>
+
+                  <span className="absolute top-3 right-3 px-2 py-0.5 bg-amber-500/20 border border-amber-500/50 text-amber-300 text-[10px] font-mono font-black uppercase tracking-wider">
+                    PRÓXIMAMENTE
+                  </span>
+
                   <div className="absolute bottom-3 left-3 flex items-baseline gap-1">
                     <span className="text-2xl font-black italic tracking-tighter text-white font-mono">
                       S/ {product.price.toFixed(2)}
@@ -349,7 +356,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
                 </div>
 
                 <div className="p-4">
-                  <h3 className="text-sm font-black uppercase text-white tracking-tight mb-2 group-hover:text-[#FF5500] transition-colors">
+                  <h3 className="text-sm font-black uppercase text-white tracking-tight mb-2 group-hover:text-amber-400 transition-colors">
                     {product.name}
                   </h3>
                   <p className="text-neutral-400 text-xs leading-relaxed line-clamp-2">
@@ -358,20 +365,14 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
                 </div>
               </div>
 
-              <div className="p-4 pt-0 grid grid-cols-2 gap-2 font-mono text-xs">
+              <div className="p-4 pt-0 font-mono text-xs">
                 <button
                   type="button"
-                  onClick={() => onAddToCart(product)}
-                  className="py-2 px-2 bg-[#1C1C1C] hover:bg-[#252525] border border-[#333] text-white font-bold uppercase transition-all cursor-pointer"
+                  onClick={() => setActiveView('tienda')}
+                  className="w-full py-2.5 px-3 bg-[#1C1C1C] hover:bg-[#252525] border border-[#333] hover:border-amber-500/50 text-amber-400 font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  + Carrito
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onBuyNow(product)}
-                  className="py-2 px-2 bg-[#FF5500] hover:bg-[#FF7733] text-white font-black uppercase transition-all shadow-md cursor-pointer"
-                >
-                  Comprar
+                  <span>Próximamente Disponible</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
@@ -379,7 +380,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
         </div>
       </section>
 
-      {/* 5. CULQI PAYMENT & COMPLIANCE BANNER */}
+      {/* 5. PAYMENT & COMPLIANCE BANNER */}
       <section className="bg-[#121212] border-t-2 border-[#1A1A1A] py-10 px-4 sm:px-6">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4">
@@ -388,10 +389,10 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
             </div>
             <div>
               <h4 className="text-base font-black uppercase text-white font-mono">
-                PAGOS Y RECARGAS 100% SEGUROS CON CULQI
+                PAGOS Y RECARGAS 100% SEGUROS
               </h4>
               <p className="text-xs text-neutral-400 mt-0.5">
-                Todas las recargas y compras en MachuPeek son procesadas mediante la pasarela autorizada <strong>Culqi</strong> con soporte instantáneo para <strong>Yape</strong> y tarjetas de débito/crédito con cifrado SSL 256-bit.
+                Todas las recargas y compras en MachuPeek cuentan con procesamiento protegido mediante cifrado bancario SSL 256-bit y soporte instantáneo para <strong>Yape</strong>.
               </p>
             </div>
           </div>

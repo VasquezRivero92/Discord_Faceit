@@ -111,11 +111,10 @@ export function createPublicApiRouter(db) {
       products: STORE_PRODUCTS,
       currency: 'PEN',
       merchant: {
-        name: 'Mixton Arena E.I.R.L.',
-        ruc: '20608934125',
-        address: 'Av. Los Conquistadores 1144, San Isidro, Lima, Perú',
-        phone: '+51 924 812 739',
-        email: 'soporte@apphub.wisp.uno'
+        name: 'MachuPeek',
+        address: 'Online',
+        phone: '+51 949 165 677',
+        email: 'machupeek@gmail.com'
       }
     });
   });
@@ -178,9 +177,10 @@ export function createPublicApiRouter(db) {
           request: consumerRequest.trim()
         },
         merchant: {
-          companyName: 'Mixton Arena E.I.R.L.',
-          ruc: '20608934125',
-          address: 'Av. Los Conquistadores 1144, San Isidro, Lima, Perú'
+          companyName: 'MachuPeek',
+          address: 'Online',
+          email: 'machupeek@gmail.com',
+          phone: '+51 949 165 677'
         },
         legalNotice: 'Conforme al Código de Protección y Defensa del Consumidor (Ley N° 29571) y el D.S. 011-2011-PCM, el proveedor responderá en un plazo máximo de quince (15) días hábiles.',
         submittedAt: new Date().toISOString()

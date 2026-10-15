@@ -229,20 +229,23 @@ export function createAuthRouter(client, db, config) {
 
   router.post(['/demo-login', '/login'], (req, res) => {
     const { username, password } = req.body || {};
-    const validUser = (username || '').trim().toLowerCase() === 'auditor@culqi.com' || 
-                      (username || '').trim().toLowerCase() === 'auditor' ||
-                      (username || '').trim().toLowerCase() === 'demo';
+    const u = (username || '').trim().toLowerCase();
+    const validUser = u === 'demo@machupeek.com' ||
+                      u === 'auditor@machupeek.com' ||
+                      u === 'auditor@culqi.com' || 
+                      u === 'auditor' ||
+                      u === 'demo';
     const validPass = (password || '').trim() === 'DemoMixton2026';
 
     if (!validUser || !validPass) {
       return res.status(401).json({
-        error: 'Credenciales inválidas. Usuario de prueba: auditor@culqi.com | Contraseña: DemoMixton2026'
+        error: 'Credenciales inválidas. Usuario de prueba: demo@machupeek.com | Contraseña: DemoMixton2026'
       });
     }
 
     const demoUser = {
-      userId: 'culqi_auditor_demo',
-      username: 'Auditor Culqi (Demo)',
+      userId: 'demo_user',
+      username: 'Auditor (Demo)',
       avatar: null,
       isAdmin: true,
       role: 'admin',
