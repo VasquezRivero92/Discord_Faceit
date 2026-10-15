@@ -182,8 +182,6 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const pollingRef = useRef<number | null>(null);
-  const lastPollTimeRef = useRef<number>(0);
 
   // Helper: Toast Notifications (Admin-style notifications)
   const showToast = useCallback((text: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -452,54 +450,14 @@ export default function App() {
     checkAuth();
   }, [fetchState, fetchHistory, loadGuildsSelector, showToast]);
 
-  // Connect WebSocket when currentGuildId is resolved and view is mixton, with smart visibility-aware polling.
+  // Conectar WebSocket únicamente cuando esté en la vista de Mixtón / Arena
   useEffect(() => {
-    if (pollingRef.current) {
-      window.clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-
     if (!currentGuildId) return;
 
-    // Solo mantener WebSocket y polling si el usuario está en la vista de Mixtón / Arena
     if (activeView === 'mixton') {
       connectWebSocket(currentGuildId);
 
-      const runPollingTick = () => {
-        // Pausar completamente el polling si la pestaña está en segundo plano o minimizada
-        if (typeof document !== 'undefined' && document.hidden) {
-          return;
-        }
-
-        // Si el WebSocket está conectado, el polling de respaldo es muy espaciado (30s)
-        const isWsConnected = wsRef.current && wsRef.current.readyState === WebSocket.OPEN;
-        const now = Date.now();
-        const interval = isWsConnected ? 30000 : 10000;
-
-        if (!lastPollTimeRef.current || (now - lastPollTimeRef.current >= interval)) {
-          lastPollTimeRef.current = now;
-          fetchState(currentGuildId);
-        }
-      };
-
-      pollingRef.current = window.setInterval(runPollingTick, 5000);
-
-      // Refrescar inmediatamente cuando el usuario vuelve a enfocar la pestaña
-      const handleVisibilityChange = () => {
-        if (!document.hidden && activeView === 'mixton') {
-          lastPollTimeRef.current = Date.now();
-          fetchState(currentGuildId);
-        }
-      };
-
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-
       return () => {
-        if (pollingRef.current) {
-          window.clearInterval(pollingRef.current);
-          pollingRef.current = null;
-        }
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
         if (wsRef.current) {
           wsRef.current.onclose = null;
           wsRef.current.close();
@@ -512,7 +470,7 @@ export default function App() {
         wsRef.current.close();
       }
     }
-  }, [currentGuildId, activeView, connectWebSocket, fetchState]);
+  }, [currentGuildId, activeView, connectWebSocket]);
 
   // Clear pendingPick if the turn changes or the draft finishes/resets
   useEffect(() => {

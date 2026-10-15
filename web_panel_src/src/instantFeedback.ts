@@ -44,12 +44,14 @@ export function installInstantFeedback() {
   }, true);
 
   window.fetch = (...args: Parameters<typeof window.fetch>) => {
-    pendingRequests += 1;
-    updateNetworkState();
+    const isUserAction = lastInteraction && (Date.now() - lastInteraction.at < 1200);
+    const relatedControl = isUserAction ? lastInteraction.control : null;
 
-    const relatedControl = lastInteraction && Date.now() - lastInteraction.at < 750
-      ? lastInteraction.control
-      : null;
+    if (isUserAction) {
+      pendingRequests += 1;
+      updateNetworkState();
+    }
+
     if (relatedControl) {
       const count = (pendingByControl.get(relatedControl) || 0) + 1;
       pendingByControl.set(relatedControl, count);
@@ -57,8 +59,10 @@ export function installInstantFeedback() {
     }
 
     return originalFetch(...args).finally(() => {
-      pendingRequests = Math.max(0, pendingRequests - 1);
-      updateNetworkState();
+      if (isUserAction) {
+        pendingRequests = Math.max(0, pendingRequests - 1);
+        updateNetworkState();
+      }
 
       if (relatedControl) {
         const nextCount = (pendingByControl.get(relatedControl) || 1) - 1;
