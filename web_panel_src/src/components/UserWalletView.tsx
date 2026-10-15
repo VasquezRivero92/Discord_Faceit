@@ -16,7 +16,8 @@ import {
   Lock, 
   Trophy,
   HelpCircle,
-  ExternalLink
+  ExternalLink,
+  Sparkles
 } from 'lucide-react';
 import { CurrentUser, ActiveView } from '../types';
 
@@ -118,38 +119,38 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
   if (!currentUser) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 sm:py-24 font-mono">
-        <div className="bg-[#121212] border-4 border-[#1F1F1F] p-6 sm:p-12 shadow-2xl relative">
+        <div className="rounded-2xl bg-[#0E1017]/85 border border-white/[0.08] backdrop-blur-xl p-6 sm:p-12 shadow-[0_16px_50px_rgba(0,0,0,0.7)] relative overflow-hidden">
           {/* Top accent bar */}
-          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-red-600 via-[#FF5500] to-purple-600" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-600 via-[#FF5500] to-purple-600" />
 
           <div className="text-center max-w-2xl mx-auto mb-10">
-            <div className="w-20 h-20 mx-auto mb-4 relative">
+            <div className="w-20 h-20 mx-auto mb-5 relative group">
+              <div className="absolute -inset-1 bg-gradient-to-r from-[#FF5500] to-purple-600 rounded-full blur opacity-30 group-hover:opacity-75 transition-opacity" />
               <img 
                 src="/logo-machupeek.png" 
                 alt="MachuPeek Esports" 
-                className="w-full h-full object-contain drop-shadow-lg"
+                className="relative w-full h-full object-contain drop-shadow-xl"
               />
             </div>
             
-            <div className="inline-block bg-[#1F1F1F] text-neutral-400 border border-[#333] px-3 py-1 text-[10px] uppercase font-bold tracking-widest mb-3">
+            <div className="inline-block bg-white/[0.04] text-neutral-300 border border-white/[0.1] px-3.5 py-1 rounded-full text-xs uppercase font-bold tracking-widest mb-4">
               PORTAL DE JUGADORES // AUTENTICACIÓN
             </div>
             
-            <h1 className="text-2xl sm:text-4xl font-black italic tracking-tighter uppercase text-white mb-3">
+            <h1 className="text-3xl sm:text-4xl font-black italic tracking-tight uppercase text-white mb-3">
               INICIA SESIÓN EN <span className="text-[#FF5500]">MACHUPEEK</span>
             </h1>
             
             <p className="text-xs sm:text-sm text-neutral-400 leading-relaxed font-sans">
-              Para recargar saldo con <strong>Yape</strong>, consultar tu historial de transacciones y unirte a los lobbies competitivos de CS2, conecta tu cuenta de Discord.
+              Para recargar saldo con <strong className="text-[#C084FC]">Yape</strong>, consultar tu historial de transacciones y unirte a los lobbies competitivos de CS2, conecta tu cuenta de Discord.
             </p>
           </div>
 
           {/* Action Login: Discord OAuth2 */}
           <div className="max-w-md mx-auto mb-10">
-            {/* Discord Login Option */}
-            <div className="bg-[#181818] border-2 border-[#2E2E2E] hover:border-[#5865F2] p-8 flex flex-col justify-between transition-all group shadow-xl">
+            <div className="rounded-xl bg-neutral-900/60 border border-white/[0.08] hover:border-[#5865F2]/60 p-8 flex flex-col justify-between transition-all duration-300 shadow-xl group">
               <div className="text-center">
-                <div className="w-14 h-14 bg-[#5865F2]/20 border-2 border-[#5865F2] flex items-center justify-center text-[#5865F2] mb-4 mx-auto group-hover:scale-105 transition-transform">
+                <div className="w-14 h-14 rounded-xl bg-[#5865F2]/10 border border-[#5865F2]/30 flex items-center justify-center text-[#5865F2] mb-5 mx-auto group-hover:scale-105 transition-transform">
                   <User className="w-7 h-7" />
                 </div>
                 <h3 className="text-base font-black uppercase text-white mb-2">
@@ -162,7 +163,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
 
               <a
                 href="/auth/discord"
-                className="w-full py-3.5 bg-[#5865F2] hover:bg-[#4752C4] border border-[#5865F2] text-white text-xs font-black uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-lg transition-all"
+                className="w-full py-3.5 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-black uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(88,101,242,0.35)] transition-all cursor-pointer active:scale-[0.98]"
               >
                 <span>Conectar con Discord</span>
                 <ArrowRight className="w-4 h-4" />
@@ -171,21 +172,21 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
           </div>
 
           {/* Value Props */}
-          <div className="border-t border-[#222] pt-6 grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
-            <div className="p-3 bg-[#161616] border border-[#262626]">
-              <Coins className="w-5 h-5 text-[#FF5500] mx-auto mb-1.5" />
-              <div className="text-[11px] font-bold text-white uppercase">Recargas Inmediatas</div>
-              <div className="text-[10px] text-neutral-400 font-sans">Acreditación instantánea en Soles (PEN) con Yape</div>
+          <div className="border-t border-white/[0.08] pt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+            <div className="p-4 rounded-xl bg-neutral-900/40 border border-white/[0.06]">
+              <Coins className="w-6 h-6 text-[#FF5500] mx-auto mb-2" />
+              <div className="text-xs font-bold text-white uppercase mb-1">Recargas Inmediatas</div>
+              <div className="text-xs text-neutral-400 font-sans">Acreditación instantánea en Soles (PEN) con Yape</div>
             </div>
-            <div className="p-3 bg-[#161616] border border-[#262626]">
-              <ShieldCheck className="w-5 h-5 text-emerald-400 mx-auto mb-1.5" />
-              <div className="text-[11px] font-bold text-white uppercase">Plataforma Segura</div>
-              <div className="text-[10px] text-neutral-400 font-sans">Transacciones protegidas con cifrado SSL 256-Bit</div>
+            <div className="p-4 rounded-xl bg-neutral-900/40 border border-white/[0.06]">
+              <ShieldCheck className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
+              <div className="text-xs font-bold text-white uppercase mb-1">Plataforma Segura</div>
+              <div className="text-xs text-neutral-400 font-sans">Transacciones protegidas con cifrado SSL 256-Bit</div>
             </div>
-            <div className="p-3 bg-[#161616] border border-[#262626]">
-              <Gamepad2 className="w-5 h-5 text-cyan-400 mx-auto mb-1.5" />
-              <div className="text-[11px] font-bold text-white uppercase">Servidores FACEIT</div>
-              <div className="text-[10px] text-neutral-400 font-sans">Partidas con anticheat oficial obligatorio de FACEIT</div>
+            <div className="p-4 rounded-xl bg-neutral-900/40 border border-white/[0.06]">
+              <Gamepad2 className="w-6 h-6 text-cyan-400 mx-auto mb-2" />
+              <div className="text-xs font-bold text-white uppercase mb-1">Servidores FACEIT</div>
+              <div className="text-xs text-neutral-400 font-sans">Partidas con anticheat oficial obligatorio de FACEIT</div>
             </div>
           </div>
         </div>
@@ -194,7 +195,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
   }
 
   // ----------------------------------------------------
-  // VISTA AUTENTICADO: BILLETERA GAMER & RECARGA CULQI
+  // VISTA AUTENTICADO: BILLETERA GAMER & RECARGA YAPE
   // ----------------------------------------------------
   const userBalance = currentUser.balance || 0;
   const userTier = currentUser.tier || (currentUser.skillLevel ? (currentUser.skillLevel >= 10 ? 'S' : currentUser.skillLevel >= 8 ? 'A' : currentUser.skillLevel >= 5 ? 'B' : 'C') : 'B');
@@ -203,33 +204,33 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
     <div className="max-w-6xl mx-auto px-4 py-8 sm:py-12 font-mono">
       
       {/* Breadcrumb / Top Info */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-[#222]">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-8 pb-4 border-b border-white/[0.08]">
         <div>
-          <div className="text-[10px] text-neutral-400 uppercase tracking-widest font-bold">
+          <div className="text-xs text-neutral-400 uppercase tracking-widest font-bold">
             MACHUPEEK ESPORTS // PANEL DEL JUGADOR
           </div>
-          <h1 className="text-xl sm:text-2xl font-black italic tracking-tighter uppercase text-white flex items-center gap-2">
+          <h1 className="text-2xl sm:text-3xl font-black italic tracking-tight uppercase text-white flex items-center gap-2 mt-1">
             MI CUENTA & <span className="text-[#FF5500]">BILLETERA GAMER</span>
           </h1>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
             onClick={() => setActiveView('mixton')}
-            className="px-3.5 py-1.5 bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-md"
+            className="px-4 py-2 rounded-lg bg-[#FF5500] hover:bg-[#FF661A] text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-[0_4px_15px_rgba(255,85,0,0.3)] transition-all active:scale-[0.98]"
           >
-            <Trophy className="w-3.5 h-3.5" />
+            <Trophy className="w-4 h-4" />
             <span>Ir al Mixtón</span>
           </button>
 
           <button
             type="button"
             onClick={onLogout}
-            className="px-3 py-1.5 bg-[#1F1F1F] hover:bg-red-900/40 border border-[#333] hover:border-red-500 text-neutral-300 hover:text-red-300 text-xs font-bold uppercase flex items-center gap-1.5 cursor-pointer transition-colors"
+            className="px-3.5 py-2 rounded-lg bg-neutral-900 hover:bg-red-950/40 border border-white/[0.1] hover:border-red-500/60 text-neutral-300 hover:text-red-300 text-xs font-bold uppercase flex items-center gap-2 cursor-pointer transition-all active:scale-[0.98]"
             title="Cerrar Sesión"
           >
-            <LogOut className="w-3.5 h-3.5" />
+            <LogOut className="w-4 h-4" />
             <span className="hidden sm:inline">Cerrar Sesión</span>
           </button>
         </div>
@@ -242,58 +243,58 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
         <div className="lg:col-span-5 space-y-6">
           
           {/* Profile Card */}
-          <div className="bg-[#141414] border-2 border-[#242424] p-5 shadow-xl relative overflow-hidden">
+          <div className="rounded-xl bg-neutral-900/60 border border-white/[0.08] p-5 shadow-xl relative overflow-hidden backdrop-blur-md">
             <div className="flex items-center gap-4 mb-5">
               {currentUser.avatar ? (
                 <img
                   src={`https://cdn.discordapp.com/avatars/${currentUser.userId}/${currentUser.avatar}.png?size=128`}
                   alt={currentUser.username}
-                  className="w-16 h-16 border-2 border-white object-cover"
+                  className="w-16 h-16 rounded-xl border border-[#FF5500]/60 object-cover shadow-md"
                 />
               ) : (
-                <div className="w-16 h-16 bg-[#252525] border-2 border-white flex items-center justify-center text-xl font-black text-white">
+                <div className="w-16 h-16 rounded-xl bg-neutral-800 border border-white/20 flex items-center justify-center text-xl font-black text-white">
                   {currentUser.username.charAt(0).toUpperCase()}
                 </div>
               )}
 
               <div>
-                <div className="inline-block px-2 py-0.5 bg-[#1E1E1E] text-neutral-400 border border-[#333] text-[9px] font-bold uppercase mb-1">
+                <div className="inline-block px-2.5 py-0.5 rounded-full bg-white/[0.05] text-neutral-300 border border-white/[0.1] text-[10px] font-bold uppercase mb-1.5">
                   {currentUser.isAdmin ? '🛡️ ADMINISTRADOR' : '🎮 JUGADOR VERIFICADO'}
                 </div>
                 <h2 className="text-lg font-black text-white uppercase tracking-tight leading-none mb-1">
                   {currentUser.username}
                 </h2>
-                <p className="text-[11px] text-neutral-400 font-sans">
+                <p className="text-xs text-neutral-400 font-sans">
                   Discord ID: <span className="font-mono text-neutral-300">{currentUser.userId}</span>
                 </p>
               </div>
             </div>
 
             {/* Game Stats Mini Grid */}
-            <div className="grid grid-cols-3 gap-2 pt-4 border-t border-[#222] text-center">
-              <div className="bg-[#0E0E0E] p-2.5 border border-[#1E1E1E]">
-                <div className="text-[9px] text-neutral-500 uppercase font-bold">FACEIT NICK</div>
-                <div className="text-xs font-black text-[#FF5500] truncate">
+            <div className="grid grid-cols-3 gap-2.5 pt-4 border-t border-white/[0.08] text-center">
+              <div className="rounded-lg bg-black/40 p-2.5 border border-white/[0.05]">
+                <div className="text-[10px] text-neutral-400 uppercase font-bold">FACEIT NICK</div>
+                <div className="text-xs font-black text-[#FF5500] truncate mt-0.5">
                   {currentUser.faceit_nickname || 'Vinculado'}
                 </div>
               </div>
-              <div className="bg-[#0E0E0E] p-2.5 border border-[#1E1E1E]">
-                <div className="text-[9px] text-neutral-500 uppercase font-bold">TIER CS2</div>
-                <div className="text-xs font-black text-emerald-400">
+              <div className="rounded-lg bg-black/40 p-2.5 border border-white/[0.05]">
+                <div className="text-[10px] text-neutral-400 uppercase font-bold">TIER CS2</div>
+                <div className="text-xs font-black text-emerald-400 mt-0.5">
                   TIER {userTier}
                 </div>
               </div>
-              <div className="bg-[#0E0E0E] p-2.5 border border-[#1E1E1E]">
-                <div className="text-[9px] text-neutral-500 uppercase font-bold">NIVEL / ELO</div>
-                <div className="text-xs font-black text-cyan-400">
+              <div className="rounded-lg bg-black/40 p-2.5 border border-white/[0.05]">
+                <div className="text-[10px] text-neutral-400 uppercase font-bold">NIVEL / ELO</div>
+                <div className="text-xs font-black text-cyan-400 mt-0.5">
                   {currentUser.elo ? `${currentUser.elo} ELO` : (currentUser.skillLevel ? `LVL ${currentUser.skillLevel}` : 'LVL 10')}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Big Balance Card */}
-          <div className="bg-gradient-to-br from-[#1A1A1A] to-[#121212] border-2 border-[#FF5500] p-6 shadow-2xl relative">
+          {/* Big Balance Card with Radiant Accent */}
+          <div className="rounded-xl bg-gradient-to-br from-neutral-900/90 via-neutral-900/70 to-black border border-[#FF5500]/50 p-6 shadow-[0_8px_30px_rgba(255,85,0,0.15)] relative overflow-hidden backdrop-blur-md">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2 text-xs font-black uppercase text-[#FF5500]">
                 <Coins className="w-4 h-4" />
@@ -303,33 +304,33 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                 type="button"
                 onClick={handleManualRefresh}
                 disabled={isRefreshing}
-                className="text-neutral-400 hover:text-white p-1 transition-colors cursor-pointer"
+                className="text-neutral-400 hover:text-white p-1.5 rounded-md hover:bg-white/[0.05] transition-colors cursor-pointer"
                 title="Actualizar saldo"
               >
-                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-[#FF5500]' : ''}`} />
               </button>
             </div>
 
-            <div className="text-4xl sm:text-5xl font-black text-white tracking-tighter mb-2 flex items-baseline gap-2">
+            <div className="text-4xl sm:text-5xl font-black text-white tracking-tight mb-2 flex items-baseline gap-2">
               <span className="text-[#FF5500] text-2xl font-bold">S/</span>
               <span>{userBalance.toFixed(2)}</span>
               <span className="text-xs text-neutral-400 font-mono">PEN</span>
             </div>
 
-            <p className="text-[11px] text-neutral-400 font-sans leading-relaxed mb-4">
+            <p className="text-xs text-neutral-400 font-sans leading-relaxed mb-4">
               Tu saldo se descuenta automáticamente al confirmar apuestas en los mixtones o puede utilizarse para pases de temporada y torneos oficiales.
             </p>
 
-            <div className="flex items-center gap-2 pt-3 border-t border-[#262626] text-[10px] text-emerald-400">
-              <ShieldCheck className="w-3.5 h-3.5" />
+            <div className="flex items-center gap-2 pt-3 border-t border-white/[0.08] text-xs text-emerald-400">
+              <ShieldCheck className="w-4 h-4" />
               <span>Garantía de custodia segura y liquidación automática</span>
             </div>
           </div>
 
           {/* Quick Info Box */}
-          <div className="bg-[#121212] border border-[#222] p-4 text-[11px] text-neutral-400 font-sans space-y-2">
+          <div className="rounded-xl bg-neutral-900/40 border border-white/[0.06] p-4 text-xs text-neutral-400 font-sans space-y-2">
             <div className="font-mono text-xs font-bold text-white uppercase flex items-center gap-2">
-              <HelpCircle className="w-3.5 h-3.5 text-[#FF5500]" />
+              <HelpCircle className="w-4 h-4 text-[#FF5500]" />
               <span>Reglas de Billetera MachuPeek</span>
             </div>
             <p>
@@ -347,26 +348,26 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
 
         {/* RIGHT COLUMN: Yape Recharge Form */}
         <div className="lg:col-span-7">
-          <div className="bg-[#141414] border-2 border-[#742284] p-6 sm:p-8 shadow-2xl relative">
+          <div className="rounded-xl bg-[#0E1017]/90 border border-[#A855F7]/40 p-6 sm:p-8 shadow-[0_8px_30px_rgba(168,85,247,0.12)] relative backdrop-blur-md">
             
             {/* Header Badge */}
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-6 pb-4 border-b border-[#2D2033]">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b border-white/[0.08]">
               <div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-[#742284]/20 border border-[#742284] text-[#A855F7] text-[10px] font-bold uppercase mb-1">
+                <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#742284]/20 border border-[#A855F7]/40 text-[#C084FC] text-[10px] font-bold uppercase mb-1.5">
                   <Zap className="w-3 h-3" /> ACREDITACIÓN EN TIEMPO REAL // AUTOMÁTICA
                 </div>
-                <h3 className="text-lg sm:text-xl font-black italic tracking-tighter uppercase text-white">
-                  RECARGAR SALDO CON <span className="text-[#A855F7]">YAPE</span>
+                <h3 className="text-xl sm:text-2xl font-black italic tracking-tight uppercase text-white">
+                  RECARGAR SALDO CON <span className="text-[#C084FC]">YAPE</span>
                 </h3>
               </div>
-              <span className="text-[10px] text-neutral-400 font-sans border border-[#333] px-2 py-1">
-                Moneda: <strong>Soles (PEN)</strong>
+              <span className="text-xs text-neutral-400 font-sans border border-white/[0.1] rounded px-2.5 py-1">
+                Moneda: <strong className="text-white">Soles (PEN)</strong>
               </span>
             </div>
 
             {/* Success Message Banner */}
             {lastSuccessMessage && (
-              <div className="mb-6 p-4 bg-emerald-950/60 border-2 border-emerald-500 text-emerald-200 text-xs flex items-start gap-3 animate-fade-in">
+              <div className="mb-6 p-4 rounded-xl bg-emerald-950/60 border border-emerald-500/60 text-emerald-200 text-xs flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
                   <div className="font-bold uppercase tracking-wider mb-0.5">Operación Aprobada</div>
@@ -379,11 +380,11 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
               
               {/* 1. Seleccionar Monto */}
               <div>
-                <label className="text-xs font-bold text-neutral-300 uppercase block mb-2">
+                <label className="text-xs font-bold text-neutral-300 uppercase block mb-2.5">
                   1. Selecciona el monto a recargar (Soles PEN):
                 </label>
                 
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-3">
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 mb-3">
                   {PRESET_AMOUNTS.map((amt) => {
                     const isSelected = !isCustom && selectedAmount === amt;
                     return (
@@ -394,10 +395,10 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                           setSelectedAmount(amt);
                           setIsCustom(false);
                         }}
-                        className={`py-3 px-2 border text-center font-black text-xs transition-all cursor-pointer ${
+                        className={`py-3 px-2 rounded-lg border text-center font-black text-xs transition-all cursor-pointer active:scale-[0.98] ${
                           isSelected
-                            ? 'bg-[#742284] border-[#A855F7] text-white shadow-md'
-                            : 'bg-[#1C1C1C] border-[#333] text-neutral-300 hover:border-neutral-500 hover:text-white'
+                            ? 'bg-[#742284] border-[#C084FC] text-white shadow-[0_0_15px_rgba(168,85,247,0.35)]'
+                            : 'bg-neutral-900/60 border-white/[0.08] text-neutral-300 hover:border-white/[0.2] hover:text-white'
                         }`}
                       >
                         S/ {amt}.00
@@ -411,16 +412,16 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsCustom(true)}
-                    className={`text-[11px] font-bold uppercase underline cursor-pointer ${
-                      isCustom ? 'text-[#A855F7]' : 'text-neutral-400 hover:text-white'
+                    className={`text-xs font-bold uppercase underline cursor-pointer transition-colors ${
+                      isCustom ? 'text-[#C084FC]' : 'text-neutral-400 hover:text-white'
                     }`}
                   >
                     Ingresar otro monto personalizado
                   </button>
 
                   {isCustom && (
-                    <div className="flex-1 flex items-center bg-[#111] border border-[#742284] px-3 py-1.5">
-                      <span className="text-xs font-bold text-[#A855F7] mr-2">S/</span>
+                    <div className="flex-1 flex items-center bg-black/50 border border-[#A855F7] rounded-lg px-3 py-1.5 shadow-[0_0_10px_rgba(168,85,247,0.2)]">
+                      <span className="text-xs font-bold text-[#C084FC] mr-2">S/</span>
                       <input
                         type="number"
                         min="1"
@@ -428,7 +429,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                         placeholder="Ej: 15.00"
                         value={customAmount}
                         onChange={(e) => setCustomAmount(e.target.value)}
-                        className="w-full bg-transparent text-sm text-white focus:outline-none"
+                        className="w-full bg-transparent text-sm text-white focus:outline-none font-bold"
                         autoFocus
                       />
                     </div>
@@ -438,24 +439,24 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
 
               {/* 2. Número de Celular Yape */}
               <div>
-                <label className="text-xs font-bold text-neutral-300 uppercase block mb-1">
+                <label className="text-xs font-bold text-neutral-300 uppercase block mb-1.5">
                   2. Número de celular afiliado a Yape:
                 </label>
                 
                 <div className="relative">
-                  <Smartphone className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Smartphone className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="tel"
                     maxLength={9}
                     placeholder="Ej: 987654321"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="w-full bg-[#111] border border-[#333] pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-[#742284]"
+                    className="w-full bg-black/40 border border-white/[0.1] rounded-lg pl-9 pr-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#C084FC] focus:ring-1 focus:ring-[#C084FC] transition-colors"
                     required={!currentUser?.hasSavedPhone}
                   />
                 </div>
                 
-                <p className="text-[10px] text-neutral-500 mt-1 font-sans">
+                <p className="text-xs text-neutral-400 mt-1.5 font-sans">
                   {currentUser?.hasSavedPhone 
                     ? '🔒 Ya tienes un número registrado. Puedes dejarlo tal como está o ingresar uno nuevo.'
                     : 'Ingresa tu número de 9 dígitos. La transacción es 100% segura con cifrado SSL 256-Bit.'}
@@ -464,26 +465,26 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
 
               {/* 3. Código de Aprobación Yape (OTP) */}
               <div>
-                <label className="text-xs font-bold text-neutral-300 uppercase block mb-1">
+                <label className="text-xs font-bold text-neutral-300 uppercase block mb-1.5">
                   3. Código de aprobación de Yape (6 dígitos):
                 </label>
 
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Lock className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     maxLength={6}
                     placeholder="000000"
                     value={otp}
                     onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                    className="w-full bg-[#111] border-2 border-[#742284] pl-9 pr-3 py-2.5 text-lg font-mono font-black text-white tracking-[0.3em] focus:outline-none focus:border-[#A855F7]"
+                    className="w-full bg-black/50 border-2 border-[#A855F7]/80 rounded-lg pl-9 pr-3 py-3 text-lg font-mono font-black text-white tracking-[0.3em] focus:outline-none focus:border-[#C084FC] focus:shadow-[0_0_15px_rgba(192,132,252,0.3)] transition-all"
                     required
                   />
                 </div>
 
                 {/* Yape Instruction Callout */}
-                <div className="mt-2.5 p-3 bg-[#24132B] border border-[#742284]/50 text-[11px] text-purple-200 font-sans leading-relaxed">
-                  <strong className="text-white block font-mono uppercase text-[10px] mb-1">
+                <div className="mt-3 p-3.5 rounded-xl bg-purple-950/30 border border-[#A855F7]/30 text-xs text-purple-200 font-sans leading-relaxed">
+                  <strong className="text-white block font-mono uppercase text-xs mb-1">
                     📱 ¿Dónde encontrar este código en tu celular?
                   </strong>
                   Abre la app de <strong>Yape</strong> &gt; Toca el ícono de Menú o campana &gt; Selecciona <strong>"Código de aprobación"</strong> y copia los 6 dígitos temporales generados.
@@ -491,10 +492,10 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
               </div>
 
               {/* Summary and Submit Button */}
-              <div className="pt-4 border-t border-[#262626]">
+              <div className="pt-4 border-t border-white/[0.08]">
                 <div className="flex items-center justify-between text-xs mb-4">
                   <span className="text-neutral-400 uppercase">Total a debitar de Yape:</span>
-                  <span className="text-lg font-black text-[#A855F7]">
+                  <span className="text-xl font-black text-[#C084FC]">
                     S/ {effectiveAmount > 0 ? effectiveAmount.toFixed(2) : '0.00'} PEN
                   </span>
                 </div>
@@ -502,10 +503,10 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmitting || effectiveAmount < 1 || otp.length !== 6}
-                  className={`w-full py-4 text-xs font-black uppercase tracking-wider transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer ${
+                  className={`w-full py-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] ${
                     isSubmitting || effectiveAmount < 1 || otp.length !== 6
                       ? 'bg-neutral-800 border border-neutral-700 text-neutral-500 cursor-not-allowed opacity-60'
-                      : 'bg-[#742284] hover:bg-[#8B2FA0] border-2 border-[#A855F7] text-white shadow-purple-900/30'
+                      : 'bg-[#742284] hover:bg-[#8B2FA0] border border-[#C084FC]/60 text-white shadow-[0_4px_25px_rgba(168,85,247,0.35)]'
                   }`}
                 >
                   {isSubmitting ? (
@@ -523,9 +524,9 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
               </div>
 
               {/* Security Guarantee */}
-              <div className="text-center pt-2">
-                <p className="text-[10px] text-neutral-500 font-sans flex items-center justify-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <div className="text-center pt-1">
+                <p className="text-xs text-neutral-400 font-sans flex items-center justify-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
                   <span>Transacciones 100% seguras con cifrado bancario SSL 256-Bit.</span>
                 </p>
               </div>

@@ -1,78 +1,113 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* Base smoothing and layout foundation */
+html {
+  font-size: 18px;
+  scroll-behavior: smooth;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: #08090C;
+  color: #F3F4F6;
+  overflow-x: hidden;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Tactical & Gaming Design Utilities */
 @utility glass-panel {
-  background: rgba(17, 17, 17, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(14, 16, 23, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
 }
 
 @utility glow-my-turn {
-  box-shadow: 0 0 20px rgba(255, 85, 0, 0.25);
-  border-color: rgba(255, 85, 0, 0.5) !important;
+  box-shadow: 0 0 25px rgba(255, 85, 0, 0.35), inset 0 0 15px rgba(255, 85, 0, 0.15);
+  border-color: rgba(255, 85, 0, 0.8) !important;
 }
 
-/* Scrollbar para estética de consola de desarrollo */
+@utility tactical-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+@utility ambient-glow-orange {
+  background: radial-gradient(circle at 50% 30%, rgba(255, 85, 0, 0.14) 0%, transparent 70%);
+}
+
+.glass-card {
+  background: rgba(18, 20, 29, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05), 0 4px 20px rgba(0, 0, 0, 0.35);
+  transition: all 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  background: rgba(24, 27, 40, 0.78);
+  border-color: rgba(255, 85, 0, 0.35);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.1), 0 12px 30px -10px rgba(255, 85, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Micro-font scale legibility safeguards */
+.text-\[8px\] { font-size: 11px !important; }
+.text-\[9px\] { font-size: 12px !important; }
+.text-\[10px\] { font-size: 13px !important; }
+.text-\[11px\] { font-size: 14px !important; }
+.text-\[12px\] { font-size: 15px !important; }
+
+/* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0A0A0A;
+  background: #08090C;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1F1F1F;
+  background: #1C1F2B;
   border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #2D2D2D;
+  background: #FF5500;
 }
 
-/* Scrollbar para Firefox */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #1F1F1F #0A0A0A;
+  scrollbar-color: #1C1F2B #08090C;
 }
 
-html {
-  font-size: 20px;
-}
-
-/* Forzar que los tamaños pequeños definidos en píxeles fijos también crezcan */
-.text-\[8px\] {
-  font-size: 11px !important;
-}
-.text-\[9px\] {
-  font-size: 12px !important;
-}
-.text-\[10px\] {
-  font-size: 13px !important;
-}
-.text-\[11px\] {
-  font-size: 14px !important;
-}
-.text-\[12px\] {
-  font-size: 15px !important;
-}
-
-/* Immediate acknowledgement for every action; requests can finish afterwards. */
+/* Emil Kowalski Physical Button & Micro-interaction Posture */
 button:not(:disabled),
 [role="button"]:not([aria-disabled="true"]),
 input[type="button"]:not(:disabled),
 input[type="submit"]:not(:disabled) {
-  transition-property: transform, opacity, filter, box-shadow;
-  transition-duration: 120ms;
-  transition-timing-function: ease-out;
+  transition-property: transform, opacity, filter, box-shadow, background-color, border-color, color;
+  transition-duration: 180ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+button:not(:disabled):hover,
+[role="button"]:not([aria-disabled="true"]):hover {
+  filter: brightness(1.06);
 }
 
 button:not(:disabled):active,
@@ -81,8 +116,19 @@ button[data-instant-pressed="true"],
 [role="button"][data-instant-pressed="true"],
 input[type="button"]:not(:disabled):active,
 input[type="submit"]:not(:disabled):active {
-  transform: scale(0.97);
-  filter: brightness(0.9);
+  transform: scale(0.975);
+  filter: brightness(0.92);
+}
+
+/* Focus visibility for high craft accessibility */
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #08090C, 0 0 0 4px #FF5500;
 }
 
 button[data-request-pending="true"],
@@ -94,35 +140,50 @@ input[data-request-pending="true"] {
   pointer-events: none;
 }
 
+/* Loading Bar Animation */
 html[data-network-pending="true"]::before {
   content: "";
   position: fixed;
   z-index: 9999;
   top: 0;
   left: 0;
-  width: 35%;
+  width: 40%;
   height: 3px;
-  background: #ff5500;
-  box-shadow: 0 0 12px rgba(255, 85, 0, 0.85);
-  animation: request-progress 900ms ease-in-out infinite alternate;
+  background: linear-gradient(90deg, #FF5500, #FF8800, #FF5500);
+  box-shadow: 0 0 14px rgba(255, 85, 0, 0.9);
+  animation: request-progress 850ms cubic-bezier(0.16, 1, 0.3, 1) infinite alternate;
   pointer-events: none;
 }
 
 @keyframes request-progress {
   from { transform: translateX(-100%); }
-  to { transform: translateX(285%); }
+  to { transform: translateX(280%); }
+}
+
+@keyframes float-subtle {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+.animate-float {
+  animation: float-subtle 4s ease-in-out infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 0.3; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  button:not(:disabled),
-  [role="button"]:not([aria-disabled="true"]),
-  input[type="button"]:not(:disabled),
-  input[type="submit"]:not(:disabled) {
-    transition-duration: 0ms;
-  }
-
-  html[data-network-pending="true"]::before {
-    animation: none;
-    width: 100%;
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

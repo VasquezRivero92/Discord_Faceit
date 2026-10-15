@@ -291,7 +291,7 @@ const READY_PLAYERS_TTL = 60 * 1000;
 let settingsCache = null;
 let settingsLastFetch = 0;
 let settingsFetch = null;
-const SETTINGS_TTL = 30000; // 30 seconds
+const SETTINGS_TTL = 180000; // 3 minutos (se actualiza inmediatamente en memoria ante cambios)
 
 let nicknameToDiscordMapCache = null;
 let nicknameToDiscordMapLastFetch = 0;
@@ -352,7 +352,7 @@ const activeMatchesCacheMap = new Map();
 let activeMatchesLastFetch = 0;
 let activeMatchesFetched = false;
 let activeMatchesFetch = null;
-const ACTIVE_MATCHES_TTL = 10000; // 10 segundos
+const ACTIVE_MATCHES_TTL = 30000; // 30 segundos (se sincroniza en memoria con addActiveMatch/removeActiveMatch)
 
 async function ensureActiveMatchesCache(forceRefresh = false) {
   const now = Date.now();
@@ -372,6 +372,7 @@ async function ensureActiveMatchesCache(forceRefresh = false) {
       activeMatchesFetched = true;
     } catch (error) {
       logger.error('Error al actualizar caché de partidas activas:', error);
+      activeMatchesLastFetch = Date.now(); // Cooldown para evitar reintentos en bucle
     } finally {
       activeMatchesFetch = null;
     }
@@ -389,8 +390,12 @@ function invalidateActiveMatchesCache() {
 // Caché de Configuración por Servidor (Guild Settings)
 const guildSettingsCache = new Map();
 const guildSettingsFetches = new Map();
-const GUILD_SETTINGS_TTL = 30000; // 30 segundos
+const GUILD_SETTINGS_TTL = 180000; // 3 minutos (se invalida o actualiza inmediatamente ante setGuildSettings)
 const hubIdToGuildIdsCache = new Map();
+
+// Caché de Baneos de Hub en memoria (evita consultar decenas de documentos de Firestore cada 2 minutos)
+const hubBansMemoryCache = new Map(); // hubId -> { bans: [], timestamp: number }
+const HUB_BANS_TTL = 10 * 60 * 1000; // 10 minutos
 
 export const db = {
   _firestore: firestore,
@@ -1123,6 +1128,7 @@ export const db = {
         return settingsCache;
       } catch (error) {
         logger.error('Error al obtener settings:', error);
+        settingsLastFetch = Date.now(); // Evita bucles inmediatos continuos si hay cuota agotada
         return settingsCache || getDefaultSettings();
       } finally {
         settingsFetch = null;
@@ -1161,6 +1167,8 @@ export const db = {
         return data;
       } catch (error) {
         logger.error(`Error al obtener settings de la guild ${guildId}:`, error);
+        // Guardar en caché el fallback con TTL para no martillar Firestore cuando la cuota esté excedida
+        cacheValue(guildSettingsCache, guildId, {});
         return {};
       } finally {
         guildSettingsFetches.delete(guildId);
@@ -1396,7 +1404,19 @@ export const db = {
         return defaultState;
       } catch (error) {
         logger.error('Error al obtener estado del lobby mixton:', error);
-        return null;
+        const fallbackState = {
+          teams: [
+            { id: 'team_1', name: 'Equipo 1', captain: null, players: [] },
+            { id: 'team_2', name: 'Equipo 2', captain: null, players: [] }
+          ],
+          pickOrder: [],
+          currentPickIndex: 0,
+          draftStarted: false,
+          draftFinished: false,
+          updatedAt: Date.now()
+        };
+        cacheValue(lobbyStateCache, cacheKey, fallbackState);
+        return fallbackState;
       } finally {
         lobbyStateFetches.delete(cacheKey);
       }
@@ -1454,6 +1474,7 @@ export const db = {
         return players;
       } catch (error) {
         logger.error('Error al obtener jugadores listos de Firestore:', error);
+        readyPlayersLastFetch = Date.now(); // Cooldown para no saturar Firestore
         return readyPlayersCache || [];
       } finally {
         readyPlayersFetch = null;
@@ -1660,21 +1681,43 @@ export const db = {
   },
 
   async getHubBansCache(hubId) {
+    if (!hubId) return [];
+    const cached = hubBansMemoryCache.get(hubId);
+    if (cached && (Date.now() - cached.timestamp < HUB_BANS_TTL)) {
+      return cached.bans;
+    }
+
     try {
       const snapshot = await firestore.collection('hub_bans_cache').where('hubId', '==', hubId).get();
       const bans = [];
       snapshot.forEach(doc => {
         bans.push({ id: doc.id, ...doc.data() });
       });
+      hubBansMemoryCache.set(hubId, { bans, timestamp: Date.now() });
       return bans;
     } catch (err) {
       logger.error('Error al obtener cache de baneos:', err);
+      if (cached) {
+        cached.timestamp = Date.now();
+        return cached.bans;
+      }
+      hubBansMemoryCache.set(hubId, { bans: [], timestamp: Date.now() });
       return [];
     }
   },
 
   async addHubBanToCache(hubId, userId, banData) {
     try {
+      const newEntry = { id: `${hubId}_${userId}`, hubId, userId, ...banData };
+      const cached = hubBansMemoryCache.get(hubId);
+      if (cached) {
+        const filtered = cached.bans.filter(b => b.userId !== userId);
+        filtered.push(newEntry);
+        cached.bans = filtered;
+      } else {
+        hubBansMemoryCache.set(hubId, { bans: [newEntry], timestamp: Date.now() });
+      }
+
       await firestore.collection('hub_bans_cache').doc(`${hubId}_${userId}`).set({
         hubId,
         userId,
@@ -1690,6 +1733,11 @@ export const db = {
 
   async removeHubBanFromCache(hubId, userId) {
     try {
+      const cached = hubBansMemoryCache.get(hubId);
+      if (cached) {
+        cached.bans = cached.bans.filter(b => b.userId !== userId);
+      }
+
       await firestore.collection('hub_bans_cache').doc(`${hubId}_${userId}`).delete();
       return true;
     } catch (err) {

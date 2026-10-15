@@ -5,6 +5,8 @@ Discord_Faceit.zip
 *.log
 .gemini/
 .agents/
+.claude/
+.codex/
 cookies.txt
 scratch/
 *.exe
