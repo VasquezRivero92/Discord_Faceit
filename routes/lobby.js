@@ -145,8 +145,7 @@ export function createLobbyRouter(client, db, config, wss) {
     const settings = await db.getGuildSettings(effectiveGuildId).catch(() => ({}));
     const commandEnabled = settings.command_mixton_listo !== false;
 
-    const allReadyPlayers = await db.getReadyPlayers();
-    const readyPlayers = allReadyPlayers.filter(p => p.mixton_guild_id === effectiveGuildId);
+    const readyPlayers = await db.getReadyPlayers(effectiveGuildId);
 
     const guild = client.guilds.cache.get(effectiveGuildId) || await client.guilds.fetch(effectiveGuildId).catch(() => null);
     const guildName = 'MachuPeek';
@@ -278,7 +277,10 @@ export function createLobbyRouter(client, db, config, wss) {
   }
 
   // --- Información del usuario autenticado ---
-  router.get('/me', requireAuth, async (req, res) => {
+  router.get('/me', optionalAuth, async (req, res) => {
+    if (!req.user) {
+      return res.json({ user: null });
+    }
     let hasSavedPhone = false;
     let balance = 0;
     let fullUser = null;
@@ -1811,6 +1813,21 @@ export function createLobbyRouter(client, db, config, wss) {
     } catch (err) {
       logger.error('Error al obtener historial en lobby:', err);
       res.status(500).json({ error: 'Error al obtener historial.' });
+    }
+  });
+
+  // The list intentionally contains only compact match summaries. Full FACEIT
+  // player statistics are fetched from Firestore only when this detail route
+  // is opened by the visitor.
+  router.get('/matches-history/:matchId', optionalAuth, async (req, res) => {
+    try {
+      const history = await db.getMatchHistoryById(req.params.matchId);
+      if (!history) return res.status(404).json({ error: 'Partida no encontrada.' });
+      const stats = await db.getMatchStats(req.params.matchId);
+      res.json({ history, stats });
+    } catch (err) {
+      logger.error('Error al obtener detalle del historial:', err);
+      res.status(500).json({ error: 'Error al obtener el detalle de la partida.' });
     }
   });
 

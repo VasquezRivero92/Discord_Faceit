@@ -103,6 +103,10 @@ const app = express();
 app.use(helmet({
   contentSecurityPolicy: false,
 }));
+app.use((req, res, next) => {
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
 const allowedCorsOrigins = (process.env.CORS_ORIGINS || process.env.ADMIN_ALLOWED_ORIGINS || '')
   .split(',')
   .map(origin => origin.trim())

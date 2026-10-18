@@ -12,6 +12,63 @@ import { logger } from '../utils/logger.js';
 import { isFeatureEnabled } from '../utils/featureFlags.js';
 import { playTTSCountdown } from '../utils/voiceAnnouncer.js';
 
+function getFaceitStat(source, ...keys) {
+  if (!source || typeof source !== 'object') return null;
+  for (const key of keys) {
+    if (source[key] !== undefined && source[key] !== null) return source[key];
+  }
+  return null;
+}
+
+function normalizeFaceitMatchStats(rawStats) {
+  const round = rawStats?.rounds?.[0];
+  if (!round || !Array.isArray(round.teams)) return null;
+
+  const roundStats = round.round_stats || {};
+  return {
+    map: getFaceitStat(roundStats, 'Map', 'Map Name'),
+    duration: getFaceitStat(roundStats, 'Match Duration', 'Duration'),
+    playedAt: getFaceitStat(roundStats, 'Match Finished At', 'Match Played'),
+    teams: round.teams.map(team => {
+      const teamStats = team.team_stats || {};
+      return {
+        name: getFaceitStat(teamStats, 'Team', 'Team Name') || team.name || 'Equipo',
+        score: getFaceitStat(teamStats, 'Final Score', 'Score'),
+        players: (team.players || []).map(player => {
+          const stats = player.player_stats || {};
+          return {
+            playerId: player.player_id || player.playerId || null,
+            nickname: player.nickname || player.name || 'Jugador',
+            kills: getFaceitStat(stats, 'Kills', 'K'),
+            assists: getFaceitStat(stats, 'Assists', 'A'),
+            deaths: getFaceitStat(stats, 'Deaths', 'D'),
+            kd: getFaceitStat(stats, 'K/D Ratio', 'K/D'),
+            headshots: getFaceitStat(stats, 'Headshots %', 'HS %', 'HS%'),
+            mvps: getFaceitStat(stats, 'MVPs', 'MVP')
+          };
+        })
+      };
+    })
+  };
+}
+
+async function fetchFaceitStatsForHistory(matchId) {
+  if (!matchId || !env.FACEIT_API_KEY || env.FACEIT_API_KEY.startsWith('TU_')) return null;
+  try {
+    const response = await fetch(`https://open.faceit.com/data/v4/matches/${matchId}/stats`, {
+      headers: { Authorization: `Bearer ${env.FACEIT_API_KEY}`, Accept: 'application/json' }
+    });
+    if (!response.ok) {
+      logger.warn(`FACEIT aún no devolvió estadísticas para ${matchId} (${response.status}).`);
+      return null;
+    }
+    return normalizeFaceitMatchStats(await response.json());
+  } catch (error) {
+    logger.warn(`No se pudieron obtener estadísticas FACEIT de ${matchId}: ${error.message}`);
+    return null;
+  }
+}
+
 export async function handleFaceitWebhook(event, client, db) {
   logger.info(`Webhook recibido. Evento: ${event.event}`);
 
@@ -680,6 +737,14 @@ async function handleMatchEvent(event, client, db, isConfigure, isStart, isFinis
           targetGuildId,
           'finished'
         ).catch(err => logger.error('Error al guardar historial de partida:', err));
+
+        // One FACEIT request occurs only once, when the match closes. The
+        // normalized result is stored separately from the lightweight history
+        // summary so neither the Mixtón nor the list needs this API call.
+        const faceitStats = await fetchFaceitStatsForHistory(matchData.id);
+        if (faceitStats) {
+          await db.saveMatchStats(matchData.id, faceitStats);
+        }
 
         await db.addLogEntry('success', `Partida ${matchData.id} finalizada exitosamente${queueConfig.queueName ? ` (${queueConfig.queueName})` : ''}.`, 'bot');
 

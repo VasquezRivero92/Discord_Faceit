@@ -12,7 +12,8 @@ import {
   Menu,
   X,
   ExternalLink,
-  Sparkles
+  Sparkles,
+  Award
 } from 'lucide-react';
 import { ActiveView, CurrentUser } from '../types';
 
@@ -124,6 +125,19 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Trophy className="w-3.5 h-3.5 text-[#FF5500]" />
             <span>El Mixtón</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleNavClick('historial')}
+            className={`px-3 py-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeView === 'historial'
+                ? 'bg-[#FF5500] text-white shadow-[0_0_15px_rgba(255,85,0,0.35)]'
+                : 'text-neutral-300 hover:text-white hover:bg-white/[0.06]'
+            }`}
+          >
+            <Award className="w-3.5 h-3.5 text-[#FF5500]" />
+            <span>Partidas</span>
           </button>
 
           <button
@@ -278,6 +292,17 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Trophy className="w-4 h-4 text-[#FF5500]" />
             <span>El Mixtón en Vivo</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleNavClick('historial')}
+            className={`w-full text-left px-3.5 py-2.5 rounded-md flex items-center gap-2 ${
+              activeView === 'historial' ? 'bg-[#FF5500] text-white' : 'text-neutral-300 hover:bg-white/[0.05]'
+            }`}
+          >
+            <Award className="w-4 h-4 text-[#FF5500]" />
+            <span>Historial de Partidas</span>
           </button>
 
           <button

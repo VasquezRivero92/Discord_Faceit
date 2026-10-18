@@ -128,6 +128,7 @@ export type ActiveView =
   | 'inicio'
   | 'mixton'
   | 'arena'
+  | 'historial'
   | 'cuenta'
   | 'login'
   | 'terminos'

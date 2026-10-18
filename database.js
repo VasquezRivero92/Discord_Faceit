@@ -275,6 +275,7 @@ const PENDING_COLLECTION = 'faceit_pending_verifications';
 const ACTIVE_MATCHES_COLLECTION = 'faceit_active_matches';
 const CONFIG_COLLECTION = 'faceit_config';
 const MATCHES_HISTORY_COLLECTION = 'faceit_matches_history';
+const MATCH_STATS_COLLECTION = 'faceit_match_stats';
 // --- In-Memory Caching ---
 // These caches are deliberately short-lived. Writes made through this module
 // update or invalidate them immediately, so Firestore is only the source of
@@ -283,10 +284,32 @@ const lobbyStateCache = new Map();
 const lobbyStateFetches = new Map();
 const LOBBY_STATE_TTL = 60 * 1000;
 
-let readyPlayersCache = null;
-let readyPlayersLastFetch = 0;
-let readyPlayersFetch = null;
+const readyPlayersCache = new Map();
+const readyPlayersFetches = new Map();
 const READY_PLAYERS_TTL = 60 * 1000;
+
+// Historial del Mixtón: cada entrada conserva solamente la página solicitada.
+// Las escrituras lo invalidan de inmediato, por lo que el TTL solo absorbe
+// aperturas simultáneas del panel y nunca deja datos obsoletos tras un cambio.
+const matchHistoryCache = new Map();
+const matchHistoryFetches = new Map();
+const MATCH_HISTORY_TTL = 2 * 60 * 1000;
+const matchStatsCache = new Map();
+const MATCH_STATS_TTL = 10 * 60 * 1000;
+
+function getMatchHistoryCacheKey(guildId, limit) {
+  return `${guildId || 'global'}:${limit}`;
+}
+
+function invalidateMatchHistoryCache(guildId = null) {
+  const prefix = `${guildId || 'global'}:`;
+  for (const key of matchHistoryCache.keys()) {
+    if (key.startsWith(prefix)) matchHistoryCache.delete(key);
+  }
+  for (const key of matchHistoryFetches.keys()) {
+    if (key.startsWith(prefix)) matchHistoryFetches.delete(key);
+  }
+}
 
 let settingsCache = null;
 let settingsLastFetch = 0;
@@ -457,8 +480,7 @@ export const db = {
       }, { merge: true });
       const pendingRef = firestore.collection(PENDING_COLLECTION).doc(discordId);
       await pendingRef.delete();
-      readyPlayersCache = null;
-      readyPlayersLastFetch = 0;
+      this.invalidateReadyPlayersCache();
       nicknameToDiscordMapCache = null;
       nicknameToDiscordMapLastFetch = 0;
       cacheUser(docId, userData);
@@ -521,8 +543,7 @@ export const db = {
         updateData.faceit_level_season = season;
       }
       await userRef.update(updateData);
-      readyPlayersCache = null;
-      readyPlayersLastFetch = 0;
+      this.invalidateReadyPlayersCache();
       
       const cached = getCachedUserByDiscordId(docId);
       if (cached) {
@@ -640,8 +661,7 @@ export const db = {
       const docId = guildId ? `${guildId}_${discordId}` : discordId;
       const userRef = firestore.collection(USERS_COLLECTION).doc(docId);
       await userRef.delete();
-      readyPlayersCache = null;
-      readyPlayersLastFetch = 0;
+      this.invalidateReadyPlayersCache();
       nicknameToDiscordMapCache = null;
       nicknameToDiscordMapLastFetch = 0;
       
@@ -997,6 +1017,7 @@ export const db = {
       }
 
       await docRef.set(matchObj, { merge: true });
+      invalidateMatchHistoryCache(guildId || matchData.guild_id || null);
       logger.success(`Partida ${matchId} [${status}] guardada/actualizada en historial de Firestore.`);
     } catch (error) {
       logger.error('Error al guardar partida en historial de Firestore:', error);
@@ -1004,28 +1025,75 @@ export const db = {
   },
 
   async getMatchHistory(limit = 20, guildId = null) {
-    try {
-      let query = firestore.collection(MATCHES_HISTORY_COLLECTION);
-      if (guildId) {
-        query = query.where('guild_id', '==', guildId);
+    const safeLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 20, 1), 50);
+    const cacheKey = getMatchHistoryCacheKey(guildId, safeLimit);
+    const cached = readCachedValue(matchHistoryCache, cacheKey, MATCH_HISTORY_TTL);
+    if (cached !== undefined) return cached;
+    if (matchHistoryFetches.has(cacheKey)) return matchHistoryFetches.get(cacheKey);
+
+    const fetchHistory = (async () => {
+      try {
+        // Firestore performs both ordering and limiting. Previously the web
+        // panel downloaded every historical match and sorted it in Node.
+        let query = firestore.collection(MATCHES_HISTORY_COLLECTION);
+        if (guildId) query = query.where('guild_id', '==', guildId);
+        const snapshot = await query.orderBy('createdAt', 'desc').limit(safeLimit).get();
+        const history = snapshot.docs.map(doc => doc.data());
+        cacheValue(matchHistoryCache, cacheKey, history);
+        return history;
+      } catch (error) {
+        logger.error('Error al obtener historial de partidas de Firestore:', error);
+        return [];
+      } finally {
+        matchHistoryFetches.delete(cacheKey);
       }
-      const snapshot = await query.get();
-      const history = [];
-      snapshot.forEach(doc => {
-        history.push(doc.data());
-      });
+    })();
+    matchHistoryFetches.set(cacheKey, fetchHistory);
+    return fetchHistory;
+  },
 
-      // Ordenar en memoria por createdAt descendente
-      history.sort((a, b) => {
-        const timeA = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate().getTime() : (a.createdAt._seconds ? a.createdAt._seconds * 1000 : new Date(a.createdAt).getTime())) : 0;
-        const timeB = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate().getTime() : (b.createdAt._seconds ? b.createdAt._seconds * 1000 : new Date(b.createdAt).getTime())) : 0;
-        return timeB - timeA;
-      });
-
-      return history.slice(0, limit);
+  async getMatchHistoryById(matchId) {
+    if (!matchId) return null;
+    try {
+      const doc = await firestore.collection(MATCHES_HISTORY_COLLECTION).doc(matchId).get();
+      return doc.exists ? doc.data() : null;
     } catch (error) {
-      logger.error('Error al obtener historial de partidas de Firestore:', error);
-      return [];
+      logger.error(`Error al obtener historial de la partida ${matchId}:`, error);
+      return null;
+    }
+  },
+
+  // The detailed FACEIT result lives outside the list document. Opening the
+  // history page therefore reads small summaries, while a full stat sheet is
+  // only read when a visitor explicitly opens that match.
+  async saveMatchStats(matchId, stats) {
+    if (!matchId || !stats) return false;
+    try {
+      await firestore.collection(MATCH_STATS_COLLECTION).doc(matchId).set({
+        matchId,
+        ...stats,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      cacheValue(matchStatsCache, matchId, { matchId, ...stats });
+      return true;
+    } catch (error) {
+      logger.error(`Error al guardar estadísticas FACEIT de ${matchId}:`, error);
+      return false;
+    }
+  },
+
+  async getMatchStats(matchId) {
+    if (!matchId) return null;
+    const cached = readCachedValue(matchStatsCache, matchId, MATCH_STATS_TTL);
+    if (cached !== undefined) return cached;
+    try {
+      const doc = await firestore.collection(MATCH_STATS_COLLECTION).doc(matchId).get();
+      const stats = doc.exists ? doc.data() : null;
+      cacheValue(matchStatsCache, matchId, stats);
+      return stats;
+    } catch (error) {
+      logger.error(`Error al obtener estadísticas FACEIT de ${matchId}:`, error);
+      return null;
     }
   },
 
@@ -1033,6 +1101,11 @@ export const db = {
     if (!matchId || typeof matchId !== 'string') return false;
     try {
       await firestore.collection(MATCHES_HISTORY_COLLECTION).doc(matchId).delete();
+      // The match id is global and does not reveal its guild here; invalidate
+      // all cached pages so a deleted entry cannot remain visible.
+      matchHistoryCache.clear();
+      matchHistoryFetches.clear();
+      matchStatsCache.delete(matchId);
       logger.success(`Partida ${matchId} eliminada del historial de Firestore.`);
       return true;
     } catch (error) {
@@ -1443,19 +1516,23 @@ export const db = {
 
   // --- Ready Players Cache & Helper Methods ---
   invalidateReadyPlayersCache() {
-    readyPlayersCache = null;
-    readyPlayersLastFetch = 0;
+    readyPlayersCache.clear();
+    readyPlayersFetches.clear();
   },
 
-  async getReadyPlayers() {
-    if (readyPlayersCache && (Date.now() - readyPlayersLastFetch < READY_PLAYERS_TTL)) {
-      return readyPlayersCache;
-    }
-    if (readyPlayersFetch) return readyPlayersFetch;
+  async getReadyPlayers(guildId = null) {
+    const cacheKey = guildId || 'global';
+    const cached = readCachedValue(readyPlayersCache, cacheKey, READY_PLAYERS_TTL);
+    if (cached !== undefined) return cached;
+    if (readyPlayersFetches.has(cacheKey)) return readyPlayersFetches.get(cacheKey);
 
-    readyPlayersFetch = (async () => {
+    const fetchPlayers = (async () => {
       try {
-        const snapshot = await firestore.collection(USERS_COLLECTION).where('mixton_ready', '==', true).get();
+        let query = firestore.collection(USERS_COLLECTION).where('mixton_ready', '==', true);
+        // A lobby only needs its own ready players. This avoids reading every
+        // other server's queue each time an arena viewer connects.
+        if (guildId) query = query.where('mixton_guild_id', '==', guildId);
+        const snapshot = await query.get();
         const players = [];
         snapshot.forEach(doc => {
           const data = doc.data();
@@ -1469,18 +1546,20 @@ export const db = {
             mixton_guild_id: data.mixton_guild_id || data.guild_id || null
           });
         });
-        readyPlayersCache = players;
-        readyPlayersLastFetch = Date.now();
+        cacheValue(readyPlayersCache, cacheKey, players);
         return players;
       } catch (error) {
         logger.error('Error al obtener jugadores listos de Firestore:', error);
-        readyPlayersLastFetch = Date.now(); // Cooldown para no saturar Firestore
-        return readyPlayersCache || [];
+        // Cache an empty fallback briefly to prevent a failing quota/index from
+        // triggering one retry per browser connection.
+        cacheValue(readyPlayersCache, cacheKey, []);
+        return [];
       } finally {
-        readyPlayersFetch = null;
+        readyPlayersFetches.delete(cacheKey);
       }
     })();
-    return readyPlayersFetch;
+    readyPlayersFetches.set(cacheKey, fetchPlayers);
+    return fetchPlayers;
   },
 
   async setPlayerReadyStatus(discordId, ready, guildId = null) {
@@ -1556,8 +1635,7 @@ export const db = {
 
   async resetAllReadyPlayers(guildId = null) {
     try {
-      const allReadyPlayers = await this.getReadyPlayers();
-      const readyPlayers = guildId ? allReadyPlayers.filter(p => p.mixton_guild_id === guildId) : allReadyPlayers;
+      const readyPlayers = await this.getReadyPlayers(guildId);
       if (readyPlayers.length === 0) return 0;
       
       const batch = firestore.batch();

@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "faceit_matches_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "guild_id", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "faceit_users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "mixton_ready", "order": "ASCENDING" },
+        { "fieldPath": "mixton_guild_id", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

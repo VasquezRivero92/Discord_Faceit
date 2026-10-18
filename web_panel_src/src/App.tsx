@@ -50,6 +50,7 @@ import { TerminosCondicionesView } from './components/TerminosCondicionesView';
 import { DevolucionesView } from './components/DevolucionesView';
 import { ContactoView } from './components/ContactoView';
 import { GuiaFaceitView } from './components/GuiaFaceitView';
+import { MatchHistoryView } from './components/MatchHistoryView';
 
 export default function App() {
   // Authentication & Loading states
@@ -66,6 +67,7 @@ export default function App() {
     if (p.includes('contacto')) return 'contacto';
     if (p.includes('cuenta') || p.includes('saldo') || p.includes('billetera')) return 'cuenta';
     if (p.includes('login') || p.includes('acceso')) return 'login';
+    if (p.includes('historial') || p.includes('partidas')) return 'historial';
     if (p.includes('mixton') || p.includes('arena') || p.includes('draft')) return 'mixton';
     return 'inicio';
   };
@@ -112,14 +114,15 @@ export default function App() {
     [key: string]: Player[];
   }>({ S: [], A: [], B: [], C: [] });
   const [matchHistory, setMatchHistory] = useState<any[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [selectedHistoryMatch, setSelectedHistoryMatch] = useState<{ history: any; stats: any | null } | null>(null);
+  const [isHistoryDetailLoading, setIsHistoryDetailLoading] = useState(false);
 
   // UI Filters and Modals
   const [selectedTier, setSelectedTier] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [modalTargetTeamId, setModalTargetTeamId] = useState<string | null>(null);
   const [modalTeamName, setModalTeamName] = useState<string>('');
-  const [modalHistoryRoster, setModalHistoryRoster] = useState<any[] | null>(null);
-  const [modalHistoryTeamName, setModalHistoryTeamName] = useState<string>('');
   const [commandEnabled, setCommandEnabled] = useState(true);
   const [pendingPick, setPendingPick] = useState<Player | null>(null);
   const [numTeamsSelect, setNumTeamsSelect] = useState<number>(4);
@@ -182,6 +185,7 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const wsReconnectTimerRef = useRef<number | null>(null);
 
   // Helper: Toast Notifications (Admin-style notifications)
   const showToast = useCallback((text: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -204,12 +208,13 @@ export default function App() {
   const handleRefreshCurrentUser = async () => {
     try {
       const res = await fetch('/api/lobby/me');
-      if (res.ok) {
+      const contentType = res.headers.get('content-type');
+      if (res.ok && contentType?.includes('application/json')) {
         const data = await res.json();
-        setCurrentUser(data.user);
+        setCurrentUser(data.user || null);
       }
-    } catch (err) {
-      console.error('Error al actualizar usuario:', err);
+    } catch {
+      // Silent fallback
     }
   };
 
@@ -223,8 +228,6 @@ export default function App() {
     if (user.isAdmin) {
       await loadGuildsSelector();
     }
-    await fetchState();
-    await fetchHistory();
     setActiveView('cuenta');
   };
 
@@ -239,7 +242,8 @@ export default function App() {
   const loadGuildsSelector = useCallback(async () => {
     try {
       const res = await fetch('/api/lobby/guilds');
-      if (!res.ok) return;
+      const contentType = res.headers.get('content-type');
+      if (!res.ok || !contentType?.includes('application/json')) return;
       const { guilds: loadedGuilds } = await res.json();
       if (!loadedGuilds || loadedGuilds.length === 0) return;
       
@@ -258,8 +262,8 @@ export default function App() {
         }
         return prev;
       });
-    } catch (err) {
-      console.error('Error loading guilds selector:', err);
+    } catch {
+      // Ignore background guilds loading error
     }
   }, []);
 
@@ -270,9 +274,9 @@ export default function App() {
       const path = targetGuildId ? `/api/lobby/mixton-state?guildId=${targetGuildId}` : '/api/lobby/mixton-state';
       
       const res = await fetch(path);
-      if (!res.ok) {
-        if (res.status === 401) return; // session expired, ignore
-        throw new Error('Error al conectar con el servidor.');
+      const contentType = res.headers.get('content-type');
+      if (!res.ok || !contentType?.includes('application/json')) {
+        return; // Session expired or reverse proxy returned HTML/challenge; ignore safely
       }
       
       const data = await res.json();
@@ -289,76 +293,53 @@ export default function App() {
         url.searchParams.set('guild', data.guildId);
         window.history.replaceState({}, '', url);
       }
-    } catch (err) {
-      console.error('Error fetching lobby state:', err);
+    } catch {
+      // Safe fallback if JSON parsing or network connection fails
     }
   }, [currentGuildId]);
 
   // Fetch recent mixton matches history
   const fetchHistory = useCallback(async (guildIdToUse?: string) => {
+    setIsHistoryLoading(true);
     try {
       const targetGuildId = guildIdToUse !== undefined ? guildIdToUse : currentGuildId;
       const path = targetGuildId ? `/api/lobby/matches-history?guildId=${targetGuildId}&limit=10` : '/api/lobby/matches-history?limit=10';
       
       const res = await fetch(path);
-      if (!res.ok) return;
+      const contentType = res.headers.get('content-type');
+      if (!res.ok || !contentType?.includes('application/json')) return;
       const data = await res.json();
       if (data.history) setMatchHistory(data.history);
-    } catch (err) {
-      console.error('Error fetching history:', err);
+    } catch {
+      // Silent error handling for history
+    } finally {
+      setIsHistoryLoading(false);
     }
   }, [currentGuildId]);
 
-  // Load team roster directly from history
-  const handleLoadTeamFromHistory = async (teamId: string, roster: any[]) => {
-    if (!roster || roster.length === 0) {
-      showToast('El equipo no tiene jugadores registrados.', 'error');
-      return;
-    }
-    
-    // Check that all players have a discord_id mapped
-    const missingDiscordId = roster.some(p => !p.discord_id && !p.id);
-    if (missingDiscordId) {
-      showToast('No se puede cargar el equipo: algunos jugadores no tienen su cuenta de Discord vinculada.', 'error');
-      return;
-    }
-
+  const handleSelectHistoryMatch = async (matchId: string) => {
+    setIsHistoryDetailLoading(true);
+    const fallback = matchHistory.find(match => match.id === matchId);
+    if (fallback) setSelectedHistoryMatch({ history: fallback, stats: null });
     try {
-      const captain = roster[0];
-      const players = roster.slice(1);
-      
-      const res = await apiFetch('/api/lobby/mixton-load-team', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          teamId,
-          captainDiscordId: captain.discord_id || captain.id,
-          playerDiscordIds: players.map((p: any) => p.discord_id || p.id)
-        })
-      });
+      const res = await apiFetch(`/api/lobby/matches-history/${matchId}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al cargar el equipo.');
-      
-      showToast('Equipo cargado con éxito del historial.', 'success');
-      await fetchState();
+      if (!res.ok) throw new Error(data.error || 'No se pudo cargar el detalle de la partida.');
+      setSelectedHistoryMatch({ history: data.history, stats: data.stats || null });
     } catch (err: any) {
       showToast(err.message, 'error');
+    } finally {
+      setIsHistoryDetailLoading(false);
     }
-  };
-
-  // Open retro flat modal to ask admin which team to assign the history roster to
-  const handleAssignHistoryTeamPrompt = (roster: any[], teamNameSource: string) => {
-    if (!roster || roster.length === 0) {
-      showToast('El equipo no tiene jugadores registrados.', 'error');
-      return;
-    }
-    setModalHistoryRoster(roster);
-    setModalHistoryTeamName(teamNameSource);
   };
 
   // Connect WebSocket for real-time updates
   const connectWebSocket = useCallback((guildId: string) => {
     if (!guildId) return;
+    if (wsReconnectTimerRef.current !== null) {
+      window.clearTimeout(wsReconnectTimerRef.current);
+      wsReconnectTimerRef.current = null;
+    }
     if (wsRef.current) {
       try {
         wsRef.current.onclose = null;
@@ -397,8 +378,6 @@ export default function App() {
               return prev;
             });
           }
-
-          fetchHistory(data.guildId || undefined);
         }
       } catch (err) {
         console.error('Error al procesar mensaje de WebSocket:', err);
@@ -406,22 +385,24 @@ export default function App() {
     };
     
     socket.onclose = () => {
+      // A socket deliberately closed while leaving the arena must not reconnect
+      // in the background. That avoids needless server work for the landing page.
+      if (wsRef.current !== socket) return;
       console.warn('Conexión WebSocket cerrada, reintentando en 5 segundos...');
-      setTimeout(() => connectWebSocket(guildId), 5000);
+      wsReconnectTimerRef.current = window.setTimeout(() => {
+        wsReconnectTimerRef.current = null;
+        if (wsRef.current === socket) connectWebSocket(guildId);
+      }, 5000);
     };
     
     socket.onerror = (err) => {
       console.error('Error en WebSocket:', err);
       socket.close();
     };
-  }, [fetchHistory, fetchState]);
+  }, []);
 
   // Check Session with Server on Mount
   useEffect(() => {
-    // Fetch live state and matches history immediately for all visitors (guests & logged in)
-    fetchState();
-    fetchHistory();
-
     const checkAuth = async () => {
       try {
         const res = await fetch('/api/lobby/me');
@@ -430,47 +411,67 @@ export default function App() {
           setAuthChecking(false);
           return;
         }
+        const contentType = res.headers.get('content-type');
+        if (!res.ok || !contentType?.includes('application/json')) {
+          setCurrentUser(null);
+          setAuthChecking(false);
+          return;
+        }
         const data = await res.json();
-        setCurrentUser(data.user);
+        setCurrentUser(data.user || null);
         
         // If user is Admin, load guilds list
         if (data.user?.isAdmin) {
           await loadGuildsSelector();
         }
         
-        await fetchState();
-        await fetchHistory();
         setAuthChecking(false);
-      } catch (err) {
-        console.error('Auth check error:', err);
+      } catch {
         setCurrentUser(null);
         setAuthChecking(false);
       }
     };
     checkAuth();
-  }, [fetchState, fetchHistory, loadGuildsSelector, showToast]);
+  }, [loadGuildsSelector]);
 
-  // Conectar WebSocket únicamente cuando esté en la vista de Mixtón / Arena
+  // The public pages do not need lobby data. Load it only when a visitor opens
+  // the Mixtón, and let the WebSocket supply the initial live lobby state.
   useEffect(() => {
-    if (!currentGuildId) return;
-
-    if (activeView === 'mixton') {
+    if (activeView === 'mixton' && currentGuildId) {
       connectWebSocket(currentGuildId);
 
       return () => {
+        if (wsReconnectTimerRef.current !== null) {
+          window.clearTimeout(wsReconnectTimerRef.current);
+          wsReconnectTimerRef.current = null;
+        }
         if (wsRef.current) {
           wsRef.current.onclose = null;
           wsRef.current.close();
+          wsRef.current = null;
         }
       };
-    } else {
-      // Si el usuario navega a otra sección (tienda, contacto, inicio), cerrar WS para no consumir recursos
-      if (wsRef.current) {
-        wsRef.current.onclose = null;
-        wsRef.current.close();
-      }
+    }
+
+    // Leaving the arena releases the real-time connection and any pending retry.
+    if (wsReconnectTimerRef.current !== null) {
+      window.clearTimeout(wsReconnectTimerRef.current);
+      wsReconnectTimerRef.current = null;
+    }
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.close();
+      wsRef.current = null;
     }
   }, [currentGuildId, activeView, connectWebSocket]);
+
+  // The history is intentionally isolated from the live draft. Its Firestore
+  // read occurs only after the visitor navigates to this dedicated view.
+  useEffect(() => {
+    if (activeView === 'historial' && currentGuildId) {
+      fetchHistory(currentGuildId);
+    }
+  }, [activeView, currentGuildId, fetchHistory]);
 
   // Clear pendingPick if the turn changes or the draft finishes/resets
   useEffect(() => {
@@ -1734,13 +1735,13 @@ export default function App() {
   const handleGuildChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const guildId = e.target.value;
     setCurrentGuildId(guildId);
+    setMatchHistory([]);
+    setSelectedHistoryMatch(null);
     
     const url = new URL(window.location.href);
     url.searchParams.set('guild', guildId);
     window.history.pushState({}, '', url);
     
-    fetchState(guildId);
-    fetchHistory(guildId);
   };
 
   // Average ELO calculation for teams
@@ -1906,6 +1907,17 @@ export default function App() {
 
       {activeView === 'contacto' && (
         <ContactoView />
+      )}
+
+      {activeView === 'historial' && (
+        <MatchHistoryView
+          history={matchHistory}
+          isLoading={isHistoryLoading}
+          selectedMatch={selectedHistoryMatch}
+          isLoadingDetail={isHistoryDetailLoading}
+          onSelectMatch={handleSelectHistoryMatch}
+          onCloseDetail={() => setSelectedHistoryMatch(null)}
+        />
       )}
 
       {/* Arena / Mixton View: libre acceso para espectadores y jugadores */}
@@ -2370,10 +2382,10 @@ export default function App() {
             </span>
           </div>
 
-          {/* Teams Grid and History Sidebar (Admin Panel style) */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 pb-6 items-start">
+          {/* Live teams stay intentionally independent from completed matches. */}
+          <div className="pb-6">
             {/* Teams Grid */}
-            <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {lobbyState.teams.map((team, tIdx) => {
                 const isCurrentTurn = lobbyState.draftStarted && !lobbyState.draftFinished && 
                                       lobbyState.pickOrder[lobbyState.currentPickIndex] === team.id;
@@ -2595,96 +2607,6 @@ export default function App() {
               })}
             </div>
 
-            {/* Quick Match History Sidebar */}
-            <div className="xl:col-span-1 bg-[#111] border-4 border-[#1A1A1A] p-5 shadow-[8px_8px_0px_rgba(0,0,0,0.5)] rounded-none flex flex-col gap-4 max-h-[650px] overflow-y-auto font-mono">
-              <div>
-                <h3 className="text-xs font-black uppercase text-neutral-400 tracking-wider flex items-center gap-1.5 border-b border-[#222] pb-2">
-                  🏆 HISTORIAL MIXTON RECIENTE
-                </h3>
-              </div>
-              <div className="space-y-3">
-                {matchHistory.length === 0 ? (
-                  <p className="text-[10px] text-neutral-600 text-center py-8 border border-dashed border-[#222]">
-                    SIN ENCUENTROS REGISTRADOS
-                  </p>
-                ) : (
-                  matchHistory.map((m: any) => {
-                    const isWinner1 = m.winner === 'faction1';
-                    const isWinner2 = m.winner === 'faction2';
-                    const statusLower = (m.status || '').toLowerCase();
-
-                    let statusBadge = null;
-                    if (statusLower === 'configuring') {
-                      statusBadge = <span className="text-[8px] font-bold text-yellow-400 bg-yellow-500/10 px-1 py-0.5 border border-yellow-500/20">CONFIGURANDO</span>;
-                    } else if (statusLower === 'started' || statusLower === 'starting') {
-                      statusBadge = <span className="text-[8px] font-bold text-blue-400 bg-blue-500/10 px-1 py-0.5 border border-blue-500/20 animate-pulse">EN JUEGO</span>;
-                    } else if (statusLower === 'cancelled' || m.winner === 'CANCELLED') {
-                      statusBadge = <span className="text-[8px] font-bold text-red-400 bg-red-500/10 px-1 py-0.5 border border-red-500/20">CANCELADA</span>;
-                    }
-
-                    return (
-                      <div key={m.id} className="p-3 bg-[#151515] border border-[#222] text-[10px] flex flex-col gap-2 relative">
-                        <div className="flex justify-between items-center text-[9px] text-neutral-500 border-b border-[#222]/30 pb-1.5">
-                          <div className="flex items-center gap-1.5">
-                            <span>{m.entity_custom_name || 'Lobby'}</span>
-                            {statusBadge}
-                          </div>
-                          <span>{m.map || 'Manual'}</span>
-                        </div>
-                        
-                        <div className="flex flex-col gap-1.5">
-                          {/* Faction 1 */}
-                          <div>
-                            <div className="flex justify-between items-center">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <span className={`font-bold truncate max-w-[125px] ${isWinner1 ? 'text-green-400' : 'text-neutral-400'}`}>
-                                  {isWinner1 && '🏆 '}{m.faction1_name}
-                                </span>
-                                <span className="font-extrabold text-neutral-500 flex-shrink-0">({m.faction1_score})</span>
-                              </div>
-                              {currentUser?.isAdmin && (
-                                <button
-                                  className="bg-[#1C1C1C] hover:bg-white hover:text-black border border-[#2D2D2D] hover:border-white px-2 py-0.5 text-[8px] font-black uppercase transition-all cursor-pointer text-center flex-shrink-0"
-                                  onClick={() => handleAssignHistoryTeamPrompt(m.faction1_roster, m.faction1_name)}
-                                >
-                                  Asignar
-                                </button>
-                              )}
-                            </div>
-                            <div className="text-[8px] text-neutral-500 truncate mt-0.5 pl-2 font-mono">
-                              {m.faction1_roster?.map((p: any) => p.nickname).join(', ') || 'Sin jugadores'}
-                            </div>
-                          </div>
-                          
-                          {/* Faction 2 */}
-                          <div>
-                            <div className="flex justify-between items-center">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <span className={`font-bold truncate max-w-[125px] ${isWinner2 ? 'text-green-400' : 'text-neutral-400'}`}>
-                                  {isWinner2 && '🏆 '}{m.faction2_name}
-                                </span>
-                                <span className="font-extrabold text-neutral-500 flex-shrink-0">({m.faction2_score})</span>
-                              </div>
-                              {currentUser?.isAdmin && (
-                                <button
-                                  className="bg-[#1C1C1C] hover:bg-white hover:text-black border border-[#2D2D2D] hover:border-white px-2 py-0.5 text-[8px] font-black uppercase transition-all cursor-pointer text-center flex-shrink-0"
-                                  onClick={() => handleAssignHistoryTeamPrompt(m.faction2_roster, m.faction2_name)}
-                                >
-                                  Asignar
-                                </button>
-                              )}
-                            </div>
-                            <div className="text-[8px] text-neutral-500 truncate mt-0.5 pl-2 font-mono">
-                              {m.faction2_roster?.map((p: any) => p.nickname).join(', ') || 'Sin jugadores'}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
           </div>
 
         </section>
@@ -2738,47 +2660,6 @@ export default function App() {
                   </button>
                 ))
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* History Team Assignment Modal (Retro flat design) */}
-      {modalHistoryRoster && (
-        <div 
-          className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm"
-          onClick={() => setModalHistoryRoster(null)}
-        >
-          <div 
-            className="w-full max-w-md p-6 bg-[#111] border-4 border-[#1A1A1A] shadow-[16px_16px_0px_rgba(0,0,0,0.8)] rounded-none flex flex-col gap-4 relative z-50 font-mono"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="border-b border-[#2D2D2D] pb-3 flex justify-between items-center">
-              <h4 className="text-sm font-black uppercase text-white">ASIGNAR EQUIPO</h4>
-              <button 
-                className="text-neutral-500 hover:text-white font-mono text-xl focus:outline-none"
-                onClick={() => setModalHistoryRoster(null)}
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-[10px] text-neutral-400 uppercase tracking-wide leading-tight">
-              SELECCIONA EL EQUIPO DEL LOBBY AL QUE DESEAS ASIGNAR EL ROSTER DE <strong className="text-[#FF5500]">{modalHistoryTeamName.toUpperCase()}</strong>.
-            </p>
-            <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
-              {lobbyState.teams.map(team => (
-                <button 
-                  key={team.id}
-                  className="w-full text-left p-3 bg-[#151515] border border-[#222] hover:border-white flex justify-between items-center transition-all rounded-none group cursor-pointer text-xs uppercase font-black"
-                  onClick={() => {
-                    handleLoadTeamFromHistory(team.id, modalHistoryRoster);
-                    setModalHistoryRoster(null);
-                  }}
-                >
-                  <span className="text-white group-hover:text-[#FF5500]">{team.name}</span>
-                  <span className="text-[9px] text-neutral-500 group-hover:text-white">SELECCIONAR →</span>
-                </button>
-              ))}
             </div>
           </div>
         </div>
