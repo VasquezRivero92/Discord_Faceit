@@ -1033,14 +1033,21 @@ export const db = {
 
     const fetchHistory = (async () => {
       try {
-        // Firestore performs both ordering and limiting. Previously the web
-        // panel downloaded every historical match and sorted it in Node.
         let query = firestore.collection(MATCHES_HISTORY_COLLECTION);
         if (guildId) query = query.where('guild_id', '==', guildId);
-        const snapshot = await query.orderBy('createdAt', 'desc').limit(safeLimit).get();
+        const snapshot = await query.get();
         const history = snapshot.docs.map(doc => doc.data());
-        cacheValue(matchHistoryCache, cacheKey, history);
-        return history;
+        
+        // Ordenar en memoria por createdAt descendente para evitar requerir un índice compuesto en Firestore
+        history.sort((a, b) => {
+          const timeA = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate().getTime() : (a.createdAt._seconds ? a.createdAt._seconds * 1000 : new Date(a.createdAt).getTime())) : 0;
+          const timeB = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate().getTime() : (b.createdAt._seconds ? b.createdAt._seconds * 1000 : new Date(b.createdAt).getTime())) : 0;
+          return timeB - timeA;
+        });
+
+        const limitedHistory = history.slice(0, safeLimit);
+        cacheValue(matchHistoryCache, cacheKey, limitedHistory);
+        return limitedHistory;
       } catch (error) {
         logger.error('Error al obtener historial de partidas de Firestore:', error);
         return [];
