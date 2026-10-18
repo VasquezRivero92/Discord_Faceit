@@ -79,9 +79,19 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
   const [showFaceitEdit, setShowFaceitEdit] = useState<boolean>(false);
 
   // Steam linking states
-  const [steamInput, setSteamInput] = useState<string>('');
   const [isLinkingSteam, setIsLinkingSteam] = useState<boolean>(false);
-  const [showSteamEdit, setShowSteamEdit] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('steam_connected') === 'true') {
+      showToast('¡Cuenta de Steam autenticada y vinculada exitosamente!', 'success');
+      onRefreshUser();
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get('error') === 'steam_validation_failed') {
+      showToast('No se pudo validar la autenticación con Steam', 'error');
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   const effectiveAmount = isCustom ? (parseFloat(customAmount) || 0) : selectedAmount;
 
@@ -181,11 +191,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
   };
 
   const handleLinkSteam = async (customVal?: string) => {
-    const val = (customVal !== undefined ? customVal : steamInput).trim();
-    if (!val) {
-      showToast('Ingresa tu SteamID64 o el enlace de tu perfil de Steam', 'error');
-      return;
-    }
+    const val = (customVal || 'detect_faceit').trim();
 
     setIsLinkingSteam(true);
     try {
@@ -200,9 +206,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
         throw new Error(data.error || 'Error al conectar cuenta de Steam');
       }
 
-      showToast(data.message || '¡Cuenta de Steam conectada exitosamente!', 'success');
-      setSteamInput('');
-      setShowSteamEdit(false);
+      showToast(data.message || '¡Cuenta de Steam sincronizada exitosamente!', 'success');
       await onRefreshUser();
     } catch (err: any) {
       showToast(err.message || 'Error al conectar cuenta de Steam', 'error');
@@ -531,11 +535,11 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
               )}
             </div>
 
-            {currentUser.steam_id_64 && !showSteamEdit ? (
+            {currentUser.steam_id_64 ? (
               <div className="space-y-3">
-                <div className="p-3 rounded-lg bg-black/40 border border-white/[0.06] flex items-center justify-between">
+                <div className="p-3.5 rounded-lg bg-black/40 border border-white/[0.06] flex items-center justify-between">
                   <div>
-                    <div className="text-[10px] text-neutral-400 uppercase font-bold">STEAMID64 CONECTADO</div>
+                    <div className="text-[10px] text-neutral-400 uppercase font-bold">STEAMID64 VINCULADO</div>
                     <a
                       href={`https://steamcommunity.com/profiles/${currentUser.steam_id_64}`}
                       target="_blank"
@@ -547,7 +551,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                     </a>
                     {currentUser.steam_nickname && (
                       <div className="text-[10px] text-neutral-400 font-sans mt-0.5">
-                        Alias: {currentUser.steam_nickname}
+                        Alias: <span className="text-neutral-200 font-semibold">{currentUser.steam_nickname}</span>
                       </div>
                     )}
                   </div>
@@ -559,73 +563,51 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                   </div>
                 </div>
 
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setShowSteamEdit(true)}
-                    className="text-[11px] text-neutral-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-emerald-400 font-sans flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Conectado con la API de Steam</span>
+                  </span>
+                  <a
+                    href="/auth/steam"
+                    className="text-[11px] text-neutral-400 hover:text-[#0088FF] flex items-center gap-1 transition-colors cursor-pointer font-sans"
+                    title="Volver a autenticar con otra cuenta de Steam"
                   >
-                    <Edit3 className="w-3 h-3" />
-                    <span>Cambiar SteamID64</span>
-                  </button>
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Re-autenticar con Steam</span>
+                  </a>
                 </div>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3.5">
                 <p className="text-xs text-neutral-400 font-sans leading-relaxed">
-                  El Steam Bot de MachuPeek requiere tu <strong className="text-white">SteamID64</strong> para invitarte al lobby oficial y servidor del match.
+                  Conecta tu cuenta de Steam para que el Steam Bot de MachuPeek consulte la API y te invite de forma automática a los lobbies de CS2 sin que tengas que escribir nada.
                 </p>
 
+                {/* Botón 1: Autenticación Oficial con Steam OpenID */}
+                <a
+                  href="/auth/steam"
+                  className="w-full py-3 px-4 rounded-xl bg-[#171a21] hover:bg-[#203247] border border-[#0088FF]/40 hover:border-[#0088FF] text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all shadow-[0_4px_15px_rgba(0,136,255,0.25)] cursor-pointer active:scale-[0.98]"
+                >
+                  <Gamepad2 className="w-4 h-4 text-[#0088FF]" />
+                  <span>Conectar e Iniciar Sesión con Steam</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-neutral-400" />
+                </a>
+
+                {/* Botón 2: Consultar API y Sincronizar desde Faceit */}
                 {currentUser.faceit_nickname && (
                   <button
                     type="button"
                     onClick={() => handleLinkSteam('detect_faceit')}
                     disabled={isLinkingSteam}
-                    className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-[#FF5500]/20 to-[#0088FF]/20 hover:from-[#FF5500]/30 hover:to-[#0088FF]/30 border border-[#0088FF]/40 text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                    className="w-full py-2.5 px-3 rounded-lg bg-gradient-to-r from-[#FF5500]/15 to-[#0088FF]/15 hover:from-[#FF5500]/25 hover:to-[#0088FF]/25 border border-white/[0.1] hover:border-[#0088FF]/50 text-xs font-bold text-neutral-200 hover:text-white flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                   >
                     {isLinkingSteam ? (
                       <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#0088FF]" />
                     ) : (
                       <Zap className="w-3.5 h-3.5 text-[#0088FF]" />
                     )}
-                    <span>⚡ Detectar SteamID64 desde mi FACEIT</span>
-                  </button>
-                )}
-
-                <div className="relative">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={steamInput}
-                      onChange={(e) => setSteamInput(e.target.value)}
-                      placeholder="SteamID64 (ej: 76561198012345678) o link"
-                      disabled={isLinkingSteam}
-                      className="w-full bg-black/50 border border-white/[0.12] focus:border-[#0088FF] rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-500 font-mono outline-none transition-colors"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => handleLinkSteam()}
-                      disabled={isLinkingSteam || !steamInput.trim()}
-                      className="px-4 py-2 rounded-lg bg-[#0088FF] hover:bg-[#0077E6] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-[0_2px_10px_rgba(0,136,255,0.3)] cursor-pointer"
-                    >
-                      {isLinkingSteam ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Link2 className="w-3.5 h-3.5" />
-                      )}
-                      <span>{isLinkingSteam ? 'Guardando...' : 'Conectar'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {showSteamEdit && (
-                  <button
-                    type="button"
-                    onClick={() => setShowSteamEdit(false)}
-                    className="text-[11px] text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                  >
-                    Cancelar
+                    <span>⚡ Consultar API y Sincronizar desde FACEIT</span>
                   </button>
                 )}
               </div>

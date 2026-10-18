@@ -232,6 +232,100 @@ export function createAuthRouter(client, db, config) {
     }
   });
 
+  // --- Steam OpenID Authentication / Linking ---
+  router.get('/steam', (req, res) => {
+    const token = req.cookies?.auth_token;
+    if (!token) {
+      return res.redirect('/auth/discord?redirect=/auth/steam');
+    }
+    try {
+      jwt.verify(token, ADMIN_JWT_SECRET);
+    } catch {
+      return res.redirect('/auth/discord?redirect=/auth/steam');
+    }
+
+    const host = req.get('x-forwarded-host') || req.get('host');
+    const proto = req.get('x-forwarded-proto') || (req.secure ? 'https' : (BASE_URL.startsWith('https') ? 'https' : 'http'));
+    const effectiveBaseUrl = host ? `${proto}://${host}` : BASE_URL;
+
+    const returnTo = `${effectiveBaseUrl}/auth/steam/callback`;
+    const realm = `${effectiveBaseUrl}/`;
+
+    const params = new URLSearchParams({
+      'openid.ns': 'http://specs.openid.net/auth/2.0',
+      'openid.mode': 'checkid_setup',
+      'openid.return_to': returnTo,
+      'openid.realm': realm,
+      'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
+      'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select'
+    });
+
+    res.redirect(`https://steamcommunity.com/openid/login?${params.toString()}`);
+  });
+
+  router.get('/steam/callback', async (req, res) => {
+    try {
+      const token = req.cookies?.auth_token;
+      if (!token) {
+        return res.redirect('/cuenta?error=auth_required');
+      }
+
+      let decodedUser;
+      try {
+        decodedUser = jwt.verify(token, ADMIN_JWT_SECRET);
+      } catch {
+        return res.redirect('/cuenta?error=invalid_session');
+      }
+
+      const params = new URLSearchParams(req.query);
+      params.set('openid.mode', 'check_authentication');
+
+      const checkRes = await fetch('https://steamcommunity.com/openid/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+      });
+
+      const checkText = await checkRes.text();
+      const isValid = checkText.includes('is_valid:true');
+
+      if (!isValid) {
+        logger.warn('[STEAM AUTH] Validación de OpenID fallida desde Steam.');
+        return res.redirect('/cuenta?error=steam_validation_failed');
+      }
+
+      const claimedId = req.query['openid.claimed_id'] || '';
+      const match = claimedId.match(/7656119\d{10}/);
+      if (!match) {
+        return res.redirect('/cuenta?error=no_steamid_found');
+      }
+
+      const steamId64 = match[0];
+      logger.info(`🎮 [STEAM AUTH] Usuario ${decodedUser.username} (${decodedUser.userId}) vinculó exitosamente SteamID64: ${steamId64}`);
+
+      let steamNickname = null;
+      try {
+        const profileRes = await fetch(`https://steamcommunity.com/profiles/${steamId64}/?xml=1`);
+        if (profileRes.ok) {
+          const xml = await profileRes.text();
+          const nickMatch = xml.match(/<steamID><!\[CDATA\[(.*?)\]\]><\/steamID>/);
+          if (nickMatch && nickMatch[1]) {
+            steamNickname = nickMatch[1];
+          }
+        }
+      } catch {
+        // Silencioso si falla la consulta de alias
+      }
+
+      await db.setSteamId(decodedUser.userId, steamId64, steamNickname, decodedUser.servidor || null);
+
+      return res.redirect('/cuenta?steam_connected=true');
+    } catch (err) {
+      logger.error('Error en callback de autenticación Steam:', err);
+      return res.redirect('/cuenta?error=steam_error');
+    }
+  });
+
   router.post(['/demo-login', '/login'], (req, res) => {
     const { username, password } = req.body || {};
     const u = (username || '').trim().toLowerCase();

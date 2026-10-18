@@ -431,7 +431,7 @@ export function createLobbyRouter(client, db, config, wss) {
   });
 
   // --- Conectar cuenta de STEAM (SteamID64) desde el panel web ---
-  router.post('/link-steam', requireAuth, async (req, res) => {
+  router.post(['/link-steam', '/sync-steam'], requireAuth, async (req, res) => {
     const { steamInput } = req.body || {};
     const discordId = req.user?.userId;
 
@@ -439,11 +439,7 @@ export function createLobbyRouter(client, db, config, wss) {
       return res.status(401).json({ error: 'Debes iniciar sesión con tu cuenta de Discord.' });
     }
 
-    if (!steamInput || typeof steamInput !== 'string' || !steamInput.trim()) {
-      return res.status(400).json({ error: 'Ingresa tu SteamID64 o el enlace de tu perfil de Steam.' });
-    }
-
-    const input = steamInput.trim();
+    const input = (steamInput || 'detect_faceit').trim();
     const targetGuildId = req.guildId || DISCORD_GUILD_ID;
 
     let steamId64 = null;
@@ -452,7 +448,7 @@ export function createLobbyRouter(client, db, config, wss) {
     if (input === 'detect_faceit') {
       const fullUser = await db.getFullUser(discordId, targetGuildId);
       if (!fullUser || !fullUser.faceit_player_id) {
-        return res.status(400).json({ error: 'Primero debes verificar tu cuenta de FACEIT para auto-detectar Steam.' });
+        return res.status(400).json({ error: 'Primero debes vincular tu cuenta de FACEIT para consultar tu Steam en la API.' });
       }
       try {
         const faceitPlayer = await fetchFaceitPlayerById(fullUser.faceit_player_id);
