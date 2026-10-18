@@ -1712,6 +1712,34 @@ export const db = {
       return 0;
     }
   },
+  async updateUserFields(discordId, fields, guildId = null) {
+    if (!discordId || !fields || typeof fields !== 'object') return false;
+    try {
+      const docId = guildId ? `${guildId}_${discordId}` : discordId;
+      const userRef = firestore.collection(USERS_COLLECTION).doc(docId);
+      await userRef.set({
+        discordId,
+        ...fields,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      if (guildId) {
+        await firestore.collection(USERS_COLLECTION).doc(discordId).set({
+          discordId,
+          ...fields,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true }).catch(() => {});
+      }
+
+      invalidateUserCache(docId);
+      invalidateUserCache(discordId);
+      return true;
+    } catch (err) {
+      logger.error(`Error al actualizar campos de usuario ${discordId}:`, err);
+      return false;
+    }
+  },
+
   async getFullUser(discordId, guildId = null) {
     if (!discordId) return null;
     const docId = guildId ? `${guildId}_${discordId}` : discordId;
@@ -1721,29 +1749,54 @@ export const db = {
 
     const fetchUser = (async () => {
       try {
+        let guildData = null;
         if (guildId) {
           const guildDoc = await firestore.collection(USERS_COLLECTION).doc(docId).get();
           if (guildDoc.exists) {
-            const data = guildDoc.data();
-            cacheUser(docId, data);
-            return data;
+            guildData = guildDoc.data();
           }
         }
 
+        let globalData = null;
         const globalDoc = await firestore.collection(USERS_COLLECTION).doc(discordId).get();
         if (globalDoc.exists) {
-          const data = globalDoc.data();
-          cacheUser(docId, data);
-          return data;
+          globalData = globalDoc.data();
         }
 
-        // Fallback para documentos antiguos cuyo ID no sigue el formato actual.
-        const snapshot = await firestore.collection(USERS_COLLECTION).where('discordId', '==', discordId).get();
-        if (!snapshot.empty) {
-          const selectedDoc = snapshot.docs.find(d => d.data().rol === 'admin' || d.data().rol === 'global_admin') || snapshot.docs[0];
-          const data = selectedDoc.data();
-          cacheUser(docId, data);
-          return data;
+        let combined = { ...(globalData || {}), ...(guildData || {}) };
+
+        // Si combined no tiene faceit_nickname o falta información clave, buscar en todos los documentos del usuario
+        if (!combined.faceit_nickname || !combined.faceit_player_id) {
+          const snapshot = await firestore.collection(USERS_COLLECTION).where('discordId', '==', discordId).get();
+          if (!snapshot.empty) {
+            for (const d of snapshot.docs) {
+              const data = d.data();
+              if (data.faceit_nickname) {
+                // Combinar priorizando campos existentes de Faceit
+                combined = { ...data, ...combined };
+              }
+              if (data.rol === 'global_admin' || data.rol === 'admin') {
+                combined.rol = data.rol;
+              }
+              if (data.wallet_balance !== undefined && (combined.wallet_balance === undefined || combined.wallet_balance === 0)) {
+                combined.wallet_balance = data.wallet_balance;
+              }
+              if (data.phoneNumber && !combined.phoneNumber) {
+                combined.phoneNumber = data.phoneNumber;
+              }
+              if (data.steam_id_64 && !combined.steam_id_64) {
+                combined.steam_id_64 = data.steam_id_64;
+              }
+              if (data.steam_nickname && !combined.steam_nickname) {
+                combined.steam_nickname = data.steam_nickname;
+              }
+            }
+          }
+        }
+
+        if (Object.keys(combined).length > 0) {
+          cacheUser(docId, combined);
+          return combined;
         }
 
         cacheUser(docId, null);

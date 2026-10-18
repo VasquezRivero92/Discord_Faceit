@@ -290,6 +290,27 @@ export function createLobbyRouter(client, db, config, wss) {
         fullUser = await db.getFullUser(req.user.userId, req.guildId);
         if (fullUser?.phoneNumber) hasSavedPhone = true;
         balance = await db.getUserBalance(req.user.userId, req.guildId);
+
+        // Si tiene Faceit vinculado pero aún no tiene steam_id_64 o avatar en la BD, consultamos la API de Faceit
+        if (fullUser?.faceit_player_id && (!fullUser.steam_id_64 || !fullUser.faceit_avatar)) {
+          try {
+            const faceitProfile = await fetchFaceitPlayerById(fullUser.faceit_player_id);
+            const steamId = faceitProfile.steam_id_64 || faceitProfile.platforms?.steam || null;
+            const steamNick = faceitProfile.steam_nickname || null;
+            const avatar = faceitProfile.avatar || null;
+            if (steamId && !fullUser.steam_id_64) fullUser.steam_id_64 = steamId;
+            if (steamNick && !fullUser.steam_nickname) fullUser.steam_nickname = steamNick;
+            if (avatar && !fullUser.faceit_avatar) fullUser.faceit_avatar = avatar;
+
+            db.updateUserFields(req.user.userId, {
+              ...(steamId ? { steam_id_64: steamId } : {}),
+              ...(steamNick ? { steam_nickname: steamNick } : {}),
+              ...(avatar ? { faceit_avatar: avatar } : {})
+            }, req.guildId).catch(() => {});
+          } catch (fErr) {
+            // Silencioso si falla la consulta externa
+          }
+        }
       }
     } catch (err) {
       logger.warn('Error al obtener perfil completo en /me:', err.message);
@@ -304,7 +325,7 @@ export function createLobbyRouter(client, db, config, wss) {
         faceit_avatar: fullUser?.faceit_avatar || null,
         skillLevel: fullUser?.faceit_level || fullUser?.skillLevel || null,
         elo: fullUser?.faceit_elo || fullUser?.elo || null,
-        tier: fullUser?.mixton_tier || null,
+        tier: fullUser?.mixton_tier_override || fullUser?.mixton_tier || null,
         phoneNumber: hasSavedPhone ? fullUser.phoneNumber : null,
         steam_id_64: fullUser?.steam_id_64 || null,
         steam_nickname: fullUser?.steam_nickname || null

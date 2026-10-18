@@ -373,7 +373,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
               <div className="rounded-lg bg-black/40 p-2.5 border border-white/[0.05]">
                 <div className="text-[10px] text-neutral-400 uppercase font-bold">FACEIT NICK</div>
                 <div className="text-xs font-black text-[#FF5500] truncate mt-0.5">
-                  {currentUser.faceit_nickname || 'Vinculado'}
+                  {currentUser.faceit_nickname || 'Sin Vincular'}
                 </div>
               </div>
               <div className="rounded-lg bg-black/40 p-2.5 border border-white/[0.05]">
@@ -385,7 +385,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
               <div className="rounded-lg bg-black/40 p-2.5 border border-white/[0.05]">
                 <div className="text-[10px] text-neutral-400 uppercase font-bold">NIVEL / ELO</div>
                 <div className="text-xs font-black text-cyan-400 mt-0.5">
-                  {currentUser.elo ? `${currentUser.elo} ELO` : (currentUser.skillLevel ? `LVL ${currentUser.skillLevel}` : 'LVL 10')}
+                  {currentUser.elo ? `${currentUser.elo} ELO` : (currentUser.skillLevel ? `LVL ${currentUser.skillLevel}` : '-')}
                 </div>
               </div>
             </div>
