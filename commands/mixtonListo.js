@@ -17,12 +17,28 @@ export async function execute(interaction, db) {
 
   try {
     // Verificar si el usuario está registrado en la base de datos (verificado)
-    const userData = await db.getFaceitIdByDiscordId(discordId, interaction.guildId);
+    let userData = await db.getFaceitIdByDiscordId(discordId, interaction.guildId);
+    if (!userData || !userData.faceit_player_id) {
+      const fullUser = await db.getFullUser(discordId, interaction.guildId);
+      if (fullUser && fullUser.faceit_player_id) {
+        userData = fullUser;
+      }
+    }
+
     if (!userData || !userData.faceit_player_id) {
       return interaction.reply({
-        content: '❌ No estás verificado. Debes vincular tu cuenta de Faceit usando el comando `/verificar_fc <nickname>` antes de unirte al mixton.',
+        content: '❌ No estás verificado. Debes vincular tu cuenta de Faceit usando el comando `/verificar_fc <nickname>` o desde la web antes de unirte al mixton.',
         flags: MessageFlags.Ephemeral
       });
+    }
+
+    // Actualizar datos de Discord en segundo plano si están disponibles
+    if (interaction.user) {
+      db.updateDiscordDetailsInDb(discordId, {
+        username: interaction.user.username,
+        displayName: interaction.user.displayName || interaction.user.username,
+        avatarURL: interaction.user.displayAvatarURL()
+      }, interaction.guildId).catch(() => {});
     }
 
     // Actualizar el estado del usuario a listo para el mixton

@@ -16,9 +16,16 @@ export async function execute(interaction, db) {
 
   try {
     // 1. Obtener faceit_id del usuario
-    const userData = await db.getFaceitIdByDiscordId(interaction.user.id, interaction.guildId);
+    let userData = await db.getFaceitIdByDiscordId(interaction.user.id, interaction.guildId);
     if (!userData || !userData.faceit_player_id) {
-      return interaction.editReply({ content: '❌ No tienes una cuenta de Faceit vinculada. Usa `/verificar_fc` para vincularla.' });
+      const fullUser = await db.getFullUser(interaction.user.id, interaction.guildId);
+      if (fullUser && fullUser.faceit_player_id) {
+        userData = fullUser;
+      }
+    }
+
+    if (!userData || !userData.faceit_player_id) {
+      return interaction.editReply({ content: '❌ No tienes una cuenta de Faceit vinculada. Usa `/verificar_fc` o conéctala desde la web.' });
     }
 
     // 2. Buscar partida activa del usuario

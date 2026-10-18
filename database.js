@@ -332,7 +332,7 @@ function cacheUser(docId, data) {
   const now = Date.now();
   userByDiscordIdCache.set(docId, { data, timestamp: now });
   if (data) {
-    const actualDiscordId = data.discordId || docId;
+    const actualDiscordId = data.discordId || (docId.includes('_') ? docId.split('_')[1] : docId);
     if (data.faceit_player_id) {
       userByFaceitIdCache.set(data.faceit_player_id, { data: actualDiscordId, timestamp: now });
     }
@@ -759,13 +759,20 @@ export const db = {
       let query = firestore.collection(USERS_COLLECTION)
         .where('faceit_player_id', '==', faceitPlayerId);
       if (guildId) {
-        query = query.where('guild_id', '==', guildId);
+        const guildSnap = await query.where('guild_id', '==', guildId).limit(1).get();
+        if (!guildSnap.empty) {
+          const doc = guildSnap.docs[0];
+          const data = doc.data();
+          const resolvedId = data.discordId || (doc.id.includes('_') ? doc.id.split('_')[1] : doc.id);
+          cacheUser(doc.id, data);
+          return resolvedId;
+        }
       }
       const snapshot = await query.limit(1).get();
       if (snapshot.empty) return null;
       const doc = snapshot.docs[0];
       const data = doc.data();
-      const resolvedId = data.discordId || doc.id;
+      const resolvedId = data.discordId || (doc.id.includes('_') ? doc.id.split('_')[1] : doc.id);
       
       // Update cache
       cacheUser(doc.id, data);
@@ -790,13 +797,20 @@ export const db = {
       let query = firestore.collection(USERS_COLLECTION)
         .where('faceit_nickname_lower', '==', key);
       if (guildId) {
-        query = query.where('guild_id', '==', guildId);
+        const guildSnap = await query.where('guild_id', '==', guildId).limit(1).get();
+        if (!guildSnap.empty) {
+          const doc = guildSnap.docs[0];
+          const data = doc.data();
+          const resolvedId = data.discordId || (doc.id.includes('_') ? doc.id.split('_')[1] : doc.id);
+          cacheUser(doc.id, data);
+          return resolvedId;
+        }
       }
       const snapshot = await query.limit(1).get();
       if (snapshot.empty) return null;
       const doc = snapshot.docs[0];
       const data = doc.data();
-      const resolvedId = data.discordId || doc.id;
+      const resolvedId = data.discordId || (doc.id.includes('_') ? doc.id.split('_')[1] : doc.id);
       
       // Update cache
       cacheUser(doc.id, data);
@@ -810,26 +824,63 @@ export const db = {
   async getFaceitIdByDiscordId(discordId, guildId = null) {
     if (!discordId) return null;
     const docId = guildId ? `${guildId}_${discordId}` : discordId;
+    
+    // 1. Revisar caché en memoria por docId
     const cached = getCachedUserByDiscordId(docId);
-    if (cached !== undefined) {
-      if (cached === null) return null;
+    if (cached && cached.faceit_player_id) {
       return {
-        faceit_player_id: cached.faceit_player_id || null,
-        faceit_nickname: cached.faceit_nickname || null
+        faceit_player_id: cached.faceit_player_id,
+        faceit_nickname: cached.faceit_nickname || null,
+        faceit_level: cached.faceit_level || 1,
+        faceit_elo: cached.faceit_elo || 1000
       };
     }
-    try {
-      const doc = await firestore.collection(USERS_COLLECTION).doc(docId).get();
-      if (!doc.exists) {
-        cacheUser(docId, null);
-        return null;
+
+    // 2. Revisar caché global si se proporcionó guildId
+    if (guildId && docId !== discordId) {
+      const globalCached = getCachedUserByDiscordId(discordId);
+      if (globalCached && globalCached.faceit_player_id) {
+        return {
+          faceit_player_id: globalCached.faceit_player_id,
+          faceit_nickname: globalCached.faceit_nickname || null,
+          faceit_level: globalCached.faceit_level || 1,
+          faceit_elo: globalCached.faceit_elo || 1000
+        };
       }
-      const data = doc.data();
-      cacheUser(docId, data);
-      return {
-        faceit_player_id: data.faceit_player_id || null,
-        faceit_nickname: data.faceit_nickname || null
-      };
+    }
+
+    try {
+      // 3. Delegar a getFullUser que busca jerárquicamente:
+      // guildDoc -> globalDoc -> query where('discordId', '==', discordId)
+      const fullUser = await this.getFullUser(discordId, guildId);
+      if (fullUser && fullUser.faceit_player_id) {
+        // Auto-sincronizar documento del servidor si faltaba
+        if (guildId && docId !== discordId) {
+          firestore.collection(USERS_COLLECTION).doc(docId).set({
+            discordId: discordId,
+            guild_id: guildId,
+            faceit_player_id: fullUser.faceit_player_id,
+            faceit_nickname: fullUser.faceit_nickname,
+            faceit_nickname_lower: (fullUser.faceit_nickname || '').toLowerCase(),
+            faceit_level: fullUser.faceit_level || 1,
+            faceit_elo: fullUser.faceit_elo || 1000,
+            steam_id_64: fullUser.steam_id_64 || null,
+            steam_nickname: fullUser.steam_nickname || null,
+            faceit_avatar: fullUser.faceit_avatar || null,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          }, { merge: true }).catch(err => {
+            logger.warn(`Error al auto-propagar vinculación a ${docId}:`, err.message);
+          });
+        }
+
+        return {
+          faceit_player_id: fullUser.faceit_player_id,
+          faceit_nickname: fullUser.faceit_nickname || null,
+          faceit_level: fullUser.faceit_level || 1,
+          faceit_elo: fullUser.faceit_elo || 1000
+        };
+      }
+      return null;
     } catch (error) {
       logger.error('Error al obtener Faceit ID por Discord ID:', error);
       return null;
@@ -1642,27 +1693,50 @@ export const db = {
     try {
       const docId = guildId ? `${guildId}_${discordId}` : discordId;
       const userRef = firestore.collection(USERS_COLLECTION).doc(docId);
-      const updates = { mixton_ready: ready };
+      
+      const fullUser = await this.getFullUser(discordId, guildId);
+
+      const updates = { 
+        discordId: discordId,
+        mixton_ready: ready 
+      };
+      if (guildId) {
+        updates.guild_id = guildId;
+      }
       if (ready) {
         updates.mixton_ready_at = Date.now();
         if (guildId) {
           updates.mixton_guild_id = guildId;
         }
+        if (fullUser) {
+          if (fullUser.faceit_player_id) updates.faceit_player_id = fullUser.faceit_player_id;
+          if (fullUser.faceit_nickname) {
+            updates.faceit_nickname = fullUser.faceit_nickname;
+            updates.faceit_nickname_lower = fullUser.faceit_nickname.toLowerCase();
+          }
+          if (fullUser.faceit_level !== undefined) updates.faceit_level = fullUser.faceit_level;
+          if (fullUser.faceit_elo !== undefined) updates.faceit_elo = fullUser.faceit_elo;
+          if (fullUser.mixton_tier_override) updates.mixton_tier_override = fullUser.mixton_tier_override;
+          if (fullUser.steam_id_64) updates.steam_id_64 = fullUser.steam_id_64;
+          if (fullUser.steam_nickname) updates.steam_nickname = fullUser.steam_nickname;
+          if (fullUser.faceit_avatar) updates.faceit_avatar = fullUser.faceit_avatar;
+          if (fullUser.discord_username) updates.discord_username = fullUser.discord_username;
+          if (fullUser.discord_displayName) updates.discord_displayName = fullUser.discord_displayName;
+          if (fullUser.discord_avatar) updates.discord_avatar = fullUser.discord_avatar;
+        }
       } else {
         updates.mixton_guild_id = admin.firestore.FieldValue.delete();
       }
-      await userRef.update(updates);
+
+      await userRef.set(updates, { merge: true });
+
       const cached = getCachedUserByDiscordId(docId);
-      if (cached) {
-        const updatedCachedUser = { ...cached, mixton_ready: ready };
-        if (ready) {
-          updatedCachedUser.mixton_ready_at = updates.mixton_ready_at;
-          if (guildId) updatedCachedUser.mixton_guild_id = guildId;
-        } else {
-          delete updatedCachedUser.mixton_guild_id;
-        }
-        cacheUser(docId, updatedCachedUser);
+      const updatedCachedUser = { ...(cached || fullUser || {}), ...updates };
+      if (!ready) {
+        delete updatedCachedUser.mixton_guild_id;
       }
+      cacheUser(docId, updatedCachedUser);
+
       this.invalidateReadyPlayersCache();
       return true;
     } catch (error) {
@@ -1676,13 +1750,13 @@ export const db = {
       const docId = guildId ? `${guildId}_${discordId}` : discordId;
       const docRef = firestore.collection(USERS_COLLECTION).doc(docId);
       if (tier === null) {
-        await docRef.update({
+        await docRef.set({
           mixton_tier_override: admin.firestore.FieldValue.delete()
-        });
+        }, { merge: true });
       } else {
-        await docRef.update({
+        await docRef.set({
           mixton_tier_override: tier
-        });
+        }, { merge: true });
       }
       this.invalidateReadyPlayersCache();
       return true;
@@ -1698,7 +1772,7 @@ export const db = {
       const batch = firestore.batch();
       discordIds.forEach(id => {
         const docId = guildId ? `${guildId}_${id}` : id;
-        batch.update(firestore.collection(USERS_COLLECTION).doc(docId), { mixton_ready: false });
+        batch.set(firestore.collection(USERS_COLLECTION).doc(docId), { mixton_ready: false }, { merge: true });
       });
       await batch.commit();
       this.invalidateReadyPlayersCache();
@@ -1717,7 +1791,7 @@ export const db = {
       const batch = firestore.batch();
       readyPlayers.forEach(p => {
         const docId = guildId ? `${guildId}_${p.discordId}` : p.discordId;
-        batch.update(firestore.collection(USERS_COLLECTION).doc(docId), { mixton_ready: false });
+        batch.set(firestore.collection(USERS_COLLECTION).doc(docId), { mixton_ready: false }, { merge: true });
       });
       await batch.commit();
       this.invalidateReadyPlayersCache();
@@ -1759,7 +1833,7 @@ export const db = {
     if (!discordId) return null;
     const docId = guildId ? `${guildId}_${discordId}` : discordId;
     const cached = getCachedUserByDiscordId(docId);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined && cached !== null) return cached;
     if (fullUserFetches.has(docId)) return fullUserFetches.get(docId);
 
     const fetchUser = (async () => {
@@ -1810,7 +1884,21 @@ export const db = {
         }
 
         if (Object.keys(combined).length > 0) {
+          if (!combined.discordId) combined.discordId = discordId;
           cacheUser(docId, combined);
+          if (guildId && docId !== discordId) {
+            cacheUser(discordId, combined);
+            if ((!guildData || !guildData.faceit_player_id) && combined.faceit_player_id) {
+              firestore.collection(USERS_COLLECTION).doc(docId).set({
+                ...combined,
+                discordId,
+                guild_id: guildId,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+              }, { merge: true }).catch(err => {
+                logger.warn(`Error al auto-propagar usuario a ${docId}:`, err.message);
+              });
+            }
+          }
           return combined;
         }
 

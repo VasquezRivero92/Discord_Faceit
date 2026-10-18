@@ -26,9 +26,16 @@ export async function execute(interaction, db) {
     }
 
     // 1. Obtener la vinculación desde la base de datos
-    const userData = await db.getFaceitIdByDiscordId(discordId, interaction.guildId);
+    let userData = await db.getFaceitIdByDiscordId(discordId, interaction.guildId);
     if (!userData || !userData.faceit_player_id) {
-      return interaction.editReply('❌ No tienes una cuenta de Faceit vinculada. Usa `/verificar_fc` primero para vincular tu cuenta.');
+      const fullUser = await db.getFullUser(discordId, interaction.guildId);
+      if (fullUser && fullUser.faceit_player_id) {
+        userData = fullUser;
+      }
+    }
+
+    if (!userData || !userData.faceit_player_id) {
+      return interaction.editReply('❌ No tienes una cuenta de Faceit vinculada. Usa `/verificar_fc` primero o vincúlala desde la web.');
     }
 
     const faceitPlayerId = userData.faceit_player_id;

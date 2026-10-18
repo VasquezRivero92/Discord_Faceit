@@ -17,7 +17,14 @@ export async function execute(interaction, db) {
 
   try {
     // Verificar si el usuario está registrado en la base de datos (verificado)
-    const userData = await db.getFaceitIdByDiscordId(discordId, interaction.guildId);
+    let userData = await db.getFaceitIdByDiscordId(discordId, interaction.guildId);
+    if (!userData || !userData.faceit_player_id) {
+      const fullUser = await db.getFullUser(discordId, interaction.guildId);
+      if (fullUser && fullUser.faceit_player_id) {
+        userData = fullUser;
+      }
+    }
+
     if (!userData || !userData.faceit_player_id) {
       return interaction.reply({
         content: '❌ No estás verificado. Este comando es solo para miembros registrados.',
