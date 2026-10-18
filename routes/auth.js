@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { logger } from '../utils/logger.js';
+import { fetchFaceitPlayerBySteamId, fetchCurrentHubSeason } from '../services/faceitApi.js';
+import { getPlayerSkillLevel, syncMemberLevelRole, syncMemberNickname } from '../services/roles.js';
+import { getEffectiveConfigForGuild } from '../config/index.js';
 
 export function createAuthRouter(client, db, config) {
   const router = Router();
@@ -317,8 +320,89 @@ export function createAuthRouter(client, db, config) {
         // Silencioso si falla la consulta de alias
       }
 
-      await db.setSteamId(decodedUser.userId, steamId64, steamNickname, decodedUser.servidor || null);
+      const targetGuildId = decodedUser.servidor || DISCORD_GUILD_ID || null;
+      let faceitLinked = false;
+      let faceitConflict = false;
+      let faceitNotFound = false;
 
+      try {
+        const faceitPlayer = await fetchFaceitPlayerBySteamId(steamId64);
+        if (faceitPlayer && faceitPlayer.player_id) {
+          const existingDiscordId = await db.getDiscordIdByFaceitId(faceitPlayer.player_id, targetGuildId);
+
+          if (existingDiscordId && existingDiscordId !== decodedUser.userId) {
+            logger.warn(`[STEAM AUTH] Cuenta FACEIT ${faceitPlayer.nickname} ya está vinculada a otro Discord (${existingDiscordId}). Solo se vincula Steam.`);
+            faceitConflict = true;
+            await db.setSteamId(decodedUser.userId, steamId64, steamNickname, targetGuildId);
+          } else {
+            const skillLevel = getPlayerSkillLevel(faceitPlayer);
+            const elo = faceitPlayer.games?.cs2?.faceit_elo || faceitPlayer.games?.csgo?.faceit_elo || 0;
+            const avatar = faceitPlayer.avatar || null;
+
+            let currentSeason = null;
+            try {
+              if (targetGuildId) {
+                const guildConfig = await getEffectiveConfigForGuild(targetGuildId);
+                currentSeason = await fetchCurrentHubSeason(guildConfig.faceitLeaderboardId || guildConfig.faceitHubId).catch(() => null);
+              }
+            } catch {
+              // Season opcional
+            }
+
+            await db.linkAccounts(
+              decodedUser.userId,
+              faceitPlayer.player_id,
+              faceitPlayer.nickname,
+              skillLevel,
+              elo,
+              targetGuildId,
+              currentSeason,
+              null,
+              steamId64,
+              steamNickname,
+              avatar
+            );
+
+            // Sincronizar roles y apodo en Discord si el bot está disponible
+            if (targetGuildId && client) {
+              const guild = client.guilds.cache.get(targetGuildId) || await client.guilds.fetch(targetGuildId).catch(() => null);
+              if (guild) {
+                if (skillLevel) {
+                  await syncMemberLevelRole(guild, decodedUser.userId, skillLevel).catch(() => {});
+                }
+                await syncMemberNickname(guild, decodedUser.userId, faceitPlayer.nickname).catch(() => {});
+              }
+            }
+
+            await db.addLogEntry(
+              'success',
+              `Usuario ${decodedUser.username} (${decodedUser.userId}) vinculó Steam ${steamId64} y detectó FACEIT: ${faceitPlayer.nickname} (Nvl ${skillLevel || '-'}, ${elo} ELO)`,
+              'web_panel',
+              targetGuildId
+            );
+
+            faceitLinked = true;
+            logger.success(`🎮 [STEAM AUTH] Cuenta FACEIT jalada automáticamente para ${decodedUser.username}: ${faceitPlayer.nickname} (Steam: ${steamId64})`);
+          }
+        } else {
+          faceitNotFound = true;
+          await db.setSteamId(decodedUser.userId, steamId64, steamNickname, targetGuildId);
+          logger.info(`🎮 [STEAM AUTH] SteamID ${steamId64} guardado para ${decodedUser.username}, pero no tiene FACEIT vinculado.`);
+        }
+      } catch (fErr) {
+        logger.error('[STEAM AUTH] Error al consultar FACEIT con SteamID:', fErr);
+        await db.setSteamId(decodedUser.userId, steamId64, steamNickname, targetGuildId);
+      }
+
+      if (faceitLinked) {
+        return res.redirect('/cuenta?steam_connected=true&faceit_linked=true');
+      }
+      if (faceitConflict) {
+        return res.redirect('/cuenta?steam_connected=true&faceit_conflict=true');
+      }
+      if (faceitNotFound) {
+        return res.redirect('/cuenta?steam_connected=true&faceit_not_found=true');
+      }
       return res.redirect('/cuenta?steam_connected=true');
     } catch (err) {
       logger.error('Error en callback de autenticación Steam:', err);

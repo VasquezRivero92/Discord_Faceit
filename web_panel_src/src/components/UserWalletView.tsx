@@ -78,17 +78,29 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
   const [isLinkingFaceit, setIsLinkingFaceit] = useState<boolean>(false);
   const [showFaceitEdit, setShowFaceitEdit] = useState<boolean>(false);
 
-  // Steam linking states
+  // Steam & Faceit linking states
   const [isLinkingSteam, setIsLinkingSteam] = useState<boolean>(false);
+  const [isSyncingFaceitFromSteam, setIsSyncingFaceitFromSteam] = useState<boolean>(false);
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('steam_connected') === 'true') {
-      showToast('¡Cuenta de Steam autenticada y vinculada exitosamente!', 'success');
+      if (params.get('faceit_linked') === 'true') {
+        showToast('¡Steam autenticado y cuenta de FACEIT vinculada automáticamente!', 'success');
+      } else if (params.get('faceit_conflict') === 'true') {
+        showToast('Steam conectado, pero tu cuenta de FACEIT ya está vinculada a otro Discord', 'error');
+      } else if (params.get('faceit_not_found') === 'true') {
+        showToast('¡Steam conectado! No se detectó cuenta de FACEIT vinculada a este Steam', 'info');
+      } else {
+        showToast('¡Cuenta de Steam autenticada y vinculada exitosamente!', 'success');
+      }
       onRefreshUser();
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (params.get('error') === 'steam_validation_failed') {
       showToast('No se pudo validar la autenticación con Steam', 'error');
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get('error') === 'auth_required') {
+      showToast('Debes iniciar sesión con Discord primero', 'error');
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
@@ -212,6 +224,27 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
       showToast(err.message || 'Error al conectar cuenta de Steam', 'error');
     } finally {
       setIsLinkingSteam(false);
+    }
+  };
+
+  const handleSyncFaceitFromSteam = async () => {
+    setIsSyncingFaceitFromSteam(true);
+    try {
+      const res = await fetch('/api/lobby/sync-faceit-from-steam', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Error al sincronizar FACEIT desde Steam');
+      }
+      showToast(data.message || '¡FACEIT detectado y vinculado exitosamente desde Steam!', 'success');
+      setShowFaceitEdit(false);
+      await onRefreshUser();
+    } catch (err: any) {
+      showToast(err.message || 'No se pudo vincular FACEIT desde Steam', 'error');
+    } finally {
+      setIsSyncingFaceitFromSteam(false);
     }
   };
 
@@ -467,47 +500,108 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                 </div>
               </div>
             ) : (
-              <form onSubmit={handleVerifyFaceit} className="space-y-3">
-                <p className="text-xs text-neutral-400 font-sans leading-relaxed">
-                  Ingresa tu nickname exacto de FACEIT para sincronizar tu nivel oficial, ELO y habilitar tu participación en los mixtones.
-                </p>
+              <div className="space-y-4">
+                {/* Opción 1: Si ya tiene Steam conectado, botón prioritario para jalar Faceit en 1 clic */}
+                {currentUser.steam_id_64 ? (
+                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-[#0088FF]/15 via-[#FF5500]/15 to-transparent border border-[#0088FF]/40 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-neutral-300 font-sans flex items-center gap-1.5 font-bold">
+                        <Gamepad2 className="w-4 h-4 text-[#0088FF]" />
+                        <span>Steam Conectado:</span>
+                      </span>
+                      <span className="font-mono text-[#0088FF] text-[11px] font-bold">
+                        {currentUser.steam_id_64}
+                      </span>
+                    </div>
 
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      value={faceitNickInput}
-                      onChange={(e) => setFaceitNickInput(e.target.value)}
-                      placeholder="Ej: s1mple"
-                      disabled={isLinkingFaceit}
-                      className="w-full bg-black/50 border border-white/[0.12] focus:border-[#FF5500] rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-500 font-mono outline-none transition-colors"
-                    />
+                    <button
+                      type="button"
+                      onClick={handleSyncFaceitFromSteam}
+                      disabled={isSyncingFaceitFromSteam}
+                      className="w-full py-2.5 px-3 rounded-lg bg-gradient-to-r from-[#FF5500] to-[#FF661A] hover:brightness-110 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(255,85,0,0.35)] cursor-pointer transition-all disabled:opacity-50 active:scale-[0.98]"
+                    >
+                      {isSyncingFaceitFromSteam ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Zap className="w-4 h-4 fill-current" />
+                      )}
+                      <span>{isSyncingFaceitFromSteam ? 'Detectando en FACEIT...' : '⚡ Jalar y Vincular FACEIT desde mi Steam'}</span>
+                    </button>
+
+                    <div className="text-[10px] text-neutral-400 font-sans text-center">
+                      Consulta la API oficial de FACEIT usando tu Steam sin escribir nada.
+                    </div>
                   </div>
-
-                  <button
-                    type="submit"
-                    disabled={isLinkingFaceit || !faceitNickInput.trim()}
-                    className="px-4 py-2 rounded-lg bg-[#FF5500] hover:bg-[#FF661A] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-[0_2px_10px_rgba(255,85,0,0.3)] cursor-pointer"
+                ) : (
+                  <a
+                    href="/auth/steam"
+                    className="p-3 rounded-xl bg-gradient-to-r from-[#171a21] to-[#203247] border border-[#0088FF]/30 hover:border-[#0088FF] text-white flex items-center justify-between group cursor-pointer transition-all"
                   >
-                    {isLinkingFaceit ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Check className="w-3.5 h-3.5" />
-                    )}
-                    <span>{isLinkingFaceit ? 'Verificando...' : 'Vincular'}</span>
-                  </button>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-[#0088FF]/20 flex items-center justify-center text-[#0088FF]">
+                        <Zap className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-black uppercase tracking-tight text-white group-hover:text-[#0088FF] transition-colors">
+                          Autenticar con Steam para jalar FACEIT
+                        </div>
+                        <div className="text-[10px] text-neutral-400 font-sans">
+                          Inicia sesión con Steam y jalará tu FACEIT en 1 clic
+                        </div>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-neutral-400 group-hover:text-[#0088FF] transition-colors" />
+                  </a>
+                )}
+
+                <div className="relative flex py-1 items-center">
+                  <div className="flex-grow border-t border-white/[0.08]"></div>
+                  <span className="flex-shrink mx-3 text-[10px] text-neutral-500 uppercase tracking-widest font-bold">O ingresar nickname manual</span>
+                  <div className="flex-grow border-t border-white/[0.08]"></div>
                 </div>
 
-                {showFaceitEdit && (
-                  <button
-                    type="button"
-                    onClick={() => setShowFaceitEdit(false)}
-                    className="text-[11px] text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                )}
-              </form>
+                <form onSubmit={handleVerifyFaceit} className="space-y-3">
+                  <p className="text-xs text-neutral-400 font-sans leading-relaxed">
+                    Si tu Steam no tiene perfil público o prefieres buscar por nombre, escribe tu nickname exacto de FACEIT:
+                  </p>
+
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={faceitNickInput}
+                        onChange={(e) => setFaceitNickInput(e.target.value)}
+                        placeholder="Ej: s1mple"
+                        disabled={isLinkingFaceit}
+                        className="w-full bg-black/50 border border-white/[0.12] focus:border-[#FF5500] rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-500 font-mono outline-none transition-colors"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isLinkingFaceit || !faceitNickInput.trim()}
+                      className="px-4 py-2 rounded-lg bg-[#FF5500] hover:bg-[#FF661A] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-[0_2px_10px_rgba(255,85,0,0.3)] cursor-pointer"
+                    >
+                      {isLinkingFaceit ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isLinkingFaceit ? 'Verificando...' : 'Vincular'}</span>
+                    </button>
+                  </div>
+
+                  {showFaceitEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setShowFaceitEdit(false)}
+                      className="text-[11px] text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                </form>
+              </div>
             )}
           </div>
 

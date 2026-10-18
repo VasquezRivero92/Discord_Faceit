@@ -8,7 +8,7 @@ import { updateLivePanel } from '../services/matchMessages.js';
 import { updateMixtonReadyPanel } from '../services/mixtonPanel.js';
 import { invalidateSettingsCache, isFeatureEnabled } from '../utils/featureFlags.js';
 import { EventEmitter } from 'events';
-import { fetchFaceitPlayer, fetchFaceitPlayerById, fetchFaceitHubQueues, fetchCurrentHubSeason } from '../services/faceitApi.js';
+import { fetchFaceitPlayer, fetchFaceitPlayerById, fetchFaceitPlayerBySteamId, fetchFaceitHubQueues, fetchCurrentHubSeason } from '../services/faceitApi.js';
 import { syncMemberLevelRole, syncMemberNickname, getPlayerSkillLevel } from '../services/roles.js';
 import { crearLobbyMatchmaking, steamClient } from '../steamBot.js';
 import { playTTSCountdown } from '../utils/voiceAnnouncer.js';
@@ -311,6 +311,43 @@ export function createLobbyRouter(client, db, config, wss) {
             // Silencioso si falla la consulta externa
           }
         }
+
+        // Si tiene Steam vinculado pero aún no tiene Faceit en la BD, consultamos la API de Faceit por SteamID
+        if (fullUser?.steam_id_64 && (!fullUser.faceit_player_id || !fullUser.faceit_nickname)) {
+          try {
+            const faceitProfile = await fetchFaceitPlayerBySteamId(fullUser.steam_id_64);
+            if (faceitProfile && faceitProfile.player_id) {
+              const existingDiscordId = await db.getDiscordIdByFaceitId(faceitProfile.player_id, req.guildId);
+              if (!existingDiscordId || existingDiscordId === req.user.userId) {
+                const skillLevel = getPlayerSkillLevel(faceitProfile);
+                const elo = faceitProfile.games?.cs2?.faceit_elo || faceitProfile.games?.csgo?.faceit_elo || 0;
+                const avatar = faceitProfile.avatar || null;
+
+                fullUser.faceit_player_id = faceitProfile.player_id;
+                fullUser.faceit_nickname = faceitProfile.nickname;
+                fullUser.faceit_level = skillLevel;
+                fullUser.faceit_elo = elo;
+                fullUser.faceit_avatar = avatar;
+
+                db.linkAccounts(
+                  req.user.userId,
+                  faceitProfile.player_id,
+                  faceitProfile.nickname,
+                  skillLevel,
+                  elo,
+                  req.guildId,
+                  null,
+                  null,
+                  fullUser.steam_id_64,
+                  fullUser.steam_nickname || null,
+                  avatar
+                ).catch(() => {});
+              }
+            }
+          } catch (fErr) {
+            // Silencioso si falla la consulta externa
+          }
+        }
       }
     } catch (err) {
       logger.warn('Error al obtener perfil completo en /me:', err.message);
@@ -488,6 +525,105 @@ export function createLobbyRouter(client, db, config, wss) {
     } catch (err) {
       logger.error('Error al conectar Steam desde la web:', err);
       return res.status(500).json({ error: 'Error interno al guardar SteamID64.' });
+    }
+  });
+
+  // --- Sincronizar FACEIT desde la cuenta de Steam conectada ---
+  router.post('/sync-faceit-from-steam', requireAuth, async (req, res) => {
+    const discordId = req.user?.userId;
+    if (!discordId) {
+      return res.status(401).json({ error: 'Debes iniciar sesión con tu cuenta de Discord.' });
+    }
+
+    const targetGuildId = req.guildId || DISCORD_GUILD_ID;
+    const fullUser = await db.getFullUser(discordId, targetGuildId);
+
+    if (!fullUser || !fullUser.steam_id_64) {
+      return res.status(400).json({
+        error: 'No tienes una cuenta de Steam conectada. Primero conecta tu cuenta de Steam con el botón de Steam.'
+      });
+    }
+
+    try {
+      const faceitProfile = await fetchFaceitPlayerBySteamId(fullUser.steam_id_64);
+      if (!faceitProfile || !faceitProfile.player_id) {
+        return res.status(404).json({
+          error: `No se encontró ninguna cuenta de FACEIT vinculada al SteamID64 ${fullUser.steam_id_64} en CS2 ni CSGO. Asegúrate de haber jugado en FACEIT con esta cuenta de Steam.`
+        });
+      }
+
+      // Verificar si ya está vinculado a otro Discord
+      const existingDiscordId = await db.getDiscordIdByFaceitId(faceitProfile.player_id, targetGuildId);
+      if (existingDiscordId && existingDiscordId !== discordId) {
+        return res.status(409).json({
+          error: `El perfil de FACEIT "${faceitProfile.nickname}" ya se encuentra vinculado a otra cuenta de Discord.`
+        });
+      }
+
+      const skillLevel = getPlayerSkillLevel(faceitProfile);
+      const elo = faceitProfile.games?.cs2?.faceit_elo || faceitProfile.games?.csgo?.faceit_elo || 0;
+      const avatar = faceitProfile.avatar || null;
+
+      let currentSeason = null;
+      try {
+        const guildConfig = await getEffectiveConfigForGuild(targetGuildId);
+        currentSeason = await fetchCurrentHubSeason(guildConfig.faceitLeaderboardId || guildConfig.faceitHubId).catch(() => null);
+      } catch {
+        // Season opcional
+      }
+
+      await db.linkAccounts(
+        discordId,
+        faceitProfile.player_id,
+        faceitProfile.nickname,
+        skillLevel,
+        elo,
+        targetGuildId,
+        currentSeason,
+        null,
+        fullUser.steam_id_64,
+        fullUser.steam_nickname || null,
+        avatar
+      );
+
+      // Sincronizar roles y apodo en Discord si el bot está en el servidor
+      const guild = client.guilds.cache.get(targetGuildId) || await client.guilds.fetch(targetGuildId).catch(() => null);
+      if (guild) {
+        const autoRoleSync = await isFeatureEnabled('autoRoleSync', targetGuildId);
+        if (autoRoleSync && skillLevel) {
+          await syncMemberLevelRole(guild, discordId, skillLevel).catch(() => {});
+        }
+        const autoNickSync = await isFeatureEnabled('autoNickSync', targetGuildId);
+        if (autoNickSync !== false) {
+          await syncMemberNickname(guild, discordId, faceitProfile.nickname).catch(() => {});
+        }
+      }
+
+      await db.addLogEntry(
+        'success',
+        `Usuario ${req.user.username} (${discordId}) detectó y vinculó FACEIT ${faceitProfile.nickname} desde SteamID64 ${fullUser.steam_id_64}`,
+        'web_panel',
+        targetGuildId
+      );
+
+      return res.json({
+        success: true,
+        message: `¡Perfil de FACEIT "${faceitProfile.nickname}" detectado y vinculado exitosamente desde tu cuenta de Steam!`,
+        faceit: {
+          nickname: faceitProfile.nickname,
+          playerId: faceitProfile.player_id,
+          level: skillLevel,
+          elo: elo,
+          avatar: avatar
+        },
+        steam: {
+          steam_id_64: fullUser.steam_id_64,
+          steam_nickname: fullUser.steam_nickname || null
+        }
+      });
+    } catch (err) {
+      logger.error('Error al sincronizar FACEIT desde Steam en /sync-faceit-from-steam:', err);
+      return res.status(500).json({ error: err.message || 'Error al comunicarse con la API de FACEIT.' });
     }
   });
 

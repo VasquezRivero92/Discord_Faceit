@@ -57,6 +57,45 @@ export async function fetchFaceitPlayerById(playerId) {
   return res.json();
 }
 
+/**
+ * Consulta un perfil de jugador en FACEIT utilizando su SteamID64.
+ * Prueba primero con CS2 y si no se encuentra (404), prueba con CSGO.
+ * @param {string} steamId64
+ * @returns {Promise<Object|null>} Perfil del jugador en Faceit o null si no se encuentra
+ */
+export async function fetchFaceitPlayerBySteamId(steamId64) {
+  if (!steamId64) return null;
+  const cleanId = String(steamId64).trim();
+  if (!/^\d{17}$/.test(cleanId)) return null;
+
+  const games = ['cs2', 'csgo'];
+  for (const game of games) {
+    try {
+      const res = await fetch(
+        `https://open.faceit.com/data/v4/players?game=${game}&game_player_id=${encodeURIComponent(cleanId)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${env.FACEIT_API_KEY}`,
+            Accept: 'application/json',
+          },
+        }
+      );
+      if (res.ok) {
+        const player = await res.json();
+        if (player && player.player_id) {
+          return player;
+        }
+      }
+      if (res.status !== 404) {
+        logger.warn(`[fetchFaceitPlayerBySteamId] FACEIT API returned status ${res.status} for game ${game} and steamId ${cleanId}`);
+      }
+    } catch (err) {
+      logger.warn(`[fetchFaceitPlayerBySteamId] Error al consultar ${game} para steamId ${cleanId}: ${err.message}`);
+    }
+  }
+  return null;
+}
+
 export async function fetchFaceitStats(playerId, game = 'cs2') {
   const res = await fetch(
     `https://open.faceit.com/data/v4/players/${playerId}/stats/${game}`,

@@ -487,6 +487,21 @@ export const db = {
         ...userData,
         linkedAt: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
+
+      try {
+        const snap = await firestore.collection(USERS_COLLECTION).where('discordId', '==', discordId).get();
+        if (!snap.empty) {
+          for (const d of snap.docs) {
+            if (d.id !== docId) {
+              await d.ref.set(userData, { merge: true });
+              invalidateUserCache(d.id);
+            }
+          }
+        }
+      } catch (propErr) {
+        logger.warn(`No se pudo propagar la vinculación a otros documentos de Discord(${discordId}):`, propErr.message);
+      }
+
       const pendingRef = firestore.collection(PENDING_COLLECTION).doc(discordId);
       await pendingRef.delete();
       this.invalidateReadyPlayersCache();
