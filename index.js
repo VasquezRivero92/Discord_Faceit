@@ -99,7 +99,7 @@ if (isDiscordConfigured && env.DISCORD_TOKEN) {
 // 2. SERVIDOR EXPRESS
 // ---------------------------------------------------------
 const app = express();
-app.set('trust proxy', true); // Confiar en proxy reverso (Cloudflare / Nginx en Wisp)
+app.set('trust proxy', 1); // Confiar en 1 salto de proxy reverso (Nginx/Wisp)
 
 app.use(helmet({
   contentSecurityPolicy: false,
@@ -156,7 +156,7 @@ const globalLimiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { xForwardedForHeader: false },
+  validate: false,
   handler: (req, res) => {
     res.status(429).json({ error: 'Demasiadas peticiones. Intenta de nuevo más tarde.' });
   },
@@ -169,7 +169,7 @@ const webhookLimiter = rateLimit({
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { xForwardedForHeader: false },
+  validate: false,
 });
 
 // Health check
