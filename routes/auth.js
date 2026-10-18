@@ -120,8 +120,13 @@ export function createAuthRouter(client, db, config) {
         logger.error('Error al verificar si el usuario es capitán:', err);
       }
 
-      if (!isAdmin && !isCaptain) {
-        logger.warn(`[AUTH] Intento de login rechazado para ${user.username} (${user.id}). No es admin ni capitán.`);
+      // Si el usuario intentaba entrar a una ruta reservada de administración o capitanes y no cumple los requisitos:
+      const targetState = String(state || '');
+      const isRestrictedAdminRoute = targetState.startsWith('/admin');
+      const isRestrictedCaptainRoute = targetState.startsWith('/captains');
+
+      if ((isRestrictedAdminRoute && !isAdmin) || (isRestrictedCaptainRoute && !isAdmin && !isCaptain)) {
+        logger.warn(`[AUTH] Intento de login rechazado para ${user.username} (${user.id}) hacia ruta protegida ${targetState}.`);
         return res.status(403).send(`
           <!DOCTYPE html>
           <html lang="es">

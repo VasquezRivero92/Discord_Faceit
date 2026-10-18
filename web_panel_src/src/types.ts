@@ -39,10 +39,14 @@ export interface CurrentUser {
   hasSavedPhone?: boolean;
   balance?: number;
   faceit_nickname?: string | null;
+  faceit_player_id?: string | null;
+  faceit_avatar?: string | null;
   skillLevel?: number | null;
   elo?: number | null;
   tier?: string | null;
   phoneNumber?: string | null;
+  steam_id_64?: string | null;
+  steam_nickname?: string | null;
 }
 
 export interface Guild {

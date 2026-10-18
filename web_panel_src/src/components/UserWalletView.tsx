@@ -17,7 +17,11 @@ import {
   Trophy,
   HelpCircle,
   ExternalLink,
-  Sparkles
+  Sparkles,
+  Edit3,
+  Link2,
+  Check,
+  Flame
 } from 'lucide-react';
 import { CurrentUser, ActiveView } from '../types';
 
@@ -30,6 +34,27 @@ interface UserWalletViewProps {
 }
 
 const PRESET_AMOUNTS = [5, 10, 20, 50, 100];
+
+const getFaceitLevelBadge = (level: number | null | undefined) => {
+  if (!level) return null;
+  const levelColors: Record<number, string> = {
+    1: 'bg-neutral-600 text-white',
+    2: 'bg-emerald-600 text-white',
+    3: 'bg-emerald-500 text-white',
+    4: 'bg-yellow-500 text-black',
+    5: 'bg-yellow-600 text-black',
+    6: 'bg-amber-600 text-white',
+    7: 'bg-orange-600 text-white',
+    8: 'bg-orange-700 text-white',
+    9: 'bg-red-600 text-white',
+    10: 'bg-red-700 text-white font-black shadow-[0_0_12px_rgba(239,68,68,0.5)]'
+  };
+  return (
+    <span className={`inline-flex items-center justify-center w-6 h-6 rounded font-mono text-xs font-bold ${levelColors[level] || 'bg-[#FF5500] text-white'}`}>
+      {level}
+    </span>
+  );
+};
 
 export const UserWalletView: React.FC<UserWalletViewProps> = ({
   currentUser,
@@ -47,6 +72,16 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [lastSuccessMessage, setLastSuccessMessage] = useState<string | null>(null);
+
+  // Faceit linking states
+  const [faceitNickInput, setFaceitNickInput] = useState<string>('');
+  const [isLinkingFaceit, setIsLinkingFaceit] = useState<boolean>(false);
+  const [showFaceitEdit, setShowFaceitEdit] = useState<boolean>(false);
+
+  // Steam linking states
+  const [steamInput, setSteamInput] = useState<string>('');
+  const [isLinkingSteam, setIsLinkingSteam] = useState<boolean>(false);
+  const [showSteamEdit, setShowSteamEdit] = useState<boolean>(false);
 
   const effectiveAmount = isCustom ? (parseFloat(customAmount) || 0) : selectedAmount;
 
@@ -113,6 +148,69 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
     }
   };
 
+  const handleVerifyFaceit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const nick = faceitNickInput.trim();
+    if (!nick) {
+      showToast('Ingresa tu nickname exacto de FACEIT', 'error');
+      return;
+    }
+
+    setIsLinkingFaceit(true);
+    try {
+      const res = await fetch('/api/lobby/verify-faceit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nickname: nick })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Error al verificar perfil de FACEIT');
+      }
+
+      showToast(data.message || `¡Cuenta de FACEIT "${nick}" vinculada exitosamente!`, 'success');
+      setFaceitNickInput('');
+      setShowFaceitEdit(false);
+      await onRefreshUser();
+    } catch (err: any) {
+      showToast(err.message || 'Error al verificar con la API de FACEIT', 'error');
+    } finally {
+      setIsLinkingFaceit(false);
+    }
+  };
+
+  const handleLinkSteam = async (customVal?: string) => {
+    const val = (customVal !== undefined ? customVal : steamInput).trim();
+    if (!val) {
+      showToast('Ingresa tu SteamID64 o el enlace de tu perfil de Steam', 'error');
+      return;
+    }
+
+    setIsLinkingSteam(true);
+    try {
+      const res = await fetch('/api/lobby/link-steam', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ steamInput: val })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Error al conectar cuenta de Steam');
+      }
+
+      showToast(data.message || '¡Cuenta de Steam conectada exitosamente!', 'success');
+      setSteamInput('');
+      setShowSteamEdit(false);
+      await onRefreshUser();
+    } catch (err: any) {
+      showToast(err.message || 'Error al conectar cuenta de Steam', 'error');
+    } finally {
+      setIsLinkingSteam(false);
+    }
+  };
+
   // ----------------------------------------------------
   // VISTA NO AUTENTICADO: LOGIN REQUERIDO
   // ----------------------------------------------------
@@ -142,7 +240,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
             </h1>
             
             <p className="text-xs sm:text-sm text-neutral-400 leading-relaxed font-sans">
-              Para recargar saldo con <strong className="text-[#C084FC]">Yape</strong>, consultar tu historial de transacciones y unirte a los lobbies competitivos de CS2, conecta tu cuenta de Discord.
+              Para vincular tu cuenta de <strong className="text-[#FF5500]">FACEIT</strong>, conectar tu cuenta de <strong className="text-[#0088FF]">Steam</strong>, recargar saldo con <strong className="text-[#C084FC]">Yape</strong> y participar en los lobbies competitivos de CS2, conecta tu cuenta de Discord.
             </p>
           </div>
 
@@ -157,7 +255,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                   Jugadores de la Comunidad
                 </h3>
                 <p className="text-xs text-neutral-400 font-sans leading-relaxed mb-6">
-                  Conexión segura mediante OAuth2 oficial de Discord. Vincula automáticamente tu perfil, rango, ELO de FACEIT y saldo en MachuPeek.
+                  Conexión segura mediante OAuth2 oficial de Discord. Vincula tu cuenta para verificar tu perfil de FACEIT, conectar tu SteamID64 para el Bot y recargar saldo en MachuPeek.
                 </p>
               </div>
 
@@ -293,6 +391,252 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
             </div>
           </div>
 
+          {/* FACEIT Account Card */}
+          <div className="rounded-xl bg-neutral-900/60 border border-white/[0.08] p-5 shadow-xl relative overflow-hidden backdrop-blur-md">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#FF5500]/10 border border-[#FF5500]/30 flex items-center justify-center text-[#FF5500]">
+                  <Flame className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black uppercase text-white tracking-wider">CUENTA DE FACEIT</h3>
+                  <div className="text-[10px] text-neutral-400 font-sans">Nivel y ELO oficial de CS2</div>
+                </div>
+              </div>
+
+              {currentUser.faceit_nickname ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold uppercase">
+                  <CheckCircle2 className="w-3 h-3" /> Vinculado
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase">
+                  <AlertCircle className="w-3 h-3" /> No Vinculado
+                </span>
+              )}
+            </div>
+
+            {currentUser.faceit_nickname && !showFaceitEdit ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 rounded-lg bg-black/40 border border-white/[0.06]">
+                  <div className="flex items-center gap-3">
+                    {currentUser.faceit_avatar ? (
+                      <img 
+                        src={currentUser.faceit_avatar} 
+                        alt={currentUser.faceit_nickname} 
+                        className="w-10 h-10 rounded-lg object-cover border border-[#FF5500]/40" 
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-[#FF5500]/20 border border-[#FF5500]/40 flex items-center justify-center text-sm font-black text-[#FF5500]">
+                        {currentUser.faceit_nickname.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <a
+                        href={`https://www.faceit.com/en/players/${currentUser.faceit_nickname}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-black text-white hover:text-[#FF5500] transition-colors flex items-center gap-1.5 group"
+                      >
+                        <span>{currentUser.faceit_nickname}</span>
+                        <ExternalLink className="w-3 h-3 text-neutral-400 group-hover:text-[#FF5500]" />
+                      </a>
+                      <div className="text-[10px] text-neutral-400 font-sans">
+                        {currentUser.elo ? `${currentUser.elo} ELO` : 'Estadísticas CS2'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {getFaceitLevelBadge(currentUser.skillLevel)}
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowFaceitEdit(true)}
+                    className="text-[11px] text-neutral-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>Cambiar o re-verificar nickname</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleVerifyFaceit} className="space-y-3">
+                <p className="text-xs text-neutral-400 font-sans leading-relaxed">
+                  Ingresa tu nickname exacto de FACEIT para sincronizar tu nivel oficial, ELO y habilitar tu participación en los mixtones.
+                </p>
+
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={faceitNickInput}
+                      onChange={(e) => setFaceitNickInput(e.target.value)}
+                      placeholder="Ej: s1mple"
+                      disabled={isLinkingFaceit}
+                      className="w-full bg-black/50 border border-white/[0.12] focus:border-[#FF5500] rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-500 font-mono outline-none transition-colors"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLinkingFaceit || !faceitNickInput.trim()}
+                    className="px-4 py-2 rounded-lg bg-[#FF5500] hover:bg-[#FF661A] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-[0_2px_10px_rgba(255,85,0,0.3)] cursor-pointer"
+                  >
+                    {isLinkingFaceit ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Check className="w-3.5 h-3.5" />
+                    )}
+                    <span>{isLinkingFaceit ? 'Verificando...' : 'Vincular'}</span>
+                  </button>
+                </div>
+
+                {showFaceitEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setShowFaceitEdit(false)}
+                    className="text-[11px] text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </form>
+            )}
+          </div>
+
+          {/* STEAM Account Card */}
+          <div className="rounded-xl bg-neutral-900/60 border border-white/[0.08] p-5 shadow-xl relative overflow-hidden backdrop-blur-md">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#0088FF]/10 border border-[#0088FF]/30 flex items-center justify-center text-[#0088FF]">
+                  <Gamepad2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black uppercase text-white tracking-wider">CUENTA DE STEAM (CS2)</h3>
+                  <div className="text-[10px] text-neutral-400 font-sans">Invitaciones automáticas del Bot</div>
+                </div>
+              </div>
+
+              {currentUser.steam_id_64 ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold uppercase">
+                  <CheckCircle2 className="w-3 h-3" /> Conectado
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase">
+                  <AlertCircle className="w-3 h-3" /> Sin Conectar
+                </span>
+              )}
+            </div>
+
+            {currentUser.steam_id_64 && !showSteamEdit ? (
+              <div className="space-y-3">
+                <div className="p-3 rounded-lg bg-black/40 border border-white/[0.06] flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] text-neutral-400 uppercase font-bold">STEAMID64 CONECTADO</div>
+                    <a
+                      href={`https://steamcommunity.com/profiles/${currentUser.steam_id_64}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs font-mono font-bold text-[#0088FF] hover:underline flex items-center gap-1.5 mt-0.5"
+                    >
+                      <span>{currentUser.steam_id_64}</span>
+                      <ExternalLink className="w-3 h-3 text-neutral-400" />
+                    </a>
+                    {currentUser.steam_nickname && (
+                      <div className="text-[10px] text-neutral-400 font-sans mt-0.5">
+                        Alias: {currentUser.steam_nickname}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">
+                      BOT LISTO
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowSteamEdit(true)}
+                    className="text-[11px] text-neutral-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>Cambiar SteamID64</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-neutral-400 font-sans leading-relaxed">
+                  El Steam Bot de MachuPeek requiere tu <strong className="text-white">SteamID64</strong> para invitarte al lobby oficial y servidor del match.
+                </p>
+
+                {currentUser.faceit_nickname && (
+                  <button
+                    type="button"
+                    onClick={() => handleLinkSteam('detect_faceit')}
+                    disabled={isLinkingSteam}
+                    className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-[#FF5500]/20 to-[#0088FF]/20 hover:from-[#FF5500]/30 hover:to-[#0088FF]/30 border border-[#0088FF]/40 text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {isLinkingSteam ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#0088FF]" />
+                    ) : (
+                      <Zap className="w-3.5 h-3.5 text-[#0088FF]" />
+                    )}
+                    <span>⚡ Detectar SteamID64 desde mi FACEIT</span>
+                  </button>
+                )}
+
+                <div className="relative">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={steamInput}
+                      onChange={(e) => setSteamInput(e.target.value)}
+                      placeholder="SteamID64 (ej: 76561198012345678) o link"
+                      disabled={isLinkingSteam}
+                      className="w-full bg-black/50 border border-white/[0.12] focus:border-[#0088FF] rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-500 font-mono outline-none transition-colors"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => handleLinkSteam()}
+                      disabled={isLinkingSteam || !steamInput.trim()}
+                      className="px-4 py-2 rounded-lg bg-[#0088FF] hover:bg-[#0077E6] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-[0_2px_10px_rgba(0,136,255,0.3)] cursor-pointer"
+                    >
+                      {isLinkingSteam ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Link2 className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isLinkingSteam ? 'Guardando...' : 'Conectar'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {showSteamEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSteamEdit(false)}
+                    className="text-[11px] text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* RIGHT COLUMN: Wallet Balance & Yape Recharge */}
+        <div className="lg:col-span-7 space-y-6">
+
           {/* Big Balance Card with Radiant Accent */}
           <div className="rounded-xl bg-gradient-to-br from-neutral-900/90 via-neutral-900/70 to-black border border-[#FF5500]/50 p-6 shadow-[0_8px_30px_rgba(255,85,0,0.15)] relative overflow-hidden backdrop-blur-md">
             <div className="flex items-center justify-between mb-3">
@@ -326,28 +670,6 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
               <span>Garantía de custodia segura y liquidación automática</span>
             </div>
           </div>
-
-          {/* Quick Info Box */}
-          <div className="rounded-xl bg-neutral-900/40 border border-white/[0.06] p-4 text-xs text-neutral-400 font-sans space-y-2">
-            <div className="font-mono text-xs font-bold text-white uppercase flex items-center gap-2">
-              <HelpCircle className="w-4 h-4 text-[#FF5500]" />
-              <span>Reglas de Billetera MachuPeek</span>
-            </div>
-            <p>
-              • Las recargas con Yape se procesan en tiempo real de forma inmediata.
-            </p>
-            <p>
-              • Toda recarga mínima es de <strong>S/ 1.00</strong>. No cobramos comisión por depósito de saldo.
-            </p>
-            <p>
-              • Si ganas una partida mixtón o torneo, el pozo acumulado se acredita inmediatamente a este mismo balance.
-            </p>
-          </div>
-
-        </div>
-
-        {/* RIGHT COLUMN: Yape Recharge Form */}
-        <div className="lg:col-span-7">
           <div className="rounded-xl bg-[#0E1017]/90 border border-[#A855F7]/40 p-6 sm:p-8 shadow-[0_8px_30px_rgba(168,85,247,0.12)] relative backdrop-blur-md">
             
             {/* Header Badge */}
@@ -532,6 +854,26 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
               </div>
 
             </form>
+          </div>
+
+          {/* Quick Info Box */}
+          <div className="rounded-xl bg-neutral-900/40 border border-white/[0.06] p-4 text-xs text-neutral-400 font-sans space-y-2">
+            <div className="font-mono text-xs font-bold text-white uppercase flex items-center gap-2">
+              <HelpCircle className="w-4 h-4 text-[#FF5500]" />
+              <span>Reglas de Billetera & Cuentas MachuPeek</span>
+            </div>
+            <p>
+              • Las recargas con Yape se procesan en tiempo real de forma inmediata.
+            </p>
+            <p>
+              • Toda recarga mínima es de <strong>S/ 1.00</strong>. No cobramos comisión por depósito de saldo.
+            </p>
+            <p>
+              • Al vincular tu cuenta de FACEIT y Steam, el Steam Bot podrá invitarte automáticamente a los lobbies y partidas sin demoras.
+            </p>
+            <p>
+              • Si ganas una partida mixtón o torneo, el pozo acumulado se acredita inmediatamente a este mismo balance.
+            </p>
           </div>
         </div>
 

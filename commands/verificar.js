@@ -101,8 +101,9 @@ export async function processVerification(interaction, db, nickname, phoneNumber
       return interaction.editReply(`❌ No se encontró nivel de CS2/CS:GO activo para tu perfil.`);
     }
 
-    // Enlazar cuentas guardando nivel, elo y número telefónico opcional
-    await db.linkAccounts(discordId, player.player_id, player.nickname, skillLevel, elo, interaction.guildId, currentSeason, cleanPhone);
+    // Enlazar cuentas guardando nivel, elo, número telefónico opcional, steam y avatar
+    const steamId = player.steam_id_64 || player.platforms?.steam || null;
+    await db.linkAccounts(discordId, player.player_id, player.nickname, skillLevel, elo, interaction.guildId, currentSeason, cleanPhone, steamId, player.steam_nickname, player.avatar);
     await db.addLogEntry('success', `El usuario ${interaction.user.tag} vinculó su cuenta directamente con Faceit ID ${player.nickname}`, 'bot', interaction.guildId);
     playerCache.set(`${interaction.guildId}_${discordId}`, { faceitId: player.player_id, nickname: player.nickname, level: skillLevel });
 

@@ -454,7 +454,7 @@ export const db = {
     }
   },
 
-  async linkAccounts(discordId, faceitPlayerId, faceitNickname, skillLevel = null, elo = null, guildId = null, season = null, phoneNumber = null) {
+  async linkAccounts(discordId, faceitPlayerId, faceitNickname, skillLevel = null, elo = null, guildId = null, season = null, phoneNumber = null, steamId64 = null, steamNickname = null, avatar = null) {
     try {
       const docId = guildId ? `${guildId}_${discordId}` : discordId;
       const userRef = firestore.collection(USERS_COLLECTION).doc(docId);
@@ -474,6 +474,15 @@ export const db = {
       if (season !== null && season !== undefined) {
         userData.faceit_level_season = season;
       }
+      if (steamId64) {
+        userData.steam_id_64 = String(steamId64).trim();
+      }
+      if (steamNickname) {
+        userData.steam_nickname = String(steamNickname).trim();
+      }
+      if (avatar) {
+        userData.faceit_avatar = String(avatar).trim();
+      }
       await userRef.set({
         ...userData,
         linkedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -487,6 +496,51 @@ export const db = {
       logger.success(`Cuenta vinculada en Firestore: Server(${guildId}) Discord(${discordId}) <-> Faceit(${faceitNickname})`);
     } catch (error) {
       logger.error('Error al vincular cuentas en Firestore:', error);
+    }
+  },
+
+  async setSteamId(discordId, steamId64, steamNickname = null, guildId = null) {
+    if (!discordId || !steamId64) return false;
+    const cleanSteamId = String(steamId64).trim();
+    try {
+      const docId = guildId ? `${guildId}_${discordId}` : discordId;
+      const userRef = firestore.collection(USERS_COLLECTION).doc(docId);
+      const doc = await userRef.get();
+      const updateData = {
+        steam_id_64: cleanSteamId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+      if (steamNickname) {
+        updateData.steam_nickname = String(steamNickname).trim();
+      }
+      if (doc.exists) {
+        await userRef.update(updateData);
+      } else {
+        const snapshot = await firestore.collection(USERS_COLLECTION).where('discordId', '==', discordId).get();
+        if (!snapshot.empty) {
+          for (const d of snapshot.docs) {
+            await d.ref.update(updateData);
+          }
+        } else {
+          await userRef.set({
+            discordId,
+            guild_id: guildId || null,
+            ...updateData,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+        }
+      }
+      const cached = getCachedUserByDiscordId(docId);
+      if (cached) {
+        cacheUser(docId, { ...cached, ...updateData });
+      } else {
+        invalidateUserCache(docId);
+      }
+      logger.info(`🎮 SteamID64 (${cleanSteamId}) vinculado para Discord ID ${discordId}`);
+      return true;
+    } catch (err) {
+      logger.error(`Error al guardar SteamID para usuario ${discordId}:`, err);
+      return false;
     }
   },
 
