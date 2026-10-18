@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 🔒 REGLA DE SEGURIDAD ESTRICTA PARA PRODUCCIÓN (MACHUPEEK)
+    // 
+    // Toda la arquitectura de MachuPeek está diseñada para que el panel web de React
+    // y los usuarios interactúen ÚNICAMENTE a través de la API segura del servidor Node.js (Express).
+    // El servidor utiliza 'firebase-admin' con Service Account (credenciales de servidor),
+    // el cual tiene permisos nativos de administración y NO necesita reglas públicas abiertas.
+    //
+    // Al bloquear la lectura y escritura cliente (allow read, write: if false), se impide
+    // que cualquier atacante o usuario externo con el ID del proyecto Firebase pueda consultar,
+    // manipular saldos, alterar partidas o descargar datos confidenciales directamente de Firestore.
+    
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

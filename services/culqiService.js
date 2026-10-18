@@ -140,8 +140,8 @@ export const culqiService = {
 
     logger.info(`Iniciando recarga Yape: S/ ${numAmount.toFixed(2)} para Discord ID ${discordId}`);
 
-    // Modo Simulación para desarrollo y pruebas (activable con CULQI_MOCK=true en .env)
-    if (process.env.CULQI_MOCK === 'true') {
+    // Modo Simulación para desarrollo y pruebas (activable con CULQI_MOCK=true en .env, NUNCA en producción)
+    if (process.env.CULQI_MOCK === 'true' && process.env.NODE_ENV !== 'production') {
       logger.info(`🧪 [MODO PRUEBA MOCK] Simulando recarga exitosa de Yape: S/ ${numAmount.toFixed(2)} para ${discordId}`);
       const mockChargeId = `chr_mock_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const newBalance = await db.updateUserBalance(
@@ -262,6 +262,33 @@ export const culqiService = {
       if (!chargeId || !discordId || amountInSoles <= 0) {
         logger.warn('Webhook Culqi charge sin metadata.discord_id o monto inválido:', charge);
         return { processed: false, reason: 'Faltan datos obligatorios' };
+      }
+
+      // Verificación estricta de seguridad: Confirmar directamente con la API oficial de Culqi
+      const rawSecret = env.CULQI_SECRET_KEY || process.env.CULQI_SECRET_KEY || '';
+      const secretKey = rawSecret.trim();
+      if (process.env.CULQI_MOCK !== 'true' && secretKey && !secretKey.startsWith('sk_test_')) {
+        try {
+          const verifyRes = await fetch(`${CULQI_API_BASE}/charges/${chargeId}`, {
+            headers: {
+              'Authorization': `Bearer ${secretKey}`,
+              'Accept': 'application/json'
+            }
+          });
+          if (!verifyRes.ok) {
+            logger.error(`🚨 ALERTA DE SEGURIDAD: Intento de spoofing de Webhook Culqi. El cargo ${chargeId} no existe en Culqi.`);
+            return { processed: false, reason: 'Cargo inexistente en Culqi' };
+          }
+          const verifiedCharge = await verifyRes.json();
+          const verifiedAmountInCents = Number(verifiedCharge?.amount || 0);
+          if (verifiedAmountInCents !== amountInCents) {
+            logger.error(`🚨 ALERTA DE SEGURIDAD: Monto del Webhook (${amountInCents}) no coincide con el cargo en Culqi (${verifiedAmountInCents}).`);
+            return { processed: false, reason: 'Monto de cargo no coincide' };
+          }
+        } catch (verifyErr) {
+          logger.error('Error al verificar cargo con API de Culqi:', verifyErr.message);
+          return { processed: false, reason: 'Error al verificar autenticidad del cargo' };
+        }
       }
 
       // Validar si ya fue procesado de forma síncrona

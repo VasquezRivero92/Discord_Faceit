@@ -280,8 +280,10 @@ export function createPublicApiRouter(db) {
           return res.status(400).json({ error: 'El código de aprobación de Yape debe tener 6 dígitos.' });
         }
 
-        // Si CULQI_MOCK o sandbox activo
-        if (process.env.CULQI_MOCK === 'true' || !process.env.CULQI_PUBLIC_KEY || process.env.CULQI_PUBLIC_KEY.startsWith('pk_test_')) {
+        // Si CULQI_MOCK o sandbox activo (solo en desarrollo, NUNCA en producción)
+        const isMockAllowed = process.env.NODE_ENV !== 'production' && (process.env.CULQI_MOCK === 'true' || !process.env.CULQI_PUBLIC_KEY || process.env.CULQI_PUBLIC_KEY.startsWith('pk_test_'));
+        
+        if (isMockAllowed) {
           try {
             // Intentar proceso real con sandbox de Culqi
             const token = await culqiService.createYapeToken(cleanPhone, cleanOtp, totalAmount);
@@ -293,12 +295,12 @@ export function createPublicApiRouter(db) {
               description: `Compra Mixton Arena: ${validatedItems.map(i => i.name).join(', ').substring(0, 80)}`
             });
           } catch (culqiErr) {
-            // Si las credenciales de sandbox o el OTP expiró durante pruebas, permitir simulación exitosa controlada para auditores
+            // Solo en ambiente de desarrollo/staging se permite simulación controlada
             logger.warn('Culqi sandbox arrojó mensaje:', culqiErr.message);
             const mockChargeId = `chr_test_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
             chargeResult = {
               id: mockChargeId,
-              outcome: { type: 'venta_exitosa', merchant_message: 'Cargo exitoso de prueba' },
+              outcome: { type: 'venta_exitosa', merchant_message: 'Cargo exitoso de prueba (Ambiente Dev)' },
               reference_code: `REF-${Date.now().toString().slice(-6)}`
             };
           }

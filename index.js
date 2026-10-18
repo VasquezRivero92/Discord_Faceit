@@ -24,6 +24,7 @@ import cors from 'cors';
 import { startSteamBot, steamClient, resolveSteamGuard } from './steamBot.js';
 import { authenticateSteamApiKey, getSteamBotStatus, handleMatchmakingLaunch } from './services/matchmakingApi.js';
 import { fetchLatestSeasonPoints } from './services/faceitApi.js';
+import jwt from 'jsonwebtoken';
 
 dotenv.config();
 
@@ -256,8 +257,27 @@ app.get('/api/ping', (req, res) => {
   });
 });
 
-// Ruta para resolver Steam Guard remotamente
+// Ruta para resolver Steam Guard remotamente (Protegida por clave admin o sesión)
 app.get('/api/steam/guard', (req, res) => {
+  const token = req.cookies?.admin_token || req.cookies?.auth_token;
+  const providedSecret = req.query.secret || req.headers['x-admin-secret'];
+  let isAuthorized = false;
+
+  if (providedSecret && providedSecret === env.ADMIN_JWT_SECRET) {
+    isAuthorized = true;
+  } else if (token) {
+    try {
+      const decoded = jwt.verify(token, env.ADMIN_JWT_SECRET);
+      if (decoded.isAdmin || decoded.role === 'admin' || decoded.role === 'global_admin') {
+        isAuthorized = true;
+      }
+    } catch {}
+  }
+
+  if (!isAuthorized) {
+    return res.status(403).json({ error: 'Acceso no autorizado. Se requieren credenciales de administrador.' });
+  }
+
   const { code } = req.query;
   if (!code) {
     return res.status(400).json({ error: 'Falta el código de verificación. Ej: /api/steam/guard?code=XXXXX' });
