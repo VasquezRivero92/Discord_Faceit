@@ -14,13 +14,14 @@ import {
   Sparkles,
   Server,
   Layers,
-  Flame,
   HelpCircle,
   BookOpen,
   Activity,
   Cpu,
-  Lock
+  Lock,
+  Wallet
 } from 'lucide-react';
+import { FaceitLogo, SteamLogo, YapeLogo } from './BrandLogos';
 
 interface LandingHomeViewProps {
   setActiveView: (view: ActiveView) => void;
@@ -90,7 +91,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
               onClick={() => setActiveView(currentUser ? 'cuenta' : 'login')}
               className="px-7 py-3.5 rounded-lg bg-[#742284] hover:bg-[#8B2FA0] border border-[#A855F7]/40 text-white font-black tracking-wider shadow-[0_4px_20px_rgba(168,85,247,0.25)] hover:shadow-[0_6px_30px_rgba(168,85,247,0.45)] transition-all flex items-center gap-2.5 cursor-pointer active:scale-[0.98]"
             >
-              <Coins className="w-4 h-4 text-[#E9D5FF]" />
+              <YapeLogo className="w-5 h-5 rounded-sm shrink-0" />
               <span>{currentUser ? 'Mi Billetera & Recargar' : 'Recargar con Yape'}</span>
             </button>
 
@@ -99,7 +100,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
               onClick={() => setActiveView('guia-faceit')}
               className="px-6 py-3.5 rounded-lg bg-neutral-900/80 hover:bg-neutral-800/90 border border-white/[0.12] hover:border-[#FF5500]/60 text-neutral-200 hover:text-white tracking-wider transition-all flex items-center gap-2 cursor-pointer active:scale-[0.98]"
             >
-              <BookOpen className="w-4 h-4 text-[#FF5500]" />
+              <FaceitLogo className="w-4 h-4 text-[#FF5500]" />
               <span>Guía FACEIT</span>
             </button>
           </div>
@@ -121,8 +122,8 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
 
             <div className="p-4 rounded-xl bg-neutral-900/40 border border-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-white/[0.18] transition-all">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
-                  <ShieldCheck className="w-5 h-5 shrink-0" />
+                <div className="p-2.5 rounded-lg bg-[#FF5500]/15 border border-[#FF5500]/30 text-[#FF5500] flex items-center justify-center">
+                  <FaceitLogo className="w-5 h-5 shrink-0 text-[#FF5500]" />
                 </div>
                 <div>
                   <span className="text-white font-bold text-xs block leading-tight">ANTICHEAT FACEIT</span>
@@ -133,8 +134,8 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
 
             <div className="p-4 rounded-xl bg-neutral-900/40 border border-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-white/[0.18] transition-all">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-lg bg-[#A855F7]/10 border border-[#A855F7]/30 text-[#C084FC]">
-                  <Coins className="w-5 h-5 shrink-0" />
+                <div className="p-1 rounded-lg bg-[#742284]/30 border border-[#A855F7]/30 flex items-center justify-center w-10 h-10 shrink-0">
+                  <YapeLogo className="w-full h-full object-contain rounded-md" />
                 </div>
                 <div>
                   <span className="text-white font-bold text-xs block leading-tight">PAGOS CON YAPE</span>
@@ -164,7 +165,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
       <section className="py-20 px-4 sm:px-6 max-w-6xl mx-auto">
         <div className="text-center max-w-2xl mx-auto mb-14">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FF5500]/10 border border-[#FF5500]/30 text-[#FF5500] text-xs font-mono font-bold uppercase mb-3">
-            <Flame className="w-3.5 h-3.5" /> COMPETICIÓN EN TIEMPO REAL
+            <FaceitLogo className="w-3.5 h-3.5 text-[#FF5500]" /> COMPETICIÓN EN TIEMPO REAL
           </div>
           <h2 className="text-3xl sm:text-4xl font-black italic tracking-tight uppercase font-mono text-white">
             ¿QUÉ ES EL MIXTÓN DE MACHUPEEK?
@@ -213,8 +214,8 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
 
           <div className="rounded-xl bg-neutral-900/50 border border-white/[0.08] hover:border-emerald-500/50 p-6 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 group shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]">
             <div>
-              <div className="w-12 h-12 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-5 group-hover:scale-110 transition-transform">
-                <Server className="w-6 h-6" />
+              <div className="w-12 h-12 rounded-lg bg-[#FF5500]/15 border border-[#FF5500]/30 flex items-center justify-center text-[#FF5500] mb-5 group-hover:scale-110 transition-transform">
+                <FaceitLogo className="w-6 h-6 text-[#FF5500]" />
               </div>
               <h3 className="text-base font-black uppercase text-white font-mono mb-2">
                 3. Servidor FACEIT
@@ -230,8 +231,8 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
 
           <div className="rounded-xl bg-neutral-900/50 border border-white/[0.08] hover:border-[#A855F7]/50 p-6 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 group shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]">
             <div>
-              <div className="w-12 h-12 rounded-lg bg-[#A855F7]/10 border border-[#A855F7]/30 flex items-center justify-center text-[#C084FC] mb-5 group-hover:scale-110 transition-transform">
-                <Coins className="w-6 h-6" />
+              <div className="w-12 h-12 rounded-lg bg-[#742284]/25 border border-[#A855F7]/30 flex items-center justify-center p-2 text-[#C084FC] mb-5 group-hover:scale-110 transition-transform">
+                <YapeLogo className="w-full h-full object-contain" />
               </div>
               <h3 className="text-base font-black uppercase text-white font-mono mb-2">
                 4. Pozos en Soles
@@ -372,9 +373,10 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
             <button
               type="button"
               onClick={() => setActiveView(currentUser ? 'cuenta' : 'login')}
-              className="px-5 py-2.5 rounded-lg bg-[#742284] hover:bg-[#8B2FA0] border border-[#A855F7]/40 text-white font-bold uppercase transition-all shadow-[0_0_15px_rgba(168,85,247,0.25)] cursor-pointer active:scale-[0.98]"
+              className="px-5 py-2.5 rounded-lg bg-[#742284] hover:bg-[#8B2FA0] border border-[#A855F7]/40 text-white font-bold uppercase transition-all shadow-[0_0_15px_rgba(168,85,247,0.25)] cursor-pointer active:scale-[0.98] flex items-center gap-2"
             >
-              Recargar con Yape
+              <YapeLogo className="w-4 h-4 rounded-sm shrink-0" />
+              <span>Recargar con Yape</span>
             </button>
             <button
               type="button"

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { 
   ShieldCheck, 
-  Gamepad2, 
   User, 
   LogOut, 
   Coins, 
@@ -15,6 +14,7 @@ import {
   Sparkles,
   Award
 } from 'lucide-react';
+import { FaceitLogo, YapeLogo, DiscordLogo } from './BrandLogos';
 import { ActiveView, CurrentUser } from '../types';
 
 interface HeaderProps {
@@ -52,8 +52,9 @@ export const Header: React.FC<HeaderProps> = ({
               <span>SSL 256-BIT SEGURO</span>
             </span>
             <span className="hidden sm:inline text-neutral-700">|</span>
-            <span className="hidden sm:inline-flex items-center gap-1 text-neutral-300 font-mono text-[11px]">
-              Recargas automáticas con <strong className="text-[#C084FC] font-semibold">Yape</strong>
+            <span className="hidden sm:inline-flex items-center gap-1.5 text-neutral-300 font-mono text-[11px]">
+              <YapeLogo className="w-3.5 h-3.5 rounded-xs shrink-0" />
+              <span>Recargas automáticas con <strong className="text-[#C084FC] font-semibold">Yape</strong></span>
             </span>
             <span className="hidden md:inline text-neutral-700">|</span>
             <span className="hidden md:inline text-neutral-300 font-mono text-[11px]">
@@ -149,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({
                 : 'text-neutral-300 hover:text-white hover:bg-white/[0.06]'
             }`}
           >
-            <BookOpen className="w-3.5 h-3.5 text-[#FF5500]" />
+            <FaceitLogo className="w-3.5 h-3.5 text-[#FF5500]" />
             <span>Guía FACEIT</span>
           </button>
 
@@ -162,7 +163,7 @@ export const Header: React.FC<HeaderProps> = ({
                 : 'text-purple-300 hover:text-white hover:bg-purple-950/30'
             }`}
           >
-            <Coins className="w-3.5 h-3.5 text-[#C084FC]" />
+            <YapeLogo className="w-3.5 h-3.5 rounded-xs shrink-0" />
             <span>{currentUser ? 'Billetera' : 'Recargar / Saldo'}</span>
           </button>
 
@@ -243,7 +244,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => handleNavClick('login')}
                 className="px-3 py-1.5 rounded-md bg-[#742284] hover:bg-[#8B2FA0] border border-[#A855F7]/40 text-white text-xs font-mono font-bold uppercase transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(168,85,247,0.25)] cursor-pointer"
               >
-                <Coins className="w-3.5 h-3.5" />
+                <YapeLogo className="w-3.5 h-3.5 rounded-xs shrink-0" />
                 <span>Recargar</span>
               </button>
 
@@ -252,7 +253,7 @@ export const Header: React.FC<HeaderProps> = ({
                 className="px-3 py-1.5 rounded-md bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-mono font-bold uppercase transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(88,101,242,0.25)]"
                 title="Conectar Discord"
               >
-                <User className="w-3.5 h-3.5" />
+                <DiscordLogo className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Discord</span>
               </a>
             </div>
@@ -312,7 +313,7 @@ export const Header: React.FC<HeaderProps> = ({
               activeView === 'guia-faceit' ? 'bg-[#FF5500] text-white' : 'text-neutral-300 hover:bg-white/[0.05]'
             }`}
           >
-            <BookOpen className="w-4 h-4 text-[#FF5500]" />
+            <FaceitLogo className="w-4 h-4 text-[#FF5500]" />
             <span>Guía FACEIT & Vinculación</span>
           </button>
 
@@ -323,7 +324,7 @@ export const Header: React.FC<HeaderProps> = ({
               activeView === 'cuenta' || activeView === 'login' ? 'bg-[#742284] text-white' : 'text-purple-300 hover:bg-purple-950/20'
             }`}
           >
-            <Coins className="w-4 h-4 text-[#C084FC]" />
+            <YapeLogo className="w-4 h-4 rounded-xs shrink-0" />
             <span>{currentUser ? 'Billetera & Saldo' : 'Recargar con Yape'}</span>
           </button>
 

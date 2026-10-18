@@ -2,13 +2,11 @@ import React, { useState } from 'react';
 import { 
   User, 
   Wallet, 
-  Coins, 
   ShieldCheck, 
   CheckCircle2, 
   AlertCircle, 
   RefreshCw, 
   KeyRound, 
-  Gamepad2, 
   LogOut, 
   ArrowRight, 
   Zap, 
@@ -20,9 +18,9 @@ import {
   Sparkles,
   Edit3,
   Link2,
-  Check,
-  Flame
+  Check
 } from 'lucide-react';
+import { FaceitLogo, SteamLogo, DiscordLogo, YapeLogo, YapeIconBadge } from './BrandLogos';
 import { CurrentUser, ActiveView } from '../types';
 
 interface UserWalletViewProps {
@@ -286,7 +284,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
             <div className="rounded-xl bg-neutral-900/60 border border-white/[0.08] hover:border-[#5865F2]/60 p-8 flex flex-col justify-between transition-all duration-300 shadow-xl group">
               <div className="text-center">
                 <div className="w-14 h-14 rounded-xl bg-[#5865F2]/10 border border-[#5865F2]/30 flex items-center justify-center text-[#5865F2] mb-5 mx-auto group-hover:scale-105 transition-transform">
-                  <User className="w-7 h-7" />
+                  <DiscordLogo className="w-8 h-8 text-[#5865F2]" />
                 </div>
                 <h3 className="text-base font-black uppercase text-white mb-2">
                   Jugadores de la Comunidad
@@ -298,8 +296,9 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
 
               <a
                 href="/auth/discord"
-                className="w-full py-3.5 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-black uppercase tracking-wider text-center flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(88,101,242,0.35)] transition-all cursor-pointer active:scale-[0.98]"
+                className="w-full py-3.5 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-black uppercase tracking-wider text-center flex items-center justify-center gap-2.5 shadow-[0_4px_20px_rgba(88,101,242,0.35)] transition-all cursor-pointer active:scale-[0.98]"
               >
+                <DiscordLogo className="w-4 h-4 text-white" />
                 <span>Conectar con Discord</span>
                 <ArrowRight className="w-4 h-4" />
               </a>
@@ -309,7 +308,9 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
           {/* Value Props */}
           <div className="border-t border-white/[0.08] pt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
             <div className="p-4 rounded-xl bg-neutral-900/40 border border-white/[0.06]">
-              <Coins className="w-6 h-6 text-[#FF5500] mx-auto mb-2" />
+              <div className="h-6 flex items-center justify-center mb-2">
+                <YapeLogo className="h-5" />
+              </div>
               <div className="text-xs font-bold text-white uppercase mb-1">Recargas Inmediatas</div>
               <div className="text-xs text-neutral-400 font-sans">Acreditación instantánea en Soles (PEN) con Yape</div>
             </div>
@@ -319,7 +320,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
               <div className="text-xs text-neutral-400 font-sans">Transacciones protegidas con cifrado SSL 256-Bit</div>
             </div>
             <div className="p-4 rounded-xl bg-neutral-900/40 border border-white/[0.06]">
-              <Gamepad2 className="w-6 h-6 text-cyan-400 mx-auto mb-2" />
+              <FaceitLogo className="w-6 h-6 text-[#FF5500] mx-auto mb-2" />
               <div className="text-xs font-bold text-white uppercase mb-1">Servidores FACEIT</div>
               <div className="text-xs text-neutral-400 font-sans">Partidas con anticheat oficial obligatorio de FACEIT</div>
             </div>
@@ -433,7 +434,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08]">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-[#FF5500]/10 border border-[#FF5500]/30 flex items-center justify-center text-[#FF5500]">
-                  <Flame className="w-4 h-4" />
+                  <FaceitLogo className="w-4 h-4 text-[#FF5500]" />
                 </div>
                 <div>
                   <h3 className="text-xs font-black uppercase text-white tracking-wider">CUENTA DE FACEIT</h3>
@@ -464,7 +465,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                       />
                     ) : (
                       <div className="w-10 h-10 rounded-lg bg-[#FF5500]/20 border border-[#FF5500]/40 flex items-center justify-center text-sm font-black text-[#FF5500]">
-                        {currentUser.faceit_nickname.charAt(0).toUpperCase()}
+                        <FaceitLogo className="w-5 h-5 text-[#FF5500]" />
                       </div>
                     )}
                     <div>
@@ -506,7 +507,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                   <div className="p-3.5 rounded-xl bg-gradient-to-r from-[#0088FF]/15 via-[#FF5500]/15 to-transparent border border-[#0088FF]/40 space-y-2">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-neutral-300 font-sans flex items-center gap-1.5 font-bold">
-                        <Gamepad2 className="w-4 h-4 text-[#0088FF]" />
+                        <SteamLogo className="w-4 h-4 text-[#0088FF]" />
                         <span>Steam Conectado:</span>
                       </span>
                       <span className="font-mono text-[#0088FF] text-[11px] font-bold">
@@ -523,7 +524,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                       {isSyncingFaceitFromSteam ? (
                         <RefreshCw className="w-4 h-4 animate-spin" />
                       ) : (
-                        <Zap className="w-4 h-4 fill-current" />
+                        <FaceitLogo className="w-4 h-4 text-white" />
                       )}
                       <span>{isSyncingFaceitFromSteam ? 'Detectando en FACEIT...' : '⚡ Jalar y Vincular FACEIT desde mi Steam'}</span>
                     </button>
@@ -538,12 +539,13 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                     className="p-3 rounded-xl bg-gradient-to-r from-[#171a21] to-[#203247] border border-[#0088FF]/30 hover:border-[#0088FF] text-white flex items-center justify-between group cursor-pointer transition-all"
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-[#0088FF]/20 flex items-center justify-center text-[#0088FF]">
-                        <Zap className="w-4 h-4" />
+                      <div className="w-8 h-8 rounded-lg bg-[#0088FF]/20 flex items-center justify-center text-[#0088FF] group-hover:scale-105 transition-transform">
+                        <SteamLogo className="w-4 h-4 text-[#0088FF]" />
                       </div>
                       <div>
-                        <div className="text-xs font-black uppercase tracking-tight text-white group-hover:text-[#0088FF] transition-colors">
-                          Autenticar con Steam para jalar FACEIT
+                        <div className="text-xs font-black uppercase tracking-tight text-white group-hover:text-[#0088FF] transition-colors flex items-center gap-1.5">
+                          <span>Autenticar con Steam para jalar FACEIT</span>
+                          <FaceitLogo className="w-3 h-3 text-[#FF5500]" />
                         </div>
                         <div className="text-[10px] text-neutral-400 font-sans">
                           Inicia sesión con Steam y jalará tu FACEIT en 1 clic
@@ -610,7 +612,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08]">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-[#0088FF]/10 border border-[#0088FF]/30 flex items-center justify-center text-[#0088FF]">
-                  <Gamepad2 className="w-4 h-4" />
+                  <SteamLogo className="w-4 h-4 text-[#0088FF]" />
                 </div>
                 <div>
                   <h3 className="text-xs font-black uppercase text-white tracking-wider">CUENTA DE STEAM (CS2)</h3>
@@ -658,8 +660,9 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-[11px] text-emerald-400 font-sans flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span className="text-[11px] text-emerald-400 font-sans flex items-center gap-1.5">
+                    <SteamLogo className="w-3.5 h-3.5 text-[#0088FF]" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                     <span>Conectado con la API de Steam</span>
                   </span>
                   <a
@@ -683,7 +686,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                   href="/auth/steam"
                   className="w-full py-3 px-4 rounded-xl bg-[#171a21] hover:bg-[#203247] border border-[#0088FF]/40 hover:border-[#0088FF] text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all shadow-[0_4px_15px_rgba(0,136,255,0.25)] cursor-pointer active:scale-[0.98]"
                 >
-                  <Gamepad2 className="w-4 h-4 text-[#0088FF]" />
+                  <SteamLogo className="w-4 h-4 text-[#0088FF]" />
                   <span>Conectar e Iniciar Sesión con Steam</span>
                   <ExternalLink className="w-3.5 h-3.5 text-neutral-400" />
                 </a>
@@ -699,7 +702,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                     {isLinkingSteam ? (
                       <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#0088FF]" />
                     ) : (
-                      <Zap className="w-3.5 h-3.5 text-[#0088FF]" />
+                      <FaceitLogo className="w-3.5 h-3.5 text-[#FF5500]" />
                     )}
                     <span>⚡ Consultar API y Sincronizar desde FACEIT</span>
                   </button>
@@ -717,7 +720,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
           <div className="rounded-xl bg-gradient-to-br from-neutral-900/90 via-neutral-900/70 to-black border border-[#FF5500]/50 p-6 shadow-[0_8px_30px_rgba(255,85,0,0.15)] relative overflow-hidden backdrop-blur-md">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2 text-xs font-black uppercase text-[#FF5500]">
-                <Coins className="w-4 h-4" />
+                <Wallet className="w-4 h-4" />
                 <span>SALDO DISPONIBLE EN BILLETERA</span>
               </div>
               <button
@@ -750,13 +753,18 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
             
             {/* Header Badge */}
             <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b border-white/[0.08]">
-              <div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#742284]/20 border border-[#A855F7]/40 text-[#C084FC] text-[10px] font-bold uppercase mb-1.5">
-                  <Zap className="w-3 h-3" /> ACREDITACIÓN EN TIEMPO REAL // AUTOMÁTICA
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-xl bg-[#742284]/25 border border-[#A855F7]/40 flex items-center justify-center p-2 shrink-0 shadow-[0_0_15px_rgba(168,85,247,0.25)]">
+                  <YapeLogo className="w-full h-full object-contain" />
                 </div>
-                <h3 className="text-xl sm:text-2xl font-black italic tracking-tight uppercase text-white">
-                  RECARGAR SALDO CON <span className="text-[#C084FC]">YAPE</span>
-                </h3>
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#742284]/20 border border-[#A855F7]/40 text-[#C084FC] text-[10px] font-bold uppercase mb-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> ACREDITACIÓN EN TIEMPO REAL // AUTOMÁTICA
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-black italic tracking-tight uppercase text-white flex items-center gap-2">
+                    RECARGAR SALDO CON <span className="text-[#C084FC]">YAPE</span>
+                  </h3>
+                </div>
               </div>
               <span className="text-xs text-neutral-400 font-sans border border-white/[0.1] rounded px-2.5 py-1">
                 Moneda: <strong className="text-white">Soles (PEN)</strong>
@@ -837,8 +845,9 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
 
               {/* 2. Número de Celular Yape */}
               <div>
-                <label className="text-xs font-bold text-neutral-300 uppercase block mb-1.5">
-                  2. Número de celular afiliado a Yape:
+                <label className="text-xs font-bold text-neutral-300 uppercase block mb-1.5 flex items-center gap-1.5">
+                  <YapeLogo className="w-4 h-4 rounded-sm shrink-0" />
+                  <span>2. Número de celular afiliado a Yape:</span>
                 </label>
                 
                 <div className="relative">
@@ -863,8 +872,9 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
 
               {/* 3. Código de Aprobación Yape (OTP) */}
               <div>
-                <label className="text-xs font-bold text-neutral-300 uppercase block mb-1.5">
-                  3. Código de aprobación de Yape (6 dígitos):
+                <label className="text-xs font-bold text-neutral-300 uppercase block mb-1.5 flex items-center gap-1.5">
+                  <YapeLogo className="w-4 h-4 rounded-sm shrink-0" />
+                  <span>3. Código de aprobación de Yape (6 dígitos):</span>
                 </label>
 
                 <div className="relative">
@@ -914,7 +924,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                     </>
                   ) : (
                     <>
-                      <Zap className="w-4 h-4" />
+                      <YapeLogo className="w-5 h-5 rounded-sm shrink-0" />
                       <span>Confirmar y Recargar S/ {effectiveAmount.toFixed(2)} PEN</span>
                     </>
                   )}

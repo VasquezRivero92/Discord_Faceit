@@ -7,14 +7,13 @@ import {
   CheckCircle2, 
   ArrowRight, 
   Download, 
-  Gamepad2, 
   Trophy, 
   HelpCircle,
   Copy,
   Check,
-  Flame,
   Award
 } from 'lucide-react';
+import { FaceitLogo } from './BrandLogos';
 import { ActiveView, CurrentUser } from '../types';
 
 interface GuiaFaceitViewProps {
@@ -184,7 +183,7 @@ export const GuiaFaceitView: React.FC<GuiaFaceitViewProps> = ({ setActiveView, c
         <div className="rounded-2xl bg-neutral-900/50 border border-white/[0.08] p-6 sm:p-8 space-y-5 backdrop-blur-md">
           <div className="border-b border-white/[0.08] pb-3">
             <h3 className="text-xl font-black uppercase text-white font-mono flex items-center gap-2.5">
-              <Gamepad2 className="w-5 h-5 text-[#FF5500]" />
+              <FaceitLogo className="w-5 h-5 text-[#FF5500]" />
               SISTEMA DE TIERS BALANCEADOS EN EL MIXTÓN
             </h3>
             <p className="text-neutral-400 text-xs font-sans mt-1">
