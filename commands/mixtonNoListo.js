@@ -8,9 +8,21 @@ export const data = new SlashCommandBuilder()
   .setDescription('Quita tu perfil de la lista de listos para el mixton.');
 
 export async function execute(interaction, db) {
+  // Asegurar diferir respuesta de inmediato para evitar el timeout de 3 segundos de Discord
+  if (!interaction.deferred && !interaction.replied) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+  }
+
+  const sendResponse = async (payload) => {
+    if (interaction.deferred || interaction.replied) {
+      return interaction.editReply(payload).catch(err => logger.warn('Error en editReply mixton_no_listo:', err.message));
+    }
+    return interaction.reply({ ...payload, flags: MessageFlags.Ephemeral }).catch(err => logger.warn('Error en reply mixton_no_listo:', err.message));
+  };
+
   const isEnabled = await isFeatureEnabled('command_mixton_no_listo', interaction.guildId).catch(() => true);
   if (isEnabled === false) {
-    return interaction.reply({ content: '❌ Este comando está desactivado por el administrador.', flags: MessageFlags.Ephemeral });
+    return sendResponse({ content: '❌ Este comando está desactivado por el administrador.' });
   }
 
   const discordId = interaction.user.id;
@@ -26,9 +38,8 @@ export async function execute(interaction, db) {
     }
 
     if (!userData || !userData.faceit_player_id) {
-      return interaction.reply({
-        content: '❌ No estás verificado. Este comando es solo para miembros registrados.',
-        flags: MessageFlags.Ephemeral
+      return sendResponse({
+        content: '❌ No estás verificado. Este comando es solo para miembros registrados.'
       });
     }
 
@@ -48,13 +59,12 @@ export async function execute(interaction, db) {
       .setTimestamp()
       .setFooter({ text: 'Sistema de Competencias Mixton' });
 
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    await sendResponse({ embeds: [embed] });
 
   } catch (error) {
     logger.error('Error en el comando /mixton_no_listo:', error);
-    await interaction.reply({
-      content: `❌ Ocurrió un error al intentar cambiar tu estado: ${error.message}`,
-      flags: MessageFlags.Ephemeral
+    await sendResponse({
+      content: `❌ Ocurrió un error al intentar cambiar tu estado: ${error.message}`
     });
   }
 }

@@ -219,11 +219,16 @@ export async function onInteractionCreate(interaction, db, commandMap) {
     // --- Botones de Mixton (Listo / No Listo) ---
     if (customId === 'mixton_listo_btn') {
       try {
+        if (!interaction.deferred && !interaction.replied) {
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+        }
         const { execute: executeListo } = await import('../commands/mixtonListo.js');
         await executeListo(interaction, db);
       } catch (err) {
         logger.error('Error al procesar botón mixton_listo:', err);
-        if (!interaction.replied && !interaction.deferred) {
+        if (interaction.deferred || interaction.replied) {
+          await interaction.editReply({ content: '❌ Error al procesar tu solicitud.' }).catch(() => {});
+        } else {
           await interaction.reply({ content: '❌ Error al procesar tu solicitud.', flags: MessageFlags.Ephemeral }).catch(() => {});
         }
       }
@@ -232,11 +237,16 @@ export async function onInteractionCreate(interaction, db, commandMap) {
 
     if (customId === 'mixton_no_listo_btn') {
       try {
+        if (!interaction.deferred && !interaction.replied) {
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+        }
         const { execute: executeNoListo } = await import('../commands/mixtonNoListo.js');
         await executeNoListo(interaction, db);
       } catch (err) {
         logger.error('Error al procesar botón mixton_no_listo:', err);
-        if (!interaction.replied && !interaction.deferred) {
+        if (interaction.deferred || interaction.replied) {
+          await interaction.editReply({ content: '❌ Error al procesar tu solicitud.' }).catch(() => {});
+        } else {
           await interaction.reply({ content: '❌ Error al procesar tu solicitud.', flags: MessageFlags.Ephemeral }).catch(() => {});
         }
       }

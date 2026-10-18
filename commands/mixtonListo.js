@@ -8,9 +8,21 @@ export const data = new SlashCommandBuilder()
   .setDescription('Muestra que estás disponible y listo para ser elegido en las partidas de mixton.');
 
 export async function execute(interaction, db) {
+  // Asegurar diferir respuesta de inmediato para evitar el timeout de 3 segundos de Discord
+  if (!interaction.deferred && !interaction.replied) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+  }
+
+  const sendResponse = async (payload) => {
+    if (interaction.deferred || interaction.replied) {
+      return interaction.editReply(payload).catch(err => logger.warn('Error en editReply mixton_listo:', err.message));
+    }
+    return interaction.reply({ ...payload, flags: MessageFlags.Ephemeral }).catch(err => logger.warn('Error en reply mixton_listo:', err.message));
+  };
+
   const isEnabled = await isFeatureEnabled('command_mixton_listo', interaction.guildId).catch(() => true);
   if (isEnabled === false) {
-    return interaction.reply({ content: '❌ Este comando está desactivado por el administrador.', flags: MessageFlags.Ephemeral });
+    return sendResponse({ content: '❌ Este comando está desactivado por el administrador.' });
   }
 
   const discordId = interaction.user.id;
@@ -26,9 +38,8 @@ export async function execute(interaction, db) {
     }
 
     if (!userData || !userData.faceit_player_id) {
-      return interaction.reply({
-        content: '❌ No estás verificado. Debes vincular tu cuenta de Faceit usando el comando `/verificar_fc <nickname>` o desde la web antes de unirte al mixton.',
-        flags: MessageFlags.Ephemeral
+      return sendResponse({
+        content: '❌ No estás verificado. Debes vincular tu cuenta de Faceit usando el comando `/verificar_fc <nickname>` o desde la web antes de unirte al mixton.'
       });
     }
 
@@ -57,13 +68,12 @@ export async function execute(interaction, db) {
       .setTimestamp()
       .setFooter({ text: 'Sistema de Competencias Mixton' });
 
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    await sendResponse({ embeds: [embed] });
 
   } catch (error) {
     logger.error('Error en el comando /mixton_listo:', error);
-    await interaction.reply({
-      content: `❌ Ocurrió un error al intentar cambiar tu estado a listo: ${error.message}`,
-      flags: MessageFlags.Ephemeral
+    await sendResponse({
+      content: `❌ Ocurrió un error al intentar cambiar tu estado a listo: ${error.message}`
     });
   }
 }
