@@ -39,7 +39,7 @@ export const TerminosCondicionesView: React.FC = () => {
               <span className="text-[#FF5500]">2.</span> OBJETO DEL SERVICIO
             </h2>
             <p>
-              MachuPeek es una plataforma en línea de entretenimiento y esports que ofrece servicios de organización de torneos, emparejamiento competitivo balanceado (matchmaking draft) para jugadores del videojuego Counter-Strike 2 en servidores de bajo ping ubicados en Lima, venta de pases de acceso a torneos, suscripciones VIP, créditos gamer para cuotas y retos, y sesiones de asesoría y coaching individual.
+              MachuPeek es una plataforma en línea de entretenimiento y esports que ofrece servicios de organización de torneos, emparejamiento competitivo balanceado (matchmaking draft) para jugadores del videojuego Counter-Strike 2 en servidores oficiales de FACEIT y Steam, venta de pases de acceso a torneos, suscripciones VIP, créditos gamer para cuotas y retos, y sesiones de asesoría y coaching individual.
             </p>
           </section>
 

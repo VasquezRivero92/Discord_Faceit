@@ -372,7 +372,7 @@ export const GuiaFaceitView: React.FC<GuiaFaceitViewProps> = ({ setActiveView, c
             <div className="p-4 rounded-xl bg-black/40 border border-white/[0.08]">
               <span className="text-[#FF5500] font-bold block mb-1">FASE 2 // SERVIDOR</span>
               <p className="text-neutral-400 font-sans text-xs">
-                La API oficial de FACEIT crea la sala de juego y despliega el servidor 128-tick.
+                La API oficial de FACEIT crea la sala de juego y despliega el servidor oficial.
               </p>
             </div>
 

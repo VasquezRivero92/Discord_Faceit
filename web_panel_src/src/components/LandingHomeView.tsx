@@ -11,7 +11,6 @@ import {
   CheckCircle2, 
   ExternalLink,
   Sparkles,
-  Server,
   Layers,
   HelpCircle,
   BookOpen,
@@ -109,12 +108,12 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
             
             <div className="p-4 rounded-xl bg-neutral-900/40 border border-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-white/[0.18] transition-all">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-lg bg-[#FF5500]/10 border border-[#FF5500]/30 text-[#FF5500]">
-                  <Server className="w-5 h-5 shrink-0" />
+                <div className="p-2.5 rounded-lg bg-[#1b2838]/80 border border-sky-500/30 text-sky-400 flex items-center justify-center">
+                  <SteamLogo className="w-5 h-5 shrink-0" />
                 </div>
                 <div>
-                  <span className="text-white font-bold text-xs block leading-tight">SERVIDORES 128T</span>
-                  <span className="text-[11px] text-neutral-400 font-sans">Oficiales bajo ping</span>
+                  <span className="text-white font-bold text-xs block leading-tight">LOBBY STEAM</span>
+                  <span className="text-[11px] text-neutral-400 font-sans">Invitaciones directas a CS2</span>
                 </div>
               </div>
             </div>
