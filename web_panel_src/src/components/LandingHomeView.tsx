@@ -5,7 +5,6 @@ import {
   Trophy, 
   ShieldCheck, 
   Zap, 
-  Users, 
   Award, 
   Coins, 
   ArrowRight, 
@@ -106,7 +105,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
           </div>
 
           {/* Live Telemetry Highlights (Stats HUD) */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-14 w-full max-w-5xl text-left font-mono">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-14 w-full max-w-4xl mx-auto text-left font-mono">
             
             <div className="p-4 rounded-xl bg-neutral-900/40 border border-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-white/[0.18] transition-all">
               <div className="flex items-center gap-3">
@@ -140,18 +139,6 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
                 <div>
                   <span className="text-white font-bold text-xs block leading-tight">PAGOS CON YAPE</span>
                   <span className="text-[11px] text-neutral-400 font-sans">Acreditación instantánea</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-neutral-900/40 border border-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-white/[0.18] transition-all">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400">
-                  <Users className="w-5 h-5 shrink-0" />
-                </div>
-                <div>
-                  <span className="text-white font-bold text-xs block leading-tight">+5,000 GAMERS</span>
-                  <span className="text-[11px] text-neutral-400 font-sans">Comunidad activa diaria</span>
                 </div>
               </div>
             </div>
