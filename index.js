@@ -127,9 +127,17 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
-app.use(cookieParser());
-app.use(express.static('public'));
-app.set('trust proxy', 1); // Confiar en el proxy reverso (Nginx/Wisp)
+app.use(express.static('public', {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    } else if (filePath.includes('assets')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  }
+}));
 
 // Redirección forzosa a HTTPS para cumplir con los estándares de seguridad SSL exigidos por Culqi
 app.use((req, res, next) => {
@@ -337,7 +345,9 @@ const publicSpaRoutes = [
 ];
 
 app.get(publicSpaRoutes, (req, res) => {
-  res.setHeader('Cache-Control', 'no-cache, private');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(new URL('public/index.html', import.meta.url).pathname);
 });
 
@@ -348,11 +358,15 @@ app.get('*', (req, res, next) => {
     req.path.startsWith('/auth') ||
     req.path.startsWith('/admin') ||
     req.path.startsWith('/webhook') ||
-    req.path.startsWith('/webhooks')
+    req.path.startsWith('/webhooks') ||
+    req.path.startsWith('/assets') ||
+    req.path.includes('.')
   ) {
     return next();
   }
-  res.setHeader('Cache-Control', 'no-cache, private');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(new URL('public/index.html', import.meta.url).pathname);
 });
 
