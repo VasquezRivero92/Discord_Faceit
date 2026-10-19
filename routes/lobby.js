@@ -12,7 +12,7 @@ import { fetchFaceitPlayer, fetchFaceitPlayerById, fetchFaceitPlayerBySteamId, f
 import { syncMemberLevelRole, syncMemberNickname, getPlayerSkillLevel } from '../services/roles.js';
 import { crearLobbyMatchmaking, steamClient } from '../steamBot.js';
 import { playTTSCountdown } from '../utils/voiceAnnouncer.js';
-import { culqiService } from '../services/culqiService.js';
+import { yapeTransactionService } from '../services/yapeTransactionService.js';
 
 export const mixtonEvents = new EventEmitter();
 
@@ -1430,49 +1430,50 @@ export function createLobbyRouter(client, db, config, wss) {
     }
   });
 
-  // 7.7. Recargar saldo con Yape vía Culqi API
+  // 7.7. Recargar saldo verificando el depósito en el monitor Yape local.
   router.post('/wallet/recharge-yape', requireAuth, async (req, res) => {
     try {
-      const { phoneNumber, otp, amount, targetDiscordId } = req.body;
+      const { operationNumber, amount, targetDiscordId } = req.body;
       const discordId = (req.user?.isAdmin && targetDiscordId) ? targetDiscordId : req.user.userId;
 
-      if (!otp || !amount) {
-        return res.status(400).json({ error: 'Debes proporcionar el código de aprobación de Yape y monto.' });
+      if (!operationNumber || amount === undefined) {
+        return res.status(400).json({ error: 'Debes proporcionar monto y código de aprobación Yape.' });
       }
 
-      let phoneToUse = phoneNumber ? String(phoneNumber).replace(/\D/g, '') : null;
-      if (!phoneToUse || phoneToUse.length !== 9) {
-        const existingUser = await db.getFullUser(discordId, req.guildId);
-        if (existingUser?.phoneNumber) {
-          phoneToUse = existingUser.phoneNumber;
-        }
-      }
-
-      if (!phoneToUse || phoneToUse.length !== 9) {
-        return res.status(400).json({ error: 'Debes proporcionar un número de celular Yape válido de 9 dígitos.' });
-      }
-
-      const result = await culqiService.processYapeRecharge({
-        discordId,
-        phoneNumber: phoneToUse,
-        otp,
-        amount,
-        email: req.user.email || null,
-        nickname: req.user.username || 'Jugador',
-        guildId: req.guildId,
-        db
+      const payment = await yapeTransactionService.findIncomingTransaction({
+        db,
+        operationNumber,
+        expectedAmount: amount
       });
+      const result = await db.creditYapeOperation({
+        operationNumber: payment.operationNumber,
+        discordId,
+        guildId: req.guildId,
+        amount: payment.amount,
+        details: { receivedAt: payment.receivedAt }
+      });
+
+      if (result.alreadyProcessed) {
+        return res.status(409).json({ error: result.belongsToUser
+          ? 'Esta operación ya fue acreditada en tu billetera.'
+          : 'Esta operación ya fue utilizada para acreditar otra cuenta.' });
+      }
 
       mixtonEvents.emit('update', req.guildId);
 
       res.json({
         success: true,
-        message: `¡Recarga de S/ ${result.amount.toFixed(2)} procesada exitosamente con Yape!`,
-        ...result
+        message: `¡Recarga de S/ ${payment.amount.toFixed(2)} acreditada exitosamente con Yape!`,
+        amount: payment.amount,
+        newBalance: result.newBalance,
+        operationNumber: payment.operationNumber
       });
     } catch (err) {
       logger.error('Error al procesar recarga con Yape en endpoint:', err.message);
-      res.status(400).json({ error: err.message || 'Error al procesar el pago con Yape.' });
+      const isMissingOperation = String(err.message || '').startsWith('No encontramos ese depósito');
+      res.status(400).json({ error: isMissingOperation
+        ? 'No encontramos ese código de aprobación. Vuelve a verificar el código en tu comprobante Yape.'
+        : (err.message || 'Error al verificar el depósito Yape.') });
     }
   });
 

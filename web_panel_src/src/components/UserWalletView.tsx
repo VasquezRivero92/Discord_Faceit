@@ -10,8 +10,6 @@ import {
   LogOut, 
   ArrowRight, 
   Zap, 
-  Smartphone, 
-  Lock, 
   Trophy,
   HelpCircle,
   ExternalLink,
@@ -30,8 +28,6 @@ interface UserWalletViewProps {
   onLogout: () => void;
   showToast: (text: string, type?: 'success' | 'error' | 'info') => void;
 }
-
-const PRESET_AMOUNTS = [5, 10, 20, 50, 100];
 
 const getFaceitLevelBadge = (level: number | null | undefined) => {
   if (!level) return null;
@@ -62,11 +58,8 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
   showToast
 }) => {
   // Recharge form states
-  const [selectedAmount, setSelectedAmount] = useState<number>(10);
-  const [customAmount, setCustomAmount] = useState<string>('');
-  const [isCustom, setIsCustom] = useState<boolean>(false);
-  const [phone, setPhone] = useState<string>(currentUser?.phoneNumber || '');
-  const [otp, setOtp] = useState<string>('');
+  const [amountInput, setAmountInput] = useState<string>('');
+  const [operationNumber, setOperationNumber] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [lastSuccessMessage, setLastSuccessMessage] = useState<string | null>(null);
@@ -103,8 +96,6 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
     }
   }, []);
 
-  const effectiveAmount = isCustom ? (parseFloat(customAmount) || 0) : selectedAmount;
-
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     try {
@@ -121,22 +112,15 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
     e.preventDefault();
     setLastSuccessMessage(null);
 
-    if (effectiveAmount < 1) {
-      showToast('El monto mínimo de recarga es S/ 1.00', 'error');
+    const amount = Number.parseFloat(amountInput);
+    if (!Number.isFinite(amount) || amount < 1) {
+      showToast('Ingresa un monto válido, mínimo S/ 1.00', 'error');
       return;
     }
 
-    const cleanPhone = phone.replace(/\D/g, '');
-    const hasExistingPhone = currentUser?.hasSavedPhone && cleanPhone.length === 0;
-
-    if (!hasExistingPhone && cleanPhone.length !== 9) {
-      showToast('Ingresa un número de celular de 9 dígitos válido para Yape', 'error');
-      return;
-    }
-
-    const cleanOtp = otp.trim();
-    if (cleanOtp.length !== 6) {
-      showToast('El código de aprobación de Yape debe tener exactamente 6 dígitos', 'error');
+    const cleanOperationNumber = operationNumber.trim();
+    if (cleanOperationNumber.length < 4) {
+      showToast('Ingresa el código de aprobación de tu comprobante Yape', 'error');
       return;
     }
 
@@ -146,9 +130,8 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: effectiveAmount,
-          phoneNumber: cleanPhone.length === 9 ? cleanPhone : undefined,
-          otp: cleanOtp
+          amount,
+          operationNumber: cleanOperationNumber
         })
       });
 
@@ -157,12 +140,12 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
         throw new Error(data.error || 'Error al procesar la recarga con Yape');
       }
 
-      setLastSuccessMessage(data.message || `¡Recarga de S/ ${effectiveAmount.toFixed(2)} completada con éxito!`);
-      showToast(`¡Recarga de S/ ${effectiveAmount.toFixed(2)} exitosa!`, 'success');
-      setOtp('');
+      setLastSuccessMessage(data.message || `¡Recarga de S/ ${Number(data.amount || 0).toFixed(2)} completada con éxito!`);
+      showToast(`¡Recarga de S/ ${Number(data.amount || 0).toFixed(2)} exitosa!`, 'success');
+      setOperationNumber('');
       await onRefreshUser();
     } catch (err: any) {
-      showToast(err.message || 'Error al conectar con la pasarela de pagos', 'error');
+      showToast(err.message || 'Error al verificar el depósito Yape', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -783,136 +766,60 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
             )}
 
             <form onSubmit={handleRechargeSubmit} className="space-y-6">
-              
-              {/* 1. Seleccionar Monto */}
+
               <div>
-                <label className="text-xs font-bold text-neutral-300 uppercase block mb-2.5">
-                  1. Selecciona el monto a recargar (Soles PEN):
+                <label className="text-xs font-bold text-neutral-300 uppercase block mb-1.5">
+                  1. Monto enviado por Yape (S/):
                 </label>
-                
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 mb-3">
-                  {PRESET_AMOUNTS.map((amt) => {
-                    const isSelected = !isCustom && selectedAmount === amt;
-                    return (
-                      <button
-                        key={amt}
-                        type="button"
-                        onClick={() => {
-                          setSelectedAmount(amt);
-                          setIsCustom(false);
-                        }}
-                        className={`py-3 px-2 rounded-lg border text-center font-black text-xs transition-all cursor-pointer active:scale-[0.98] ${
-                          isSelected
-                            ? 'bg-[#742284] border-[#C084FC] text-white shadow-[0_0_15px_rgba(168,85,247,0.35)]'
-                            : 'bg-neutral-900/60 border-white/[0.08] text-neutral-300 hover:border-white/[0.2] hover:text-white'
-                        }`}
-                      >
-                        S/ {amt}.00
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Custom Amount Toggle */}
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsCustom(true)}
-                    className={`text-xs font-bold uppercase underline cursor-pointer transition-colors ${
-                      isCustom ? 'text-[#C084FC]' : 'text-neutral-400 hover:text-white'
-                    }`}
-                  >
-                    Ingresar otro monto personalizado
-                  </button>
-
-                  {isCustom && (
-                    <div className="flex-1 flex items-center bg-black/50 border border-[#A855F7] rounded-lg px-3 py-1.5 shadow-[0_0_10px_rgba(168,85,247,0.2)]">
-                      <span className="text-xs font-bold text-[#C084FC] mr-2">S/</span>
-                      <input
-                        type="number"
-                        min="1"
-                        step="0.5"
-                        placeholder="Ej: 15.00"
-                        value={customAmount}
-                        onChange={(e) => setCustomAmount(e.target.value)}
-                        className="w-full bg-transparent text-sm text-white focus:outline-none font-bold"
-                        autoFocus
-                      />
-                    </div>
-                  )}
-                </div>
+                <input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  placeholder="Ej: 5.00"
+                  value={amountInput}
+                  onChange={(e) => setAmountInput(e.target.value)}
+                  className="w-full bg-black/40 border border-white/[0.1] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#C084FC] focus:ring-1 focus:ring-[#C084FC] transition-colors"
+                  required
+                />
               </div>
 
-              {/* 2. Número de Celular Yape */}
+              {/* 2. Código de aprobación Yape */}
               <div>
                 <label className="text-xs font-bold text-neutral-300 uppercase block mb-1.5 flex items-center gap-1.5">
                   <YapeLogo className="w-4 h-4 rounded-sm shrink-0" />
-                  <span>2. Número de celular afiliado a Yape:</span>
-                </label>
-                
-                <div className="relative">
-                  <Smartphone className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="tel"
-                    maxLength={9}
-                    placeholder="Ej: 987654321"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full bg-black/40 border border-white/[0.1] rounded-lg pl-9 pr-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#C084FC] focus:ring-1 focus:ring-[#C084FC] transition-colors"
-                    required={!currentUser?.hasSavedPhone}
-                  />
-                </div>
-                
-                <p className="text-xs text-neutral-400 mt-1.5 font-sans">
-                  {currentUser?.hasSavedPhone 
-                    ? '🔒 Ya tienes un número registrado. Puedes dejarlo tal como está o ingresar uno nuevo.'
-                    : 'Ingresa tu número de 9 dígitos. La transacción es 100% segura con cifrado SSL 256-Bit.'}
-                </p>
-              </div>
-
-              {/* 3. Código de Aprobación Yape (OTP) */}
-              <div>
-                <label className="text-xs font-bold text-neutral-300 uppercase block mb-1.5 flex items-center gap-1.5">
-                  <YapeLogo className="w-4 h-4 rounded-sm shrink-0" />
-                  <span>3. Código de aprobación de Yape (6 dígitos):</span>
+                  <span>2. Código de aprobación de tu comprobante:</span>
                 </label>
 
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <KeyRound className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    maxLength={6}
-                    placeholder="000000"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                    className="w-full bg-black/50 border-2 border-[#A855F7]/80 rounded-lg pl-9 pr-3 py-3 text-lg font-mono font-black text-white tracking-[0.3em] focus:outline-none focus:border-[#C084FC] focus:shadow-[0_0_15px_rgba(192,132,252,0.3)] transition-all"
+                    maxLength={64}
+                    placeholder="Ej: 25381004"
+                    value={operationNumber}
+                    onChange={(e) => setOperationNumber(e.target.value)}
+                    className="w-full bg-black/50 border-2 border-[#A855F7]/80 rounded-lg pl-9 pr-3 py-3 text-lg font-mono font-black text-white focus:outline-none focus:border-[#C084FC] focus:shadow-[0_0_15px_rgba(192,132,252,0.3)] transition-all"
                     required
                   />
                 </div>
 
-                {/* Yape Instruction Callout */}
                 <div className="mt-3 p-3.5 rounded-xl bg-purple-950/30 border border-[#A855F7]/30 text-xs text-purple-200 font-sans leading-relaxed">
                   <strong className="text-white block font-mono uppercase text-xs mb-1">
-                    📱 ¿Dónde encontrar este código en tu celular?
+                    📱 ¿Dónde encontrar el código de aprobación?
                   </strong>
-                  Abre la app de <strong>Yape</strong> &gt; Toca el ícono de Menú o campana &gt; Selecciona <strong>"Código de aprobación"</strong> y copia los 6 dígitos temporales generados.
+                  Abre el comprobante de tu transferencia en <strong>Yape</strong> y copia el código de aprobación completo. Puede tener más de 6 dígitos.
                 </div>
               </div>
 
               {/* Summary and Submit Button */}
               <div className="pt-4 border-t border-white/[0.08]">
-                <div className="flex items-center justify-between text-xs mb-4">
-                  <span className="text-neutral-400 uppercase">Total a debitar de Yape:</span>
-                  <span className="text-xl font-black text-[#C084FC]">
-                    S/ {effectiveAmount > 0 ? effectiveAmount.toFixed(2) : '0.00'} PEN
-                  </span>
-                </div>
+                <p className="text-xs text-neutral-400 mb-4">El monto acreditado será exactamente el que figure en tu depósito Yape encontrado.</p>
 
                 <button
                   type="submit"
-                  disabled={isSubmitting || effectiveAmount < 1 || otp.length !== 6}
+                  disabled={isSubmitting || Number.parseFloat(amountInput) < 1 || operationNumber.trim().length < 4}
                   className={`w-full py-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] ${
-                    isSubmitting || effectiveAmount < 1 || otp.length !== 6
+                    isSubmitting || Number.parseFloat(amountInput) < 1 || operationNumber.trim().length < 4
                       ? 'bg-neutral-800 border border-neutral-700 text-neutral-500 cursor-not-allowed opacity-60'
                       : 'bg-[#742284] hover:bg-[#8B2FA0] border border-[#C084FC]/60 text-white shadow-[0_4px_25px_rgba(168,85,247,0.35)]'
                   }`}
@@ -920,12 +827,12 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                   {isSubmitting ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Procesando recarga con Yape...</span>
+                      <span>Verificando depósito Yape...</span>
                     </>
                   ) : (
                     <>
                       <YapeLogo className="w-5 h-5 rounded-sm shrink-0" />
-                      <span>Confirmar y Recargar S/ {effectiveAmount.toFixed(2)} PEN</span>
+                      <span>Verificar y acreditar depósito</span>
                     </>
                   )}
                 </button>
@@ -935,7 +842,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
               <div className="text-center pt-1">
                 <p className="text-xs text-neutral-400 font-sans flex items-center justify-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  <span>Transacciones 100% seguras con cifrado bancario SSL 256-Bit.</span>
+                  <span>Ingresa el código de aprobación completo, aunque tenga más de 6 dígitos.</span>
                 </p>
               </div>
 

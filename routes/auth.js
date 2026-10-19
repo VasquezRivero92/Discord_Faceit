@@ -415,7 +415,6 @@ export function createAuthRouter(client, db, config) {
     const u = (username || '').trim().toLowerCase();
     const validUser = u === 'demo@machupeek.com' ||
                       u === 'auditor@machupeek.com' ||
-                      u === 'auditor@culqi.com' || 
                       u === 'auditor' ||
                       u === 'demo';
     const validPass = (password || '').trim() === 'DemoMixton2026';

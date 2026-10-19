@@ -57,7 +57,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
 
-  // Active Navigation View (SPA Routing compatible with Culqi requirements)
+  // Active Navigation View (SPA routing)
   const getInitialView = (): ActiveView => {
     const p = window.location.pathname.toLowerCase();
     if (p.includes('guia') || p.includes('faceit')) return 'guia-faceit';
@@ -168,9 +168,8 @@ export default function App() {
   const [quickTopUpUser, setQuickTopUpUser] = useState<{ discordId: string; nickname: string; hasSavedPhone?: boolean } | null>(null);
   const [quickTopUpAmount, setQuickTopUpAmount] = useState<string>('10');
   const [isSubmittingTopUp, setIsSubmittingTopUp] = useState(false);
-  const [yapePhoneInput, setYapePhoneInput] = useState<string>('');
-  const [yapeOtpInput, setYapeOtpInput] = useState<string>('');
-  const [topUpTab, setTopUpTab] = useState<'culqi_yape' | 'admin_manual'>('culqi_yape');
+  const [yapeOperationInput, setYapeOperationInput] = useState<string>('');
+  const [topUpTab, setTopUpTab] = useState<'yape_verificado' | 'admin_manual'>('yape_verificado');
 
   // Queue / Room selection state (Colas / Salas Faceit)
   const [availableQueues, setAvailableQueues] = useState<MixtonQueue[]>([]);
@@ -1649,22 +1648,17 @@ export default function App() {
     }
   };
 
-  // Process recharge with Yape via Culqi API
-  const handleCulqiYapeSubmit = async () => {
+  // Process recharge after matching the deposit in the local Yape monitor database.
+  const handleYapeVerificationSubmit = async () => {
     if (!quickTopUpUser) return;
     const amount = parseFloat(quickTopUpAmount);
+    const operationNumber = yapeOperationInput.trim();
     if (isNaN(amount) || amount < 1) {
       showToast('El monto mínimo para recargar es S/ 1.00', 'error');
       return;
     }
-    const cleanPhone = yapePhoneInput.replace(/\D/g, '');
-    const cleanOtp = yapeOtpInput.replace(/\D/g, '');
-    if (!quickTopUpUser.hasSavedPhone && cleanPhone.length !== 9) {
-      showToast('El número de celular Yape debe tener 9 dígitos.', 'error');
-      return;
-    }
-    if (cleanOtp.length !== 6) {
-      showToast('El código de aprobación de Yape debe tener 6 dígitos.', 'error');
+    if (operationNumber.length < 4) {
+      showToast('Ingresa el código de aprobación Yape.', 'error');
       return;
     }
 
@@ -1675,18 +1669,16 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           targetDiscordId: quickTopUpUser.discordId,
-          phoneNumber: cleanPhone.length === 9 ? cleanPhone : undefined,
-          otp: cleanOtp,
-          amount
+          amount,
+          operationNumber
         })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al procesar el pago con Yape.');
+      if (!res.ok) throw new Error(data.error || 'Error al verificar el depósito Yape.');
 
-      showToast(`¡Pago de S/ ${amount.toFixed(2)} procesado con éxito con Yape!`, 'success');
+      showToast(`¡Depósito de S/ ${Number(data.amount || 0).toFixed(2)} acreditado con éxito!`, 'success');
       setQuickTopUpUser(null);
-      setYapePhoneInput('');
-      setYapeOtpInput('');
+      setYapeOperationInput('');
       await fetchBetStatus(effectiveBetAmount);
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -3259,8 +3251,7 @@ export default function App() {
                                     onClick={() => {
                                       setQuickTopUpUser({ discordId: p.discordId, nickname: p.faceit_nickname, hasSavedPhone: p.hasSavedPhone });
                                       setQuickTopUpAmount(p.deficit > 0 ? p.deficit.toFixed(2) : '5.00');
-                                      setYapePhoneInput('');
-                                      setYapeOtpInput('');
+                                      setYapeOperationInput('');
                                     }}
                                     title="Recargar saldo a este usuario"
                                     className="px-1.5 py-1 text-[9px] font-bold bg-[#262626] border border-[#444] text-[#FF5500] hover:border-[#FF5500] transition-all cursor-pointer"
@@ -3376,8 +3367,7 @@ export default function App() {
                                     onClick={() => {
                                       setQuickTopUpUser({ discordId: p.discordId, nickname: p.faceit_nickname, hasSavedPhone: p.hasSavedPhone });
                                       setQuickTopUpAmount(p.deficit > 0 ? p.deficit.toFixed(2) : '5.00');
-                                      setYapePhoneInput('');
-                                      setYapeOtpInput('');
+                                      setYapeOperationInput('');
                                     }}
                                     title="Recargar saldo a este usuario"
                                     className="px-1.5 py-1 text-[9px] font-bold bg-[#262626] border border-[#444] text-[#FF5500] hover:border-[#FF5500] transition-all cursor-pointer"
@@ -3452,7 +3442,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal para Recarga de Saldo (Culqi Yape o Manual) */}
+      {/* Modal para recarga por depósito Yape o acreditación manual */}
       {quickTopUpUser && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in font-mono">
           <div className="bg-[#1A1A1A] border-2 border-[#FF5500] p-5 w-full max-w-md text-white shadow-2xl">
@@ -3477,14 +3467,14 @@ export default function App() {
             <div className="flex border border-[#333] mb-4 bg-[#141414]">
               <button
                 type="button"
-                onClick={() => setTopUpTab('culqi_yape')}
+                onClick={() => setTopUpTab('yape_verificado')}
                 className={`flex-1 py-1.5 text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  topUpTab === 'culqi_yape'
+                  topUpTab === 'yape_verificado'
                     ? 'bg-[#742284] text-white'
                     : 'text-neutral-400 hover:text-white'
                 }`}
               >
-                ⚡ Yape Automático
+                ⚡ Verificar Yape
               </button>
               <button
                 type="button"
@@ -3499,56 +3489,32 @@ export default function App() {
               </button>
             </div>
 
-            {topUpTab === 'culqi_yape' ? (
+            {topUpTab === 'yape_verificado' ? (
               <div className="space-y-3 mb-4">
                 <div className="p-2.5 bg-[#25152B] border border-[#742284]/40 text-[10px] text-purple-200">
-                  ℹ️ El jugador genera su <strong>Código de Aprobación</strong> de 6 dígitos en su app de Yape (Menú &gt; Código de aprobación).
+                  ℹ️ Ingresa el monto y el <strong>código de aprobación</strong> del comprobante. Ambos deben coincidir con el depósito registrado.
                 </div>
                 <div>
-                  <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Monto en Soles (PEN):</label>
-                  <div className="flex items-center bg-[#111] border border-[#333] px-3 py-1.5 focus-within:border-[#742284]">
-                    <span className="text-xs text-[#A855F7] font-bold mr-2">S/</span>
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={quickTopUpAmount}
-                      onChange={(e) => setQuickTopUpAmount(e.target.value)}
-                      className="w-full bg-transparent text-sm text-white focus:outline-none"
-                      placeholder="5.00"
-                    />
-                  </div>
+                  <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Monto enviado (S/):</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="0.01"
+                    value={quickTopUpAmount}
+                    onChange={(e) => setQuickTopUpAmount(e.target.value)}
+                    className="w-full bg-[#111] border border-[#333] px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#742284]"
+                    placeholder="Ej: 5.00"
+                  />
                 </div>
-                {quickTopUpUser?.hasSavedPhone ? (
-                  <div>
-                    <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Celular de Yape:</label>
-                    <div className="bg-[#111] border border-[#742284]/40 px-3 py-2 text-xs text-purple-200 flex items-center justify-between">
-                      <span className="font-bold">🔒 Número registrado guardado</span>
-                      <span className="text-[10px] text-neutral-400">(Totalmente confidencial)</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Celular de Yape (9 dígitos):</label>
-                    <input
-                      type="text"
-                      maxLength={9}
-                      value={yapePhoneInput}
-                      onChange={(e) => setYapePhoneInput(e.target.value)}
-                      className="w-full bg-[#111] border border-[#333] px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#742284]"
-                      placeholder="Ej: 987654321 (Se guardará confidencialmente)"
-                    />
-                  </div>
-                )}
                 <div>
-                  <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Código de Aprobación (6 dígitos):</label>
+                  <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Código de aprobación Yape:</label>
                   <input
                     type="text"
-                    maxLength={6}
-                    value={yapeOtpInput}
-                    onChange={(e) => setYapeOtpInput(e.target.value)}
+                    maxLength={64}
+                    value={yapeOperationInput}
+                    onChange={(e) => setYapeOperationInput(e.target.value)}
                     className="w-full bg-[#111] border border-[#333] px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#742284]"
-                    placeholder="Ej: 123456"
+                    placeholder="Ej: 25381004"
                   />
                 </div>
               </div>
@@ -3582,14 +3548,14 @@ export default function App() {
               >
                 Cancelar
               </button>
-              {topUpTab === 'culqi_yape' ? (
+              {topUpTab === 'yape_verificado' ? (
                 <button
                   type="button"
-                  onClick={handleCulqiYapeSubmit}
+                  onClick={handleYapeVerificationSubmit}
                   disabled={isSubmittingTopUp}
                   className="px-4 py-1.5 bg-[#742284] hover:bg-[#8B2FA0] border border-[#742284] text-xs font-black text-white uppercase transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                 >
-                  {isSubmittingTopUp ? 'Cobrando con Yape...' : 'Cobrar con Yape'}
+                  {isSubmittingTopUp ? 'Verificando...' : 'Verificar y acreditar'}
                 </button>
               ) : (
                 <button
@@ -3609,7 +3575,7 @@ export default function App() {
         </>
       )}
 
-      {/* Global Culqi-compliant Footer */}
+      {/* Global footer */}
       <Footer setActiveView={handleSelectView} />
 
 

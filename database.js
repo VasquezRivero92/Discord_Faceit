@@ -2129,25 +2129,98 @@ export const db = {
     }
   },
 
-  async recordCulqiCharge(chargeId, discordId, amount, details = {}) {
+  async findYapeTransaction(operationNumber) {
+    const normalizedOperation = String(operationNumber || '').trim();
+    if (!normalizedOperation) return null;
+
     try {
-      const chargeRef = firestore.collection('culqi_charges').doc(chargeId);
-      const doc = await chargeRef.get();
-      if (doc.exists && doc.data()?.credited) {
-        return { alreadyProcessed: true, charge: doc.data() };
+      const transactions = firestore.collection('yape_transacciones');
+      let snapshot = await transactions.doc(normalizedOperation).get();
+
+      // La migración usa el número de operación como id del documento. El
+      // fallback conserva compatibilidad con documentos creados con otro id.
+      if (!snapshot.exists) {
+        const matches = await transactions
+          .where('numero_operacion', '==', normalizedOperation)
+          .limit(1)
+          .get();
+        if (matches.empty) return null;
+        snapshot = matches.docs[0];
       }
-      await chargeRef.set({
-        chargeId,
-        discordId,
-        amount,
-        credited: true,
-        details,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-      return { alreadyProcessed: false };
+
+      return { id: snapshot.id, ...snapshot.data() };
     } catch (err) {
-      logger.error(`Error al registrar cargo de Culqi ${chargeId}:`, err);
-      return { alreadyProcessed: false };
+      logger.error(`Error al buscar operación Yape ${normalizedOperation}:`, err);
+      throw new Error('No se pudo consultar el registro de transacciones Yape. Intenta nuevamente.');
+    }
+  },
+
+  async creditYapeOperation({ operationNumber, discordId, guildId = null, amount, details = {} }) {
+    if (!operationNumber || !discordId || !Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+      throw new Error('Datos incompletos para acreditar la operación Yape.');
+    }
+
+    const operationId = encodeURIComponent(String(operationNumber).trim());
+    const operationRef = firestore.collection('yape_operations').doc(operationId);
+    const docId = guildId ? `${guildId}_${discordId}` : discordId;
+    const userRef = firestore.collection(USERS_COLLECTION).doc(docId);
+
+    try {
+      const result = await firestore.runTransaction(async (transaction) => {
+        const operationDoc = await transaction.get(operationRef);
+        if (operationDoc.exists) {
+          const operation = operationDoc.data();
+          return {
+            alreadyProcessed: true,
+            belongsToUser: operation.discordId === discordId && operation.guildId === (guildId || null),
+            operation
+          };
+        }
+
+        const userDoc = await transaction.get(userRef);
+        const currentBalance = userDoc.exists ? Number(userDoc.data().wallet_balance || 0) : 0;
+        const newBalance = Math.max(0, parseFloat((currentBalance + Number(amount)).toFixed(2)));
+        const userData = {
+          wallet_balance: newBalance,
+          last_balance_update: Date.now(),
+          last_balance_reason: `Recarga Yape verificada (operación: ${operationNumber})`
+        };
+
+        if (!userDoc.exists) {
+          Object.assign(userData, {
+            discordId,
+            guild_id: guildId || null,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
+
+        transaction.set(userRef, userData, { merge: true });
+        transaction.set(operationRef, {
+          operationNumber: String(operationNumber).trim(),
+          discordId,
+          guildId: guildId || null,
+          amount: Number(amount),
+          credited: true,
+          details,
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        return { alreadyProcessed: false, newBalance, userData };
+      });
+
+      if (!result.alreadyProcessed) {
+        cacheUser(docId, {
+          ...(getCachedUserByDiscordId(docId) || {}),
+          discordId,
+          guild_id: guildId || null,
+          wallet_balance: result.newBalance,
+          last_balance_reason: result.userData.last_balance_reason
+        });
+      }
+      return result;
+    } catch (err) {
+      logger.error(`Error al acreditar operación Yape ${operationNumber}:`, err);
+      throw err;
     }
   },
 

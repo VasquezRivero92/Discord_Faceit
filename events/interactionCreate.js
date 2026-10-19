@@ -294,55 +294,8 @@ export async function onInteractionCreate(interaction, db, commandMap) {
     // --- Botón de Iniciar Recarga de Saldo con Yape ---
     if (customId === 'iniciar_recarga_btn') {
       try {
-        let savedPhone = '';
-        try {
-          if (db) {
-            const user = await db.getFullUser(interaction.user.id, interaction.guildId);
-            if (user?.phoneNumber) {
-              savedPhone = String(user.phoneNumber);
-            }
-          }
-        } catch (e) {}
-
-        const modal = new ModalBuilder()
-          .setCustomId('recargar_yape_modal')
-          .setTitle('Recargar Saldo con Yape');
-
-        const amountInput = new TextInputBuilder()
-          .setCustomId('monto_input')
-          .setLabel('Monto en Soles (PEN)')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('Ej: 5.00 o 10.00')
-          .setValue('5.00')
-          .setMinLength(1)
-          .setMaxLength(6)
-          .setRequired(true);
-
-        const phoneInput = new TextInputBuilder()
-          .setCustomId('celular_input')
-          .setLabel(savedPhone ? 'Celular Yape (Opcional - ya registrado)' : 'Número de celular Yape (9 dígitos)')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder(savedPhone ? '🔒 Ya registrado confidencialmente (Déjalo vacío)' : 'Ej: 987654321 (Confidencial)')
-          .setMinLength(savedPhone ? 0 : 9)
-          .setMaxLength(9)
-          .setRequired(!savedPhone);
-
-        const otpInput = new TextInputBuilder()
-          .setCustomId('otp_input')
-          .setLabel('Código de aprobación Yape (6 dígitos)')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('Código de 6 dígitos desde tu app de Yape')
-          .setMinLength(6)
-          .setMaxLength(6)
-          .setRequired(true);
-
-        modal.addComponents(
-          new ActionRowBuilder().addComponents(amountInput),
-          new ActionRowBuilder().addComponents(phoneInput),
-          new ActionRowBuilder().addComponents(otpInput)
-        );
-
-        await interaction.showModal(modal);
+        const { execute: openRechargeModal } = await import('../commands/recargar.js');
+        await openRechargeModal(interaction, db);
       } catch (err) {
         logger.error('Error al abrir modal de recarga Yape desde botón:', err);
         return interaction.reply({ content: '❌ Error al abrir el formulario de recarga.', flags: MessageFlags.Ephemeral });

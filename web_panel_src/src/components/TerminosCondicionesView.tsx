@@ -63,7 +63,7 @@ export const TerminosCondicionesView: React.FC = () => {
               Las transacciones y cobros electrónicos se procesan de manera cifrada e inmediata mediante pasarela de pagos segura y certificada SSL. Los medios de pago habilitados incluyen:
             </p>
             <ul className="list-disc pl-5 space-y-1 text-neutral-300">
-              <li><strong>Yape:</strong> Cobro y recarga automática mediante número de celular y Código de Aprobación OTP generado en la app de Yape.</li>
+              <li><strong>Yape:</strong> Recarga automática al verificar el monto y código de aprobación del depósito registrado.</li>
               <li><strong>Tarjetas de Débito y Crédito:</strong> Visa, Mastercard, American Express y Diners Club con tecnología de autenticación segura 3D Secure y SSL.</li>
             </ul>
           </section>

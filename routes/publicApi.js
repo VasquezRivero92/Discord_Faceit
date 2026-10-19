@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { logger } from '../utils/logger.js';
-import { culqiService } from '../services/culqiService.js';
+import { yapeTransactionService } from '../services/yapeTransactionService.js';
 
 export const STORE_PRODUCTS = [
   {
@@ -30,7 +30,7 @@ export const STORE_PRODUCTS = [
     features: [
       '10 créditos para cuotas de partidas',
       'Participación en pozos de torneos',
-      'Acreditación inmediata vía Yape / Culqi',
+      'Acreditación inmediata tras verificación del depósito Yape',
       'Saldo sin fecha de caducidad'
     ],
     image: 'https://images.unsplash.com/photo-1614680376593-902f749f7ffc?auto=format&fit=crop&w=600&q=80'
@@ -220,15 +220,14 @@ export function createPublicApiRouter(db) {
     }
   });
 
-  // 4. Procesar Compra en la Tienda (Checkout con Culqi Yape o Tarjeta)
+  // 4. Procesar Compra en la Tienda mediante un depósito Yape ya registrado.
   router.post('/checkout/purchase', async (req, res) => {
     try {
       const {
         items,
         customer,
         paymentMethod,
-        yapePhone,
-        yapeOtp
+        yapeOperationNumber
       } = req.body || {};
 
       if (!Array.isArray(items) || items.length === 0) {
@@ -267,63 +266,15 @@ export function createPublicApiRouter(db) {
 
       logger.info(`🛒 Iniciando compra de tienda por S/ ${totalAmount.toFixed(2)} (${validatedItems.length} items) para ${customer.email}`);
 
-      let chargeResult = null;
-
-      if (paymentMethod === 'culqi_yape') {
-        const cleanPhone = String(yapePhone || '').replace(/\D/g, '');
-        const cleanOtp = String(yapeOtp || '').replace(/\D/g, '');
-
-        if (cleanPhone.length !== 9) {
-          return res.status(400).json({ error: 'El número de celular de Yape debe tener 9 dígitos.' });
-        }
-        if (cleanOtp.length !== 6) {
-          return res.status(400).json({ error: 'El código de aprobación de Yape debe tener 6 dígitos.' });
-        }
-
-        // Si CULQI_MOCK o sandbox activo (solo en desarrollo, NUNCA en producción)
-        const isMockAllowed = process.env.NODE_ENV !== 'production' && (process.env.CULQI_MOCK === 'true' || !process.env.CULQI_PUBLIC_KEY || process.env.CULQI_PUBLIC_KEY.startsWith('pk_test_'));
-        
-        if (isMockAllowed) {
-          try {
-            // Intentar proceso real con sandbox de Culqi
-            const token = await culqiService.createYapeToken(cleanPhone, cleanOtp, totalAmount);
-            chargeResult = await culqiService.createCharge({
-              amount: totalAmount,
-              sourceId: token.id,
-              email: customer.email,
-              nickname: customer.name,
-              description: `Compra Mixton Arena: ${validatedItems.map(i => i.name).join(', ').substring(0, 80)}`
-            });
-          } catch (culqiErr) {
-            // Solo en ambiente de desarrollo/staging se permite simulación controlada
-            logger.warn('Culqi sandbox arrojó mensaje:', culqiErr.message);
-            const mockChargeId = `chr_test_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-            chargeResult = {
-              id: mockChargeId,
-              outcome: { type: 'venta_exitosa', merchant_message: 'Cargo exitoso de prueba (Ambiente Dev)' },
-              reference_code: `REF-${Date.now().toString().slice(-6)}`
-            };
-          }
-        } else {
-          // Producción Culqi
-          const token = await culqiService.createYapeToken(cleanPhone, cleanOtp, totalAmount);
-          chargeResult = await culqiService.createCharge({
-            amount: totalAmount,
-            sourceId: token.id,
-            email: customer.email,
-            nickname: customer.name,
-            description: `Compra Mixton Arena: ${validatedItems.map(i => i.name).join(', ').substring(0, 80)}`
-          });
-        }
-      } else {
-        // Tarjeta u otro método
-        const cardChargeId = `chr_card_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-        chargeResult = {
-          id: cardChargeId,
-          outcome: { type: 'venta_exitosa', merchant_message: 'Pago autorizado por Culqi' },
-          reference_code: `REF-CARD-${Date.now().toString().slice(-6)}`
-        };
+      if (paymentMethod && paymentMethod !== 'yape_transferencia') {
+        return res.status(400).json({ error: 'El único método disponible es la verificación de depósito Yape.' });
       }
+
+      const payment = await yapeTransactionService.findIncomingTransaction({
+        db,
+        operationNumber: yapeOperationNumber,
+        expectedAmount: totalAmount
+      });
 
       // Guardar orden en base de datos
       const orderRecord = await db.recordOrder({
@@ -331,9 +282,9 @@ export function createPublicApiRouter(db) {
         items: validatedItems,
         totalAmount,
         currency: 'PEN',
-        paymentMethod: paymentMethod || 'culqi_yape',
-        chargeId: chargeResult?.id || `chr_${Date.now()}`,
-        referenceCode: chargeResult?.reference_code || chargeResult?.id || `REF-${Date.now()}`,
+        paymentMethod: 'yape_transferencia',
+        chargeId: payment.operationNumber,
+        referenceCode: payment.operationNumber,
         status: 'PAGADO'
       });
 
@@ -359,7 +310,7 @@ export function createPublicApiRouter(db) {
         currency: 'PEN',
         items: validatedItems,
         customer,
-        message: '¡Tu pago ha sido procesado exitosamente por Culqi! Hemos enviado el comprobante a tu correo.'
+        message: '¡Tu depósito Yape fue verificado exitosamente! Hemos enviado el comprobante a tu correo.'
       });
     } catch (err) {
       logger.error('Error al procesar compra de checkout:', err);

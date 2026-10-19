@@ -5,70 +5,41 @@ import {
   TextInputStyle, 
   ActionRowBuilder, 
   MessageFlags, 
-  EmbedBuilder 
+  EmbedBuilder
 } from 'discord.js';
-import { culqiService } from '../services/culqiService.js';
+import { yapeTransactionService } from '../services/yapeTransactionService.js';
 import { logger } from '../utils/logger.js';
 
 export const data = new SlashCommandBuilder()
   .setName('recargar')
-  .setDescription('Recarga saldo para tus mixtones y apuestas de Faceit usando Yape')
-  .addNumberOption(opt => 
-    opt.setName('monto')
-      .setDescription('Monto en Soles (PEN) que deseas recargar (Mínimo S/ 1.00)')
-      .setRequired(false)
-      .setMinValue(1)
-  );
+  .setDescription('Acredita tu depósito Yape con monto y código de aprobación');
 
 export async function execute(interaction, db) {
-  const defaultAmount = interaction.options.getNumber('monto');
-
-  let savedPhone = '';
-  try {
-    if (db) {
-      const user = await db.getFullUser(interaction.user.id, interaction.guildId);
-      if (user?.phoneNumber) {
-        savedPhone = String(user.phoneNumber);
-      }
-    }
-  } catch (e) {}
-
   const modal = new ModalBuilder()
     .setCustomId('recargar_yape_modal')
     .setTitle('Recargar Saldo con Yape');
 
   const amountInput = new TextInputBuilder()
     .setCustomId('monto_input')
-    .setLabel('Monto en Soles (PEN)')
+    .setLabel('Monto enviado por Yape (S/)')
     .setStyle(TextInputStyle.Short)
-    .setPlaceholder('Ej: 5.00 o 10.00')
-    .setValue(defaultAmount ? defaultAmount.toString() : '5.00')
+    .setPlaceholder('Ej: 5.00')
     .setMinLength(1)
-    .setMaxLength(6)
+    .setMaxLength(8)
     .setRequired(true);
 
-  const phoneInput = new TextInputBuilder()
-    .setCustomId('celular_input')
-    .setLabel(savedPhone ? 'Celular Yape (Opcional - ya registrado)' : 'Número de celular Yape (9 dígitos)')
+  const operationInput = new TextInputBuilder()
+    .setCustomId('operacion_input')
+    .setLabel('Código de aprobación Yape')
     .setStyle(TextInputStyle.Short)
-    .setPlaceholder(savedPhone ? '🔒 Ya registrado confidencialmente (Déjalo vacío)' : 'Ej: 987654321 (Confidencial)')
-    .setMinLength(savedPhone ? 0 : 9)
-    .setMaxLength(9)
-    .setRequired(!savedPhone);
-
-  const otpInput = new TextInputBuilder()
-    .setCustomId('otp_input')
-    .setLabel('Código de aprobación Yape (6 dígitos)')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('Código de 6 dígitos desde tu app de Yape')
-    .setMinLength(6)
-    .setMaxLength(6)
+    .setPlaceholder('Ej: 25381004')
+    .setMinLength(4)
+    .setMaxLength(64)
     .setRequired(true);
 
   modal.addComponents(
     new ActionRowBuilder().addComponents(amountInput),
-    new ActionRowBuilder().addComponents(phoneInput),
-    new ActionRowBuilder().addComponents(otpInput)
+    new ActionRowBuilder().addComponents(operationInput)
   );
 
   await interaction.showModal(modal);
@@ -80,52 +51,41 @@ export async function execute(interaction, db) {
 export async function handleRecargaModalSubmit(interaction, db) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const amountStr = interaction.fields.getTextInputValue('monto_input');
-  let phone = interaction.fields.getTextInputValue('celular_input')?.trim();
-  const otp = interaction.fields.getTextInputValue('otp_input')?.trim();
-
-  const amount = parseFloat(amountStr);
-  if (isNaN(amount) || amount < 1) {
-    return interaction.editReply({
-      content: '❌ El monto ingresado no es válido. El monto mínimo de recarga es S/ 1.00.'
-    });
-  }
-
-  if (!phone) {
-    try {
-      const user = await db?.getFullUser?.(interaction.user.id, interaction.guildId);
-      if (user?.phoneNumber) {
-        phone = user.phoneNumber;
-      }
-    } catch (_) {}
-  }
-
-  const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
-  if (cleanPhone.length !== 9) {
-    return interaction.editReply({
-      content: '❌ Debes ingresar tu número de celular Yape de 9 dígitos.'
-    });
+  const amount = Number.parseFloat(interaction.fields.getTextInputValue('monto_input')?.trim());
+  const operationNumber = interaction.fields.getTextInputValue('operacion_input')?.trim();
+  if (!Number.isFinite(amount) || amount < 1) {
+    return interaction.editReply({ content: '❌ Debes ingresar un monto válido, mínimo S/ 1.00.' });
   }
 
   try {
-    const result = await culqiService.processYapeRecharge({
-      discordId: interaction.user.id,
-      phoneNumber: cleanPhone,
-      otp: otp,
-      amount: amount,
-      nickname: interaction.member?.displayName || interaction.user.username,
-      guildId: interaction.guildId,
-      db
+    const payment = await yapeTransactionService.findIncomingTransaction({
+      db,
+      operationNumber,
+      expectedAmount: amount
     });
+    const result = await db.creditYapeOperation({
+      operationNumber: payment.operationNumber,
+      discordId: interaction.user.id,
+      guildId: interaction.guildId,
+      amount: payment.amount,
+      details: { receivedAt: payment.receivedAt }
+    });
+
+    if (result.alreadyProcessed) {
+      const message = result.belongsToUser
+        ? '❌ Esta operación ya fue acreditada anteriormente en tu billetera.'
+        : '❌ Esta operación ya fue utilizada para acreditar otra cuenta.';
+      return interaction.editReply({ content: message });
+    }
 
     const successEmbed = new EmbedBuilder()
       .setTitle('✅ ¡Recarga Exitosa con Yape!')
       .setColor(0x742284) // Color morado característico de Yape
       .setDescription(`Se ha procesado tu pago de forma exitosa y acreditado a tu saldo.`)
       .addFields(
-        { name: '💵 Monto Recargado', value: `S/ ${result.amount.toFixed(2)}`, inline: true },
+        { name: '💵 Monto Recargado', value: `S/ ${payment.amount.toFixed(2)}`, inline: true },
         { name: '💰 Nuevo Saldo', value: `S/ ${result.newBalance.toFixed(2)}`, inline: true },
-        { name: '🧾 Referencia de Pago', value: `\`${result.chargeId}\``, inline: false }
+        { name: '🧾 Código de aprobación', value: `\`${payment.operationNumber}\``, inline: false }
       )
       .setFooter({ text: 'Ya puedes participar en partidas con apuesta en Mixton Arena' })
       .setTimestamp();
@@ -133,8 +93,11 @@ export async function handleRecargaModalSubmit(interaction, db) {
     await interaction.editReply({ embeds: [successEmbed] });
   } catch (err) {
     logger.error('Error al procesar recarga con Yape en Discord:', err);
+    const isMissingOperation = String(err.message || '').startsWith('No encontramos ese depósito');
     await interaction.editReply({
-      content: `❌ **Error al procesar el pago con Yape:**\n> ${err.message || 'No se pudo autorizar la transacción.'}\n\n*Asegúrate de generar un nuevo código de aprobación en tu app Yape e intenta nuevamente.*`
+      content: isMissingOperation
+        ? '❌ **No encontramos ese código de aprobación.**\n> Vuelve a verificar el código en tu comprobante Yape e inténtalo nuevamente.'
+        : `❌ **No se pudo acreditar tu depósito Yape:**\n> ${err.message || 'No se pudo verificar la operación.'}`
     });
   }
 }

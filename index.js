@@ -16,7 +16,6 @@ import { onGuildMemberAdd } from './events/guildMemberAdd.js';
 import { onMessageCreate } from './events/messageCreate.js';
 import { onVoiceStateUpdate } from './events/voiceStateUpdate.js';
 import { handleFaceitWebhook } from './webhooks/faceit.js';
-import { handleCulqiWebhook } from './webhooks/culqi.js';
 import rateLimit from 'express-rate-limit';
 import { isFeatureEnabled } from './utils/featureFlags.js';
 import helmet from 'helmet';
@@ -142,7 +141,7 @@ app.use(express.static('public', {
   }
 }));
 
-// Redirección forzosa a HTTPS para cumplir con los estándares de seguridad SSL exigidos por Culqi
+// Redirección forzosa a HTTPS para proteger las sesiones y datos de los usuarios.
 app.use((req, res, next) => {
   const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
   if (!isHttps && (process.env.NODE_ENV === 'production' || (env.BASE_URL && env.BASE_URL.startsWith('https')))) {
@@ -206,24 +205,6 @@ app.post(['/webhook/faceit', '/webhooks/faceit'], webhookLimiter, async (req, re
 
   res.status(200).send('OK');
   await handleFaceitWebhook(req.body, client, db);
-});
-
-// Webhook de Culqi (Confirmación automática de pagos Yape)
-app.get(['/webhook/culqi', '/webhooks/culqi'], (req, res) => {
-  res.json({
-    status: 'ok',
-    message: 'Endpoint de Webhook de Culqi activo y listo para recibir notificaciones.',
-    endpoint: '/webhooks/culqi'
-  });
-});
-
-app.post(['/webhook/culqi', '/webhooks/culqi'], async (req, res) => {
-  res.status(200).json({ received: true });
-  try {
-    await handleCulqiWebhook(req.body, client, db);
-  } catch (err) {
-    logger.error('Error al procesar notificación de webhook Culqi:', err);
-  }
 });
 
 // ---------------------------------------------------------
