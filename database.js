@@ -11,6 +11,7 @@ const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
 class MockFirestore {
   constructor() {
     this.store = {}; // { collectionName: { docId: data } }
+    this.transactionTail = Promise.resolve();
   }
   collection(name) {
     if (!this.store[name]) this.store[name] = {};
@@ -18,6 +19,19 @@ class MockFirestore {
   }
   batch() {
     return new MockBatch(this);
+  }
+  async runTransaction(callback) {
+    // Serializa las transacciones de la base en memoria para que el entorno de
+    // desarrollo mantenga la misma garantía de exclusión que Firestore.
+    let release;
+    const previous = this.transactionTail;
+    this.transactionTail = new Promise(resolve => { release = resolve; });
+    await previous;
+    try {
+      return await callback(new MockTransaction());
+    } finally {
+      release();
+    }
   }
   _resolveServerTimestamps(data) {
     if (!data) return data;
@@ -198,6 +212,21 @@ class MockBatch {
         await op.docRef.delete();
       }
     }
+  }
+}
+
+class MockTransaction {
+  async get(docRef) {
+    return docRef.get();
+  }
+  set(docRef, data, options) {
+    return docRef.set(data, options);
+  }
+  update(docRef, data) {
+    return docRef.update(data);
+  }
+  delete(docRef) {
+    return docRef.delete();
   }
 }
 
@@ -2134,25 +2163,52 @@ export const db = {
     if (!normalizedOperation) return null;
 
     try {
-      const transactions = firestore.collection('yape_transacciones');
-      let snapshot = await transactions.doc(normalizedOperation).get();
-
-      // La migración usa el número de operación como id del documento. El
-      // fallback conserva compatibilidad con documentos creados con otro id.
-      if (!snapshot.exists) {
-        const matches = await transactions
-          .where('numero_operacion', '==', normalizedOperation)
-          .limit(1)
-          .get();
-        if (matches.empty) return null;
-        snapshot = matches.docs[0];
-      }
+      // El escáner Yape guarda cada operación con el código como ID. Esta
+      // consulta directa evita una búsqueda/cobro adicional en la colección.
+      const snapshot = await firestore.collection('yape_transacciones').doc(normalizedOperation).get();
+      if (!snapshot.exists) return null;
 
       return { id: snapshot.id, ...snapshot.data() };
     } catch (err) {
       logger.error(`Error al buscar operación Yape ${normalizedOperation}:`, err);
       throw new Error('No se pudo consultar el registro de transacciones Yape. Intenta nuevamente.');
     }
+  },
+
+  async reserveYapeOperation({ operationNumber, discordId, guildId = null, amount }) {
+    if (!operationNumber || !discordId || !Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+      throw new Error('Datos incompletos para reservar la operación Yape.');
+    }
+
+    const normalizedOperation = String(operationNumber).trim();
+    const operationRef = firestore.collection('yape_operations').doc(encodeURIComponent(normalizedOperation));
+
+    return firestore.runTransaction(async (transaction) => {
+      const operationDoc = await transaction.get(operationRef);
+      if (operationDoc.exists) {
+        const operation = operationDoc.data();
+        const belongsToUser = operation.discordId === discordId && operation.guildId === (guildId || null);
+        return {
+          reserved: false,
+          alreadyProcessed: operation.credited === true || operation.status === 'credited',
+          belongsToUser,
+          operation
+        };
+      }
+
+      transaction.set(operationRef, {
+        operationNumber: normalizedOperation,
+        discordId,
+        guildId: guildId || null,
+        amount: Number(amount),
+        status: 'pending',
+        credited: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        pendingAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      return { reserved: true, alreadyProcessed: false, belongsToUser: true };
+    });
   },
 
   async creditYapeOperation({ operationNumber, discordId, guildId = null, amount, details = {} }) {
@@ -2170,11 +2226,13 @@ export const db = {
         const operationDoc = await transaction.get(operationRef);
         if (operationDoc.exists) {
           const operation = operationDoc.data();
-          return {
-            alreadyProcessed: true,
-            belongsToUser: operation.discordId === discordId && operation.guildId === (guildId || null),
-            operation
-          };
+          const belongsToUser = operation.discordId === discordId && operation.guildId === (guildId || null);
+          if (operation.credited === true || operation.status === 'credited') {
+            return { alreadyProcessed: true, belongsToUser, operation };
+          }
+          if (!belongsToUser) {
+            return { alreadyReserved: true, belongsToUser: false, operation };
+          }
         }
 
         const userDoc = await transaction.get(userRef);
@@ -2201,9 +2259,11 @@ export const db = {
           guildId: guildId || null,
           amount: Number(amount),
           credited: true,
+          status: 'credited',
           details,
-          createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+          ...(operationDoc.exists ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() }),
+          creditedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
 
         return { alreadyProcessed: false, newBalance, userData };
       });

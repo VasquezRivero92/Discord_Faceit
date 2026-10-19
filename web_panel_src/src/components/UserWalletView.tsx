@@ -148,6 +148,10 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
       if (!res.ok) {
         throw new Error(data.error || 'Error al procesar la recarga con Yape');
       }
+      if (data.pending) {
+        showToast(data.message || 'El código quedó reservado. Vuelve a intentarlo en unos segundos.', 'info');
+        return;
+      }
 
       setLastSuccessMessage(data.message || `¡Recarga de S/ ${Number(data.amount || 0).toFixed(2)} completada con éxito!`);
       showToast(`¡Recarga de S/ ${Number(data.amount || 0).toFixed(2)} exitosa!`, 'success');

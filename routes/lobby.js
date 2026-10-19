@@ -1441,11 +1441,41 @@ export function createLobbyRouter(client, db, config, wss) {
         return res.status(400).json({ error: 'Debes proporcionar monto, código de aprobación y celular Yape válido para recibir premios.' });
       }
 
-      const payment = await yapeTransactionService.findIncomingTransaction({
-        db,
-        operationNumber,
-        expectedAmount: amount
-      });
+      let payment;
+      try {
+        payment = await yapeTransactionService.findIncomingTransaction({
+          db,
+          operationNumber,
+          expectedAmount: amount
+        });
+      } catch (err) {
+        const isMissingOperation = String(err.message || '').startsWith('No encontramos ese depósito');
+        if (!isMissingOperation) throw err;
+
+        // Un código que aún no llegó desde el escáner queda reservado en una
+        // transacción. Así dos usuarios no pueden dejar pendiente el mismo código.
+        const reservation = await db.reserveYapeOperation({
+          operationNumber,
+          discordId,
+          guildId: req.guildId,
+          amount
+        });
+        if (!reservation.reserved) {
+          const error = reservation.alreadyProcessed
+            ? (reservation.belongsToUser
+              ? 'Esta operación ya fue acreditada en tu billetera.'
+              : 'Esta operación ya fue utilizada para acreditar otra cuenta.')
+            : (reservation.belongsToUser
+              ? 'Este código de aprobación ya está en proceso de verificación.'
+              : 'Este código de aprobación ya está siendo usado por otra cuenta.');
+          return res.status(409).json({ error });
+        }
+
+        return res.status(202).json({
+          pending: true,
+          message: 'Aún no vemos el depósito. El código quedó reservado para tu cuenta; inténtalo nuevamente cuando aparezca en unos segundos.'
+        });
+      }
       const result = await db.creditYapeOperation({
         operationNumber: payment.operationNumber,
         discordId,
@@ -1458,6 +1488,9 @@ export function createLobbyRouter(client, db, config, wss) {
         return res.status(409).json({ error: result.belongsToUser
           ? 'Esta operación ya fue acreditada en tu billetera.'
           : 'Esta operación ya fue utilizada para acreditar otra cuenta.' });
+      }
+      if (result.alreadyReserved) {
+        return res.status(409).json({ error: 'Este código de aprobación ya está siendo usado por otra cuenta.' });
       }
 
       await db.setUserPhone(discordId, cleanPhone, req.guildId);

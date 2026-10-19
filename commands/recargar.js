@@ -73,11 +73,38 @@ export async function handleRecargaModalSubmit(interaction, db) {
   }
 
   try {
-    const payment = await yapeTransactionService.findIncomingTransaction({
-      db,
-      operationNumber,
-      expectedAmount: amount
-    });
+    let payment;
+    try {
+      payment = await yapeTransactionService.findIncomingTransaction({
+        db,
+        operationNumber,
+        expectedAmount: amount
+      });
+    } catch (err) {
+      const isMissingOperation = String(err.message || '').startsWith('No encontramos ese depósito');
+      if (!isMissingOperation) throw err;
+
+      const reservation = await db.reserveYapeOperation({
+        operationNumber,
+        discordId: interaction.user.id,
+        guildId: interaction.guildId,
+        amount
+      });
+      if (!reservation.reserved) {
+        const message = reservation.alreadyProcessed
+          ? (reservation.belongsToUser
+            ? '❌ Esta operación ya fue acreditada anteriormente en tu billetera.'
+            : '❌ Esta operación ya fue utilizada para acreditar otra cuenta.')
+          : (reservation.belongsToUser
+            ? '⏳ Este código de aprobación ya está en proceso de verificación para tu cuenta.'
+            : '❌ Este código de aprobación ya está siendo usado por otra cuenta.');
+        return interaction.editReply({ content: message });
+      }
+
+      return interaction.editReply({
+        content: '⏳ **Aún no vemos tu depósito.**\n> El código quedó reservado para tu cuenta. Vuelve a intentar en unos segundos; no se entregará a otro usuario.'
+      });
+    }
     const result = await db.creditYapeOperation({
       operationNumber: payment.operationNumber,
       discordId: interaction.user.id,
@@ -91,6 +118,9 @@ export async function handleRecargaModalSubmit(interaction, db) {
         ? '❌ Esta operación ya fue acreditada anteriormente en tu billetera.'
         : '❌ Esta operación ya fue utilizada para acreditar otra cuenta.';
       return interaction.editReply({ content: message });
+    }
+    if (result.alreadyReserved) {
+      return interaction.editReply({ content: '❌ Esta operación ya está siendo usada por otra cuenta.' });
     }
 
     await db.setUserPhone(interaction.user.id, cleanPhone, interaction.guildId);

@@ -1682,6 +1682,10 @@ export default function App() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al verificar el depósito Yape.');
+      if (data.pending) {
+        showToast(data.message || 'El código quedó reservado. Vuelve a intentarlo en unos segundos.', 'info');
+        return;
+      }
 
       showToast(`¡Depósito de S/ ${Number(data.amount || 0).toFixed(2)} acreditado con éxito!`, 'success');
       setQuickTopUpUser(null);
