@@ -102,11 +102,11 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Desktop Navigation Tabs */}
-        <nav className="hidden lg:flex items-center gap-1.5 text-xs font-mono font-semibold uppercase">
+        <nav className="hidden 2xl:flex min-w-0 flex-1 items-center justify-center gap-1 text-[11px] font-mono font-semibold uppercase whitespace-nowrap">
           <button
             type="button"
             onClick={() => handleNavClick('inicio')}
-            className={`px-3 py-1.5 rounded-md transition-all cursor-pointer ${
+            className={`px-2.5 py-1.5 rounded-md transition-all cursor-pointer ${
               activeView === 'inicio'
                 ? 'bg-[#FF5500] text-white shadow-[0_0_15px_rgba(255,85,0,0.35)]'
                 : 'text-neutral-300 hover:text-white hover:bg-white/[0.06]'
@@ -118,7 +118,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => handleNavClick('mixton')}
-            className={`px-3 py-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-2.5 py-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
               activeView === 'mixton' || activeView === 'arena'
                 ? 'bg-[#FF5500] text-white shadow-[0_0_15px_rgba(255,85,0,0.35)]'
                 : 'text-neutral-300 hover:text-white hover:bg-white/[0.06]'
@@ -131,7 +131,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => handleNavClick('historial')}
-            className={`px-3 py-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-2.5 py-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
               activeView === 'historial'
                 ? 'bg-[#FF5500] text-white shadow-[0_0_15px_rgba(255,85,0,0.35)]'
                 : 'text-neutral-300 hover:text-white hover:bg-white/[0.06]'
@@ -144,7 +144,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => handleNavClick('guia-faceit')}
-            className={`px-3 py-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-2.5 py-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
               activeView === 'guia-faceit'
                 ? 'bg-[#FF5500] text-white shadow-[0_0_15px_rgba(255,85,0,0.35)]'
                 : 'text-neutral-300 hover:text-white hover:bg-white/[0.06]'
@@ -157,7 +157,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => handleNavClick(currentUser ? 'cuenta' : 'login')}
-            className={`px-3 py-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-2.5 py-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
               activeView === 'cuenta' || activeView === 'login'
                 ? 'bg-[#742284] text-white shadow-[0_0_15px_rgba(168,85,247,0.35)]'
                 : 'text-purple-300 hover:text-white hover:bg-purple-950/30'
@@ -170,7 +170,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => handleNavClick('libro-de-reclamaciones')}
-            className={`px-3 py-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-2.5 py-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
               activeView === 'libro-de-reclamaciones'
                 ? 'bg-[#0284C7] text-white shadow-[0_0_15px_rgba(2,132,199,0.35)]'
                 : 'text-cyan-300 hover:text-white hover:bg-cyan-950/30'
@@ -183,7 +183,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => handleNavClick('contacto')}
-            className={`px-3 py-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-2.5 py-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
               activeView === 'contacto'
                 ? 'bg-[#FF5500] text-white shadow-[0_0_15px_rgba(255,85,0,0.35)]'
                 : 'text-neutral-300 hover:text-white hover:bg-white/[0.06]'
@@ -242,7 +242,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={() => handleNavClick('login')}
-                className="px-2 sm:px-3 py-1.5 rounded-md bg-[#742284] hover:bg-[#8B2FA0] border border-[#A855F7]/40 text-white text-xs font-mono font-bold uppercase transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(168,85,247,0.25)] cursor-pointer"
+                className="2xl:hidden px-2 sm:px-3 py-1.5 rounded-md bg-[#742284] hover:bg-[#8B2FA0] border border-[#A855F7]/40 text-white text-xs font-mono font-bold uppercase transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(168,85,247,0.25)] cursor-pointer"
               >
                 <YapeLogo className="w-3.5 h-3.5 rounded-xs shrink-0" />
                 <span className="hidden min-[360px]:inline">Recargar</span>
@@ -263,7 +263,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-2 rounded-md bg-white/[0.05] border border-white/[0.1] text-neutral-300 hover:text-white cursor-pointer"
+            className="2xl:hidden p-2 rounded-md bg-white/[0.05] border border-white/[0.1] text-neutral-300 hover:text-white cursor-pointer"
             aria-label="Abrir menú"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -273,7 +273,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* 3. Mobile Navigation Drawer */}
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-[#0A0C12] border-b border-white/[0.1] px-4 py-3 space-y-1.5 font-mono text-xs uppercase font-semibold">
+        <div className="2xl:hidden bg-[#0A0C12] border-b border-white/[0.1] px-4 py-3 space-y-1.5 font-mono text-xs uppercase font-semibold">
           <button
             type="button"
             onClick={() => handleNavClick('inicio')}
