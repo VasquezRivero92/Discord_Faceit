@@ -71,11 +71,11 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* 2. Main Navigation Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2 sm:gap-4">
         
         {/* Brand Logo & Name */}
         <div 
-          className="flex items-center gap-3 cursor-pointer group select-none" 
+          className="flex min-w-0 items-center gap-2 sm:gap-3 cursor-pointer group select-none"
           onClick={() => handleNavClick('inicio')}
         >
           <div className="relative w-10 h-10 shrink-0">
@@ -88,10 +88,10 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xl sm:text-2xl font-black italic tracking-tighter uppercase text-white font-mono">
+              <span className="text-base sm:text-2xl font-black italic tracking-tighter uppercase text-white font-mono whitespace-nowrap">
                 MACHU<span className="text-[#FF5500]">PEEK</span>
               </span>
-              <span className="text-[10px] bg-red-950/80 text-red-300 border border-red-700/60 px-1.5 py-0.5 rounded font-mono uppercase font-bold tracking-wider">
+              <span className="hidden min-[420px]:inline text-[10px] bg-red-950/80 text-red-300 border border-red-700/60 px-1.5 py-0.5 rounded font-mono uppercase font-bold tracking-wider">
                 PERÚ
               </span>
             </div>
@@ -195,7 +195,7 @@ export const Header: React.FC<HeaderProps> = ({
         </nav>
 
         {/* Right Action: Auth / User / Mobile Menu Toggle */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           {currentUser ? (
             <div className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-white/[0.1]">
               <button
@@ -238,19 +238,19 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <button
                 type="button"
                 onClick={() => handleNavClick('login')}
-                className="px-3 py-1.5 rounded-md bg-[#742284] hover:bg-[#8B2FA0] border border-[#A855F7]/40 text-white text-xs font-mono font-bold uppercase transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(168,85,247,0.25)] cursor-pointer"
+                className="px-2 sm:px-3 py-1.5 rounded-md bg-[#742284] hover:bg-[#8B2FA0] border border-[#A855F7]/40 text-white text-xs font-mono font-bold uppercase transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(168,85,247,0.25)] cursor-pointer"
               >
                 <YapeLogo className="w-3.5 h-3.5 rounded-xs shrink-0" />
-                <span>Recargar</span>
+                <span className="hidden min-[360px]:inline">Recargar</span>
               </button>
 
               <a
                 href="/auth/discord"
-                className="px-3 py-1.5 rounded-md bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-mono font-bold uppercase transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(88,101,242,0.25)]"
+                className="hidden min-[420px]:flex px-3 py-1.5 rounded-md bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-mono font-bold uppercase transition-all items-center gap-1.5 shadow-[0_0_12px_rgba(88,101,242,0.25)]"
                 title="Conectar Discord"
               >
                 <DiscordLogo className="w-3.5 h-3.5" />

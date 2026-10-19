@@ -2688,7 +2688,7 @@ export default function App() {
                     ref={canvasRef} 
                     width={480} 
                     height={480}
-                    className="w-[340px] h-[340px] md:w-[420px] md:h-[420px] select-none"
+                    className="w-full max-w-[340px] aspect-square h-auto md:max-w-[420px] select-none"
                   />
                 </div>
               </div>
@@ -2799,7 +2799,7 @@ export default function App() {
                     ref={matchupCanvasRef} 
                     width={480} 
                     height={480}
-                    className="w-[340px] h-[340px] md:w-[420px] md:h-[420px] select-none"
+                    className="w-full max-w-[340px] aspect-square h-auto md:max-w-[420px] select-none"
                   />
                 </div>
               </div>
@@ -3605,11 +3605,11 @@ export default function App() {
 
 
       {/* Notification Toast Stack (Admin Style) */}
-      <div id="toast-container" className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3">
+      <div id="toast-container" className="fixed bottom-4 left-4 right-4 sm:bottom-6 sm:left-auto sm:right-6 z-[9999] flex flex-col gap-3">
         {toasts.map(t => (
           <div 
             key={t.id} 
-            className={`px-5 py-3 rounded-none shadow-[8px_8px_0px_rgba(0,0,0,0.8)] flex items-center gap-3 border-2 transition-all animate-slide-in ${
+            className={`w-full sm:w-auto px-5 py-3 rounded-none shadow-[8px_8px_0px_rgba(0,0,0,0.8)] flex items-center gap-3 border-2 transition-all animate-slide-in ${
               t.type === 'success' ? 'bg-[#121212] border-white text-white' :
               t.type === 'error' ? 'bg-[#121212] border-red-500 text-red-400' :
               'bg-[#121212] border-blue-500 text-blue-400'
