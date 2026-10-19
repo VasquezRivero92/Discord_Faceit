@@ -30,6 +30,8 @@ interface UserWalletViewProps {
   showToast: (text: string, type?: 'success' | 'error' | 'info') => void;
 }
 
+const QUICK_RECHARGE_AMOUNTS = [5, 10, 20, 50, 100];
+
 const getFaceitLevelBadge = (level: number | null | undefined) => {
   if (!level) return null;
   const levelColors: Record<number, string> = {
@@ -794,6 +796,29 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                   className="w-full bg-black/40 border border-white/[0.1] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#C084FC] focus:ring-1 focus:ring-[#C084FC] transition-colors"
                   required
                 />
+                <div className="mt-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 mb-2">Montos de acceso rápido</p>
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                    {QUICK_RECHARGE_AMOUNTS.map((amount) => {
+                      const isSelected = Number.parseFloat(amountInput) === amount;
+                      return (
+                        <button
+                          key={amount}
+                          type="button"
+                          onClick={() => setAmountInput(amount.toFixed(2))}
+                          aria-pressed={isSelected}
+                          className={`min-h-10 rounded-lg border px-2 py-2 text-xs font-black transition-all active:scale-[0.98] ${
+                            isSelected
+                              ? 'border-[#C084FC] bg-[#742284] text-white shadow-[0_0_14px_rgba(168,85,247,0.3)]'
+                              : 'border-white/[0.1] bg-neutral-900/60 text-neutral-300 hover:border-[#C084FC]/60 hover:text-white'
+                          }`}
+                        >
+                          S/ {amount}.00
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
               <div>
