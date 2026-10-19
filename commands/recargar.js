@@ -28,6 +28,15 @@ export async function execute(interaction, db) {
     .setMaxLength(8)
     .setRequired(true);
 
+  const phoneInput = new TextInputBuilder()
+    .setCustomId('celular_input')
+    .setLabel('Celular Yape para recibir premios (9 dígitos)')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('Ej: 987654321')
+    .setMinLength(9)
+    .setMaxLength(9)
+    .setRequired(true);
+
   const operationInput = new TextInputBuilder()
     .setCustomId('operacion_input')
     .setLabel('Código de aprobación Yape')
@@ -39,6 +48,7 @@ export async function execute(interaction, db) {
 
   modal.addComponents(
     new ActionRowBuilder().addComponents(amountInput),
+    new ActionRowBuilder().addComponents(phoneInput),
     new ActionRowBuilder().addComponents(operationInput)
   );
 
@@ -52,9 +62,14 @@ export async function handleRecargaModalSubmit(interaction, db) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const amount = Number.parseFloat(interaction.fields.getTextInputValue('monto_input')?.trim());
+  const phoneNumber = interaction.fields.getTextInputValue('celular_input')?.trim();
   const operationNumber = interaction.fields.getTextInputValue('operacion_input')?.trim();
+  const cleanPhone = String(phoneNumber || '').replace(/\D/g, '');
   if (!Number.isFinite(amount) || amount < 1) {
     return interaction.editReply({ content: '❌ Debes ingresar un monto válido, mínimo S/ 1.00.' });
+  }
+  if (cleanPhone.length !== 9) {
+    return interaction.editReply({ content: '❌ Ingresa un celular Yape válido de 9 dígitos para recibir premios.' });
   }
 
   try {
@@ -78,6 +93,8 @@ export async function handleRecargaModalSubmit(interaction, db) {
       return interaction.editReply({ content: message });
     }
 
+    await db.setUserPhone(interaction.user.id, cleanPhone, interaction.guildId);
+
     const successEmbed = new EmbedBuilder()
       .setTitle('✅ ¡Recarga Exitosa con Yape!')
       .setColor(0x742284) // Color morado característico de Yape
@@ -85,6 +102,7 @@ export async function handleRecargaModalSubmit(interaction, db) {
       .addFields(
         { name: '💵 Monto Recargado', value: `S/ ${payment.amount.toFixed(2)}`, inline: true },
         { name: '💰 Nuevo Saldo', value: `S/ ${result.newBalance.toFixed(2)}`, inline: true },
+        { name: '📱 Celular para premios', value: `\`${cleanPhone.slice(0, 3)}***${cleanPhone.slice(-3)}\``, inline: true },
         { name: '🧾 Código de aprobación', value: `\`${payment.operationNumber}\``, inline: false }
       )
       .setFooter({ text: 'Ya puedes participar en partidas con apuesta en Mixton Arena' })

@@ -6,7 +6,8 @@ import {
   CheckCircle2, 
   AlertCircle, 
   RefreshCw, 
-  KeyRound, 
+  KeyRound,
+  Smartphone,
   LogOut, 
   ArrowRight, 
   Zap, 
@@ -59,6 +60,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
 }) => {
   // Recharge form states
   const [amountInput, setAmountInput] = useState<string>('');
+  const [phone, setPhone] = useState<string>(currentUser?.phoneNumber || '');
   const [operationNumber, setOperationNumber] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -118,6 +120,12 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
       return;
     }
 
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 9) {
+      showToast('Ingresa un celular Yape de 9 dígitos para recibir premios', 'error');
+      return;
+    }
+
     const cleanOperationNumber = operationNumber.trim();
     if (cleanOperationNumber.length < 4) {
       showToast('Ingresa el código de aprobación de tu comprobante Yape', 'error');
@@ -131,6 +139,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount,
+          phoneNumber: cleanPhone,
           operationNumber: cleanOperationNumber
         })
       });
@@ -783,11 +792,28 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                 />
               </div>
 
+              <div>
+                <label className="text-xs font-bold text-neutral-300 uppercase block mb-1.5 flex items-center gap-1.5">
+                  <Smartphone className="w-4 h-4 rounded-sm shrink-0" />
+                  <span>2. Celular Yape para recibir premios:</span>
+                </label>
+                <input
+                  type="tel"
+                  maxLength={9}
+                  placeholder="Ej: 987654321"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full bg-black/40 border border-white/[0.1] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#C084FC] focus:ring-1 focus:ring-[#C084FC] transition-colors"
+                  required
+                />
+                <p className="text-xs text-neutral-400 mt-1.5 font-sans">Lo guardaremos para enviarte el premio si ganas. No se usa para validar el depósito.</p>
+              </div>
+
               {/* 2. Código de aprobación Yape */}
               <div>
                 <label className="text-xs font-bold text-neutral-300 uppercase block mb-1.5 flex items-center gap-1.5">
                   <YapeLogo className="w-4 h-4 rounded-sm shrink-0" />
-                  <span>2. Código de aprobación de tu comprobante:</span>
+                  <span>3. Código de aprobación de tu comprobante:</span>
                 </label>
 
                 <div className="relative">
@@ -817,9 +843,9 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
 
                 <button
                   type="submit"
-                  disabled={isSubmitting || Number.parseFloat(amountInput) < 1 || operationNumber.trim().length < 4}
+                  disabled={isSubmitting || Number.parseFloat(amountInput) < 1 || phone.replace(/\D/g, '').length !== 9 || operationNumber.trim().length < 4}
                   className={`w-full py-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] ${
-                    isSubmitting || Number.parseFloat(amountInput) < 1 || operationNumber.trim().length < 4
+                    isSubmitting || Number.parseFloat(amountInput) < 1 || phone.replace(/\D/g, '').length !== 9 || operationNumber.trim().length < 4
                       ? 'bg-neutral-800 border border-neutral-700 text-neutral-500 cursor-not-allowed opacity-60'
                       : 'bg-[#742284] hover:bg-[#8B2FA0] border border-[#C084FC]/60 text-white shadow-[0_4px_25px_rgba(168,85,247,0.35)]'
                   }`}

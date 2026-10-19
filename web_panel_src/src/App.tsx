@@ -168,6 +168,7 @@ export default function App() {
   const [quickTopUpUser, setQuickTopUpUser] = useState<{ discordId: string; nickname: string; hasSavedPhone?: boolean } | null>(null);
   const [quickTopUpAmount, setQuickTopUpAmount] = useState<string>('10');
   const [isSubmittingTopUp, setIsSubmittingTopUp] = useState(false);
+  const [yapePhoneInput, setYapePhoneInput] = useState<string>('');
   const [yapeOperationInput, setYapeOperationInput] = useState<string>('');
   const [topUpTab, setTopUpTab] = useState<'yape_verificado' | 'admin_manual'>('yape_verificado');
 
@@ -1652,9 +1653,14 @@ export default function App() {
   const handleYapeVerificationSubmit = async () => {
     if (!quickTopUpUser) return;
     const amount = parseFloat(quickTopUpAmount);
+    const cleanPhone = yapePhoneInput.replace(/\D/g, '');
     const operationNumber = yapeOperationInput.trim();
     if (isNaN(amount) || amount < 1) {
       showToast('El monto mínimo para recargar es S/ 1.00', 'error');
+      return;
+    }
+    if (cleanPhone.length !== 9) {
+      showToast('Ingresa el celular Yape de 9 dígitos para recibir premios.', 'error');
       return;
     }
     if (operationNumber.length < 4) {
@@ -1670,6 +1676,7 @@ export default function App() {
         body: JSON.stringify({
           targetDiscordId: quickTopUpUser.discordId,
           amount,
+          phoneNumber: cleanPhone,
           operationNumber
         })
       });
@@ -1678,6 +1685,7 @@ export default function App() {
 
       showToast(`¡Depósito de S/ ${Number(data.amount || 0).toFixed(2)} acreditado con éxito!`, 'success');
       setQuickTopUpUser(null);
+      setYapePhoneInput('');
       setYapeOperationInput('');
       await fetchBetStatus(effectiveBetAmount);
     } catch (err: any) {
@@ -3251,6 +3259,7 @@ export default function App() {
                                     onClick={() => {
                                       setQuickTopUpUser({ discordId: p.discordId, nickname: p.faceit_nickname, hasSavedPhone: p.hasSavedPhone });
                                       setQuickTopUpAmount(p.deficit > 0 ? p.deficit.toFixed(2) : '5.00');
+                                      setYapePhoneInput('');
                                       setYapeOperationInput('');
                                     }}
                                     title="Recargar saldo a este usuario"
@@ -3367,6 +3376,7 @@ export default function App() {
                                     onClick={() => {
                                       setQuickTopUpUser({ discordId: p.discordId, nickname: p.faceit_nickname, hasSavedPhone: p.hasSavedPhone });
                                       setQuickTopUpAmount(p.deficit > 0 ? p.deficit.toFixed(2) : '5.00');
+                                      setYapePhoneInput('');
                                       setYapeOperationInput('');
                                     }}
                                     title="Recargar saldo a este usuario"
@@ -3492,7 +3502,7 @@ export default function App() {
             {topUpTab === 'yape_verificado' ? (
               <div className="space-y-3 mb-4">
                 <div className="p-2.5 bg-[#25152B] border border-[#742284]/40 text-[10px] text-purple-200">
-                  ℹ️ Ingresa el monto y el <strong>código de aprobación</strong> del comprobante. Ambos deben coincidir con el depósito registrado.
+                  ℹ️ Ingresa monto y <strong>código de aprobación</strong> para validar el depósito. El celular se guarda para enviar premios, pero no se compara con la transacción.
                 </div>
                 <div>
                   <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Monto enviado (S/):</label>
@@ -3504,6 +3514,17 @@ export default function App() {
                     onChange={(e) => setQuickTopUpAmount(e.target.value)}
                     className="w-full bg-[#111] border border-[#333] px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#742284]"
                     placeholder="Ej: 5.00"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">Celular Yape para recibir premios:</label>
+                  <input
+                    type="text"
+                    maxLength={9}
+                    value={yapePhoneInput}
+                    onChange={(e) => setYapePhoneInput(e.target.value)}
+                    className="w-full bg-[#111] border border-[#333] px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#742284]"
+                    placeholder="Ej: 987654321"
                   />
                 </div>
                 <div>

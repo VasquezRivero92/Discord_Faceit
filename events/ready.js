@@ -387,8 +387,8 @@ export async function checkAndDeployRechargePanel(client, db) {
               '¡Recarga saldo a tu cuenta de forma instantánea usando **Yape** para participar en las partidas y cuotas de apuestas de Mixton Arena!\n\n' +
               '**📌 ¿Cómo recargar?**\n' +
               '1️⃣ Presiona el botón de abajo **[Recargar con Yape]**.\n' +
-              '2️⃣ Ingresa el monto y el código de aprobación de tu comprobante.\n' +
-              '3️⃣ Verificaremos que ambos datos coincidan con el depósito registrado y acreditaremos el monto a tu perfil.\n\n' +
+              '2️⃣ Ingresa el monto, tu celular Yape para premios y el código de aprobación de tu comprobante.\n' +
+              '3️⃣ Verificaremos monto y código; tu celular se guardará para enviarte premios si ganas.\n\n' +
               '🔒 *Nunca te pediremos códigos de aprobación de Yape.*'
             )
             .setColor(0x742284) // Morado característico de Yape

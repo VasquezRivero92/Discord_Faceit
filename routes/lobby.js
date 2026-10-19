@@ -1433,11 +1433,12 @@ export function createLobbyRouter(client, db, config, wss) {
   // 7.7. Recargar saldo verificando el depósito en el monitor Yape local.
   router.post('/wallet/recharge-yape', requireAuth, async (req, res) => {
     try {
-      const { operationNumber, amount, targetDiscordId } = req.body;
+      const { phoneNumber, operationNumber, amount, targetDiscordId } = req.body;
       const discordId = (req.user?.isAdmin && targetDiscordId) ? targetDiscordId : req.user.userId;
 
-      if (!operationNumber || amount === undefined) {
-        return res.status(400).json({ error: 'Debes proporcionar monto y código de aprobación Yape.' });
+      const cleanPhone = String(phoneNumber || '').replace(/\D/g, '');
+      if (!operationNumber || amount === undefined || cleanPhone.length !== 9) {
+        return res.status(400).json({ error: 'Debes proporcionar monto, código de aprobación y celular Yape válido para recibir premios.' });
       }
 
       const payment = await yapeTransactionService.findIncomingTransaction({
@@ -1458,6 +1459,8 @@ export function createLobbyRouter(client, db, config, wss) {
           ? 'Esta operación ya fue acreditada en tu billetera.'
           : 'Esta operación ya fue utilizada para acreditar otra cuenta.' });
       }
+
+      await db.setUserPhone(discordId, cleanPhone, req.guildId);
 
       mixtonEvents.emit('update', req.guildId);
 
