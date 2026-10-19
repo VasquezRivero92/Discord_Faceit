@@ -1,7 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import { pathToFileURL } from 'url';
-import { startSteamBot, steamClient } from './steamBot.js';
+import { steamClient } from './steamBot.js';
 import { authenticateSteamApiKey, getSteamBotStatus, handleMatchmakingLaunch } from './services/matchmakingApi.js';
 
 
@@ -32,7 +32,7 @@ export function startServer() {
 
   serverInstance = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Servidor de la API del Steam Bot escuchando en http://0.0.0.0:${PORT}`);
-    startSteamBot();
+    console.log('Bot de Steam: el inicio de sesión se solicita manualmente desde el panel de administración.');
   });
 
   return serverInstance;

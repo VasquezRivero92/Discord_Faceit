@@ -20,7 +20,7 @@ import rateLimit from 'express-rate-limit';
 import { isFeatureEnabled } from './utils/featureFlags.js';
 import helmet from 'helmet';
 import cors from 'cors';
-import { startSteamBot, steamClient } from './steamBot.js';
+import { steamClient } from './steamBot.js';
 import { authenticateSteamApiKey, getSteamBotStatus, handleMatchmakingLaunch } from './services/matchmakingApi.js';
 import { fetchLatestSeasonPoints } from './services/faceitApi.js';
 import jwt from 'jsonwebtoken';
@@ -451,12 +451,7 @@ app.get('*', (req, res, next) => {
 
 const server = app.listen(env.PORT, '0.0.0.0', () => {
   logger.success(`Servidor Express escuchando en http://0.0.0.0:${env.PORT}`);
-  // Iniciar el Bot de Steam en el mismo proceso
-  if (process.env.DISABLE_STEAM_BOT !== 'true') {
-    startSteamBot();
-  } else {
-    logger.warn('🤖 Bot de Steam: Inicio de sesión desactivado mediante la variable DISABLE_STEAM_BOT en el archivo .env.');
-  }
+  logger.info('🤖 Bot de Steam: el inicio de sesión se solicita manualmente desde el panel de administración.');
 });
 
 server.on('upgrade', (request, socket, head) => {

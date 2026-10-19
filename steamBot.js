@@ -64,7 +64,7 @@ export function registerCs2LobbyInvite({ captainSteamId, onLobbyReady, onError, 
 export function startSteamBot() {
   if (!STEAM_USERNAME || !STEAM_PASSWORD) {
     console.error('❌ Error: STEAM_USERNAME o STEAM_PASSWORD no están configurados en el archivo .env');
-    return;
+    return false;
   }
 
   const logOnDetails = {
@@ -84,6 +84,7 @@ export function startSteamBot() {
 
   console.log(`🤖 Iniciando sesión en Steam como: ${STEAM_USERNAME}...`);
   client.logOn(logOnDetails);
+  return true;
 }
 
 // Evento: Sesión iniciada correctamente
@@ -133,6 +134,10 @@ client.on('error', (err) => {
 });
 
 let steamGuardCallback = null;
+
+export function isSteamGuardPending() {
+  return Boolean(steamGuardCallback);
+}
 
 export function resolveSteamGuard(code) {
   if (steamGuardCallback) {

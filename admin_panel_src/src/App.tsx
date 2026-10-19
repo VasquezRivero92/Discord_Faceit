@@ -341,6 +341,7 @@ export default function App() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [steamGuardCode, setSteamGuardCode] = useState<string>('');
   const [sendingSteamGuardCode, setSendingSteamGuardCode] = useState<boolean>(false);
+  const [requestingSteamGuardCode, setRequestingSteamGuardCode] = useState<boolean>(false);
 
   const [liveTime, setLiveTime] = useState<string>('14:24:08');
   useEffect(() => {
@@ -468,6 +469,21 @@ export default function App() {
       showToast('Error de conexión al enviar el código a Steam.', 'error');
     } finally {
       setSendingSteamGuardCode(false);
+    }
+  };
+
+  const handleRequestSteamGuardCode = async () => {
+    if (requestingSteamGuardCode) return;
+
+    setRequestingSteamGuardCode(true);
+    try {
+      const res = await apiFetch('/api/admin/steam/login', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      showToast(data.message || data.error || 'No se pudo iniciar Steam Guard.', res.ok ? 'info' : 'error');
+    } catch {
+      showToast('Error de conexión al iniciar Steam Guard.', 'error');
+    } finally {
+      setRequestingSteamGuardCode(false);
     }
   };
 
@@ -2325,9 +2341,17 @@ export default function App() {
                       <div className="flex flex-col gap-1 mb-5">
                         <h4 className="text-sm font-black text-[#66C0F4] uppercase tracking-tight">Steam Guard</h4>
                         <p className="text-xs text-neutral-400 font-mono">
-                          Cuando el bot solicite verificación, pega aquí únicamente el código más reciente enviado por Steam. El código no se guarda.
+                          Solicita el código para iniciar el bot. Steam lo enviará a su correo; luego pega aquí únicamente el código más reciente. El código no se guarda.
                         </p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={handleRequestSteamGuardCode}
+                        disabled={requestingSteamGuardCode}
+                        className="mb-3 px-5 py-3 bg-[#1B4F72] hover:bg-[#236B99] disabled:opacity-50 text-white text-xs font-black uppercase tracking-tight rounded-none transition-colors cursor-pointer"
+                      >
+                        {requestingSteamGuardCode ? 'Solicitando...' : 'Solicitar código de Steam'}
+                      </button>
                       <form onSubmit={handleSubmitSteamGuardCode} className="flex flex-col sm:flex-row gap-3">
                         <input
                           type="text"

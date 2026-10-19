@@ -13,7 +13,7 @@ import { cleanupVoiceChannel } from '../services/voice.js';
 import { env } from '../config/index.js';
 import { fetchFaceitStats, fetchPlayerHistory, fetchHubInfo, fetchLeaderboard, fetchLatestSeasonPoints, fetchCurrentHubSeason, fetchFaceitHubQueues } from '../services/faceitApi.js';
 import { getEffectiveConfig, getEffectiveConfigForGuild, CLUB_ROLES_MAP } from '../config/index.js';
-import { resolveSteamGuard } from '../steamBot.js';
+import { isSteamGuardPending, resolveSteamGuard, startSteamBot, steamClient } from '../steamBot.js';
 
 export function createApiRouter(client, db, config) {
   const router = Router();
@@ -140,6 +140,27 @@ export function createApiRouter(client, db, config) {
     }
 
     return res.json({ success: true, message: 'Código enviado al bot de Steam.' });
+  });
+
+  // --- Inicio de Steam Guard ---
+  router.post('/steam/login', requireAuth, (req, res) => {
+    if (req.user?.role !== 'global_admin') {
+      return res.status(403).json({ error: 'Solo el administrador global puede iniciar sesión en Steam.' });
+    }
+
+    if (steamClient.steamID) {
+      return res.json({ success: true, connected: true, message: 'El bot de Steam ya está conectado.' });
+    }
+
+    if (isSteamGuardPending()) {
+      return res.status(409).json({ error: 'El bot ya está esperando un código de Steam Guard. Revisa el correo e ingresa el código más reciente.' });
+    }
+
+    if (!startSteamBot()) {
+      return res.status(503).json({ error: 'Faltan las credenciales STEAM_USERNAME o STEAM_PASSWORD en el servidor.' });
+    }
+
+    return res.json({ success: true, connected: false, message: 'Inicio de sesión solicitado. Revisa el correo de Steam Guard e ingresa el código más reciente.' });
   });
 
   // --- Información del Sistema (Uptime y Hub) ---
