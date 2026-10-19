@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -7,6 +8,48 @@ import { logger } from './utils/logger.js';
 dotenv.config();
 
 const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+const YAPE_RESERVATION_WINDOW_MS = 10 * 60 * 1000;
+const YAPE_MAX_PENDING_RESERVATIONS = 3;
+const yapeReservationAttempts = new Map();
+const yapeVerificationAttempts = new Map();
+
+function yapeAuditFingerprint(value) {
+  const secret = process.env.YAPE_AUDIT_SECRET || process.env.ADMIN_JWT_SECRET || 'local-yape-audit-secret';
+  return crypto.createHmac('sha256', secret).update(String(value || '')).digest('hex');
+}
+
+function canCreatePendingYapeReservation(discordId, guildId, operationNumber) {
+  const key = `${guildId || 'global'}:${discordId}`;
+  const now = Date.now();
+  const current = yapeReservationAttempts.get(key) || new Map();
+
+  for (const [code, createdAt] of current) {
+    if (now - createdAt >= YAPE_RESERVATION_WINDOW_MS) current.delete(code);
+  }
+
+  const operation = String(operationNumber).trim();
+  if (current.has(operation)) {
+    yapeReservationAttempts.set(key, current);
+    return true;
+  }
+  if (current.size >= YAPE_MAX_PENDING_RESERVATIONS) return false;
+
+  current.set(operation, now);
+  yapeReservationAttempts.set(key, current);
+  return true;
+}
+
+function consumeYapeVerificationAttempt(discordId, guildId) {
+  const key = `${guildId || 'global'}:${discordId}`;
+  const now = Date.now();
+  const attempts = (yapeVerificationAttempts.get(key) || []).filter(
+    createdAt => now - createdAt < YAPE_RESERVATION_WINDOW_MS
+  );
+  if (attempts.length >= 8) return false;
+  attempts.push(now);
+  yapeVerificationAttempts.set(key, attempts);
+  return true;
+}
 
 class MockFirestore {
   constructor() {
@@ -2175,12 +2218,22 @@ export const db = {
     }
   },
 
-  async reserveYapeOperation({ operationNumber, discordId, guildId = null, amount }) {
+  consumeYapeVerificationAttempt(discordId, guildId = null) {
+    const allowed = consumeYapeVerificationAttempt(discordId, guildId);
+    if (!allowed) logger.warn(`Límite de verificaciones Yape alcanzado por ${discordId}.`);
+    return allowed;
+  },
+
+  async reserveYapeOperation({ operationNumber, discordId, guildId = null, amount, phoneNumber = null, auditContext = {} }) {
     if (!operationNumber || !discordId || !Number.isFinite(Number(amount)) || Number(amount) <= 0) {
       throw new Error('Datos incompletos para reservar la operación Yape.');
     }
 
     const normalizedOperation = String(operationNumber).trim();
+    const cleanPhone = phoneNumber ? String(phoneNumber).replace(/\D/g, '').trim() : null;
+    if (cleanPhone && cleanPhone.length !== 9) {
+      throw new Error('El celular para premios debe tener 9 dígitos.');
+    }
     const operationRef = firestore.collection('yape_operations').doc(encodeURIComponent(normalizedOperation));
 
     return firestore.runTransaction(async (transaction) => {
@@ -2196,22 +2249,38 @@ export const db = {
         };
       }
 
+      if (!canCreatePendingYapeReservation(discordId, guildId, normalizedOperation)) {
+        logger.warn(`Límite de reservas Yape alcanzado por ${discordId}.`);
+        return { reserved: false, rateLimited: true, alreadyProcessed: false, belongsToUser: true };
+      }
+
       transaction.set(operationRef, {
         operationNumber: normalizedOperation,
         discordId,
         guildId: guildId || null,
         amount: Number(amount),
+        ...(cleanPhone ? { prizePhoneNumber: cleanPhone } : {}),
         status: 'pending',
         credited: false,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         pendingAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      transaction.set(firestore.collection('yape_audit_logs').doc(), {
+        event: 'pending_reserved',
+        source: auditContext.source || 'unknown',
+        discordId,
+        guildId: guildId || null,
+        amount: Number(amount),
+        operationFingerprint: yapeAuditFingerprint(normalizedOperation),
+        ...(auditContext.ip ? { ipFingerprint: yapeAuditFingerprint(auditContext.ip) } : {}),
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
 
       return { reserved: true, alreadyProcessed: false, belongsToUser: true };
     });
   },
 
-  async creditYapeOperation({ operationNumber, discordId, guildId = null, amount, details = {} }) {
+  async creditYapeOperation({ operationNumber, discordId, guildId = null, amount, phoneNumber = null, details = {}, auditContext = {} }) {
     if (!operationNumber || !discordId || !Number.isFinite(Number(amount)) || Number(amount) <= 0) {
       throw new Error('Datos incompletos para acreditar la operación Yape.');
     }
@@ -2220,6 +2289,10 @@ export const db = {
     const operationRef = firestore.collection('yape_operations').doc(operationId);
     const docId = guildId ? `${guildId}_${discordId}` : discordId;
     const userRef = firestore.collection(USERS_COLLECTION).doc(docId);
+    const cleanPhone = phoneNumber ? String(phoneNumber).replace(/\D/g, '').trim() : null;
+    if (cleanPhone && cleanPhone.length !== 9) {
+      throw new Error('El celular para premios debe tener 9 dígitos.');
+    }
 
     try {
       const result = await firestore.runTransaction(async (transaction) => {
@@ -2243,6 +2316,7 @@ export const db = {
           last_balance_update: Date.now(),
           last_balance_reason: `Recarga Yape verificada (operación: ${operationNumber})`
         };
+        if (cleanPhone) userData.phoneNumber = cleanPhone;
 
         if (!userDoc.exists) {
           Object.assign(userData, {
@@ -2261,9 +2335,20 @@ export const db = {
           credited: true,
           status: 'credited',
           details,
+          prizePhoneNumber: admin.firestore.FieldValue.delete(),
           ...(operationDoc.exists ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() }),
           creditedAt: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
+        transaction.set(firestore.collection('yape_audit_logs').doc(), {
+          event: 'credited',
+          source: auditContext.source || 'unknown',
+          discordId,
+          guildId: guildId || null,
+          amount: Number(amount),
+          operationFingerprint: yapeAuditFingerprint(operationNumber),
+          ...(auditContext.ip ? { ipFingerprint: yapeAuditFingerprint(auditContext.ip) } : {}),
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
 
         return { alreadyProcessed: false, newBalance, userData };
       });
@@ -2274,7 +2359,8 @@ export const db = {
           discordId,
           guild_id: guildId || null,
           wallet_balance: result.newBalance,
-          last_balance_reason: result.userData.last_balance_reason
+          last_balance_reason: result.userData.last_balance_reason,
+          ...(cleanPhone ? { phoneNumber: cleanPhone } : {})
         });
       }
       return result;
@@ -2282,6 +2368,53 @@ export const db = {
       logger.error(`Error al acreditar operación Yape ${operationNumber}:`, err);
       throw err;
     }
+  },
+
+  async processPendingYapeOperation({ operationNumber, auditContext = {} }) {
+    const normalizedOperation = String(operationNumber || '').trim();
+    if (!normalizedOperation) throw new Error('Código de aprobación inválido.');
+
+    const operationRef = firestore.collection('yape_operations').doc(encodeURIComponent(normalizedOperation));
+    const operationDoc = await operationRef.get();
+    if (!operationDoc.exists) return { status: 'not_pending' };
+
+    const pending = operationDoc.data();
+    if (pending.credited === true || pending.status === 'credited') return { status: 'already_credited' };
+    if (pending.status !== 'pending' || !pending.discordId) return { status: 'not_pending' };
+
+    const payment = await this.findYapeTransaction(normalizedOperation);
+    if (!payment) return { status: 'not_found' };
+    if (String(payment.tipo || '').toUpperCase() !== 'ENTRADA') return { status: 'not_incoming' };
+
+    const amount = Number(payment.monto);
+    if (!Number.isFinite(amount) || amount <= 0 || Number(pending.amount).toFixed(2) !== amount.toFixed(2)) {
+      logger.warn(`El depósito Yape ${normalizedOperation} no coincide con la reserva pendiente.`);
+      await firestore.collection('yape_audit_logs').add({
+        event: 'amount_mismatch',
+        source: auditContext.source || 'unknown',
+        discordId: pending.discordId,
+        guildId: pending.guildId || null,
+        expectedAmount: Number(pending.amount),
+        receivedAmount: Number.isFinite(amount) ? amount : null,
+        operationFingerprint: yapeAuditFingerprint(normalizedOperation),
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      return { status: 'amount_mismatch', pending };
+    }
+
+    const result = await this.creditYapeOperation({
+      operationNumber: normalizedOperation,
+      discordId: pending.discordId,
+      guildId: pending.guildId || null,
+      amount,
+      phoneNumber: pending.prizePhoneNumber || null,
+      details: { receivedAt: payment.fecha_hora || payment.fecha_registro || null },
+      auditContext
+    });
+
+    if (result.alreadyProcessed) return { status: 'already_credited', result };
+    if (result.alreadyReserved) return { status: 'reserved_by_other', result };
+    return { status: 'credited', result, pending, amount };
   },
 
   async recordClaim(claimData) {

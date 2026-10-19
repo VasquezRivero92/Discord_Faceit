@@ -22,6 +22,8 @@ export const env = {
   FACEIT_HUB_ID: process.env.FACEIT_HUB_ID,
   FACEIT_LEADERBOARD_ID: process.env.FACEIT_LEADERBOARD_ID,
   FACEIT_WEBHOOK_SECRET: process.env.FACEIT_WEBHOOK_SECRET,
+  YAPE_WEBHOOK_SECRET: process.env.YAPE_WEBHOOK_SECRET,
+  YAPE_AUDIT_SECRET: process.env.YAPE_AUDIT_SECRET,
   PORT: process.env.PORT || 3000,
   BASE_URL: process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
   ADMIN_ROLE_ID: process.env.ADMIN_ROLE_ID || process.env.ADMIN_ROLE_NAME || '',
@@ -39,6 +41,13 @@ export function validateConfig() {
 
   if (env.ADMIN_JWT_SECRET.length < 32) {
     console.warn('ADVERTENCIA: ADMIN_JWT_SECRET deberia tener al menos 32 caracteres.');
+  }
+
+  if (process.env.NODE_ENV === 'production' && !env.YAPE_WEBHOOK_SECRET) {
+    console.warn('ADVERTENCIA: YAPE_WEBHOOK_SECRET no está configurado; la acreditación automática desde el escáner Yape permanecerá desactivada.');
+  }
+  if (env.YAPE_WEBHOOK_SECRET && env.YAPE_WEBHOOK_SECRET.length < 32) {
+    throw new Error('YAPE_WEBHOOK_SECRET debe tener al menos 32 caracteres aleatorios.');
   }
 
   try {

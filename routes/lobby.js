@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import admin from 'firebase-admin';
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { verifyUserToken, optionalUserToken } from '../middleware/auth.js';
@@ -21,6 +22,24 @@ export function createLobbyRouter(client, db, config, wss) {
   const { ADMIN_JWT_SECRET, DISCORD_GUILD_ID } = config;
   const requireAuth = verifyUserToken(ADMIN_JWT_SECRET);
   const optionalAuth = optionalUserToken(ADMIN_JWT_SECRET);
+  const yapeRechargeAccountLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 8,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: false,
+    keyGenerator: (req) => `yape-user:${req.user?.userId || req.user?.discordId || req.user?.id || req.ip}`,
+    handler: (req, res) => res.status(429).json({ error: 'Demasiados intentos de recarga. Espera unos minutos antes de volver a intentar.' })
+  });
+  const yapeRechargeIpLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 15,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: false,
+    keyGenerator: (req) => `yape-ip:${req.ip}`,
+    handler: (req, res) => res.status(429).json({ error: 'Demasiados intentos desde esta conexión. Espera unos minutos.' })
+  });
 
   // Middleware to attach guildId to req
   router.use((req, res, next) => {
@@ -1431,7 +1450,7 @@ export function createLobbyRouter(client, db, config, wss) {
   });
 
   // 7.7. Recargar saldo verificando el depósito en el monitor Yape local.
-  router.post('/wallet/recharge-yape', requireAuth, async (req, res) => {
+  router.post('/wallet/recharge-yape', requireAuth, yapeRechargeAccountLimiter, yapeRechargeIpLimiter, async (req, res) => {
     try {
       const { phoneNumber, operationNumber, amount, targetDiscordId } = req.body;
       const discordId = (req.user?.isAdmin && targetDiscordId) ? targetDiscordId : req.user.userId;
@@ -1458,8 +1477,13 @@ export function createLobbyRouter(client, db, config, wss) {
           operationNumber,
           discordId,
           guildId: req.guildId,
-          amount
+          amount,
+          phoneNumber: cleanPhone,
+          auditContext: { source: 'web', ip: req.ip }
         });
+        if (reservation.rateLimited) {
+          return res.status(429).json({ error: 'Alcanzaste el límite de códigos pendientes. Espera 10 minutos antes de intentar otro código.' });
+        }
         if (!reservation.reserved) {
           const error = reservation.alreadyProcessed
             ? (reservation.belongsToUser
@@ -1481,7 +1505,9 @@ export function createLobbyRouter(client, db, config, wss) {
         discordId,
         guildId: req.guildId,
         amount: payment.amount,
-        details: { receivedAt: payment.receivedAt }
+        phoneNumber: cleanPhone,
+        details: { receivedAt: payment.receivedAt },
+        auditContext: { source: 'web', ip: req.ip }
       });
 
       if (result.alreadyProcessed) {
@@ -1492,8 +1518,6 @@ export function createLobbyRouter(client, db, config, wss) {
       if (result.alreadyReserved) {
         return res.status(409).json({ error: 'Este código de aprobación ya está siendo usado por otra cuenta.' });
       }
-
-      await db.setUserPhone(discordId, cleanPhone, req.guildId);
 
       mixtonEvents.emit('update', req.guildId);
 

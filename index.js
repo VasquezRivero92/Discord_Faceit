@@ -24,6 +24,7 @@ import { startSteamBot, steamClient, resolveSteamGuard } from './steamBot.js';
 import { authenticateSteamApiKey, getSteamBotStatus, handleMatchmakingLaunch } from './services/matchmakingApi.js';
 import { fetchLatestSeasonPoints } from './services/faceitApi.js';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 dotenv.config();
 
@@ -127,7 +128,14 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({
+  limit: '64kb',
+  verify: (req, res, buffer) => {
+    if (req.originalUrl?.split('?')[0] === '/webhook/yape-transaction') {
+      req.rawYapeWebhookBody = Buffer.from(buffer);
+    }
+  }
+}));
 app.use(cookieParser());
 app.use(express.static('public', {
   setHeaders: (res, filePath) => {
@@ -172,6 +180,73 @@ const webhookLimiter = rateLimit({
   validate: false,
 });
 
+const yapeWebhookLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: false,
+  handler: (req, res) => res.status(429).json({ error: 'Demasiados eventos del escáner Yape.' }),
+});
+const usedYapeWebhookNonces = new Map();
+const YAPE_WEBHOOK_MAX_AGE_MS = 5 * 60 * 1000;
+
+function validateYapeWebhook(req) {
+  const secret = env.YAPE_WEBHOOK_SECRET;
+  const timestamp = String(req.headers['x-yape-timestamp'] || '');
+  const nonce = String(req.headers['x-yape-nonce'] || '');
+  const signature = String(req.headers['x-yape-signature'] || '');
+  const parsedTimestamp = Number(timestamp);
+
+  if (!secret || !Number.isFinite(parsedTimestamp) || Math.abs(Date.now() - parsedTimestamp) > YAPE_WEBHOOK_MAX_AGE_MS) {
+    return false;
+  }
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(nonce) || usedYapeWebhookNonces.has(nonce)) {
+    return false;
+  }
+
+  const rawBody = req.rawYapeWebhookBody;
+  if (!rawBody || !/^[a-f0-9]{64}$/i.test(signature)) return false;
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(`${timestamp}.${nonce}.`)
+    .update(rawBody)
+    .digest('hex');
+  const expectedBuffer = Buffer.from(expected, 'hex');
+  const receivedBuffer = Buffer.from(signature, 'hex');
+  if (expectedBuffer.length !== receivedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, receivedBuffer)) {
+    return false;
+  }
+
+  const now = Date.now();
+  for (const [knownNonce, createdAt] of usedYapeWebhookNonces) {
+    if (now - createdAt >= YAPE_WEBHOOK_MAX_AGE_MS) usedYapeWebhookNonces.delete(knownNonce);
+  }
+  usedYapeWebhookNonces.set(nonce, now);
+  return true;
+}
+
+async function notifyYapeCredit(discordId, amount) {
+  try {
+    const user = await client.users.fetch(discordId);
+    await user.send(`✅ Tu recarga Yape de S/ ${Number(amount).toFixed(2)} fue acreditada automáticamente a tu billetera.`);
+  } catch (error) {
+    logger.warn(`No se pudo notificar por DM la recarga Yape a ${discordId}: ${error.message}`);
+  }
+}
+
+async function notifyYapeSecurityIncident(processed) {
+  try {
+    const channelId = env.DISCORD_ADMIN_ALERTS_CHANNEL_ID;
+    if (!channelId) return;
+    const channel = await client.channels.fetch(channelId);
+    if (!channel?.isTextBased?.()) return;
+    await channel.send(`🚨 **Alerta de recarga Yape**\nUna reserva no coincide con el monto detectado por el escáner. Usuario: <@${processed.pending?.discordId || 'desconocido'}>. Se bloqueó la acreditación automática.`);
+  } catch (error) {
+    logger.warn(`No se pudo enviar alerta de seguridad Yape: ${error.message}`);
+  }
+}
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({
@@ -205,6 +280,38 @@ app.post(['/webhook/faceit', '/webhooks/faceit'], webhookLimiter, async (req, re
 
   res.status(200).send('OK');
   await handleFaceitWebhook(req.body, client, db);
+});
+
+// El escáner Android llama este endpoint solamente después de persistir el
+// depósito en Firestore. No se acepta ningún monto ni cuenta del cliente: el
+// servidor vuelve a leer el depósito y acredita únicamente una reserva válida.
+app.post('/webhook/yape-transaction', yapeWebhookLimiter, async (req, res) => {
+  if (!validateYapeWebhook(req)) {
+    logger.warn(`Webhook Yape rechazado desde ${req.ip}: firma, fecha o nonce inválido.`);
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const operationNumber = String(req.body?.numero_operacion || req.body?.operationNumber || '').trim();
+  if (!/^[A-Za-z0-9-]{4,64}$/.test(operationNumber)) {
+    return res.status(400).json({ error: 'Código de aprobación inválido.' });
+  }
+
+  try {
+    const processed = await db.processPendingYapeOperation({
+      operationNumber,
+      auditContext: { source: 'yape-scanner-webhook' }
+    });
+    if (processed.status === 'credited') {
+      void notifyYapeCredit(processed.pending.discordId, processed.amount);
+    }
+    if (processed.status === 'amount_mismatch') {
+      void notifyYapeSecurityIncident(processed);
+    }
+    return res.json({ ok: true, status: processed.status });
+  } catch (error) {
+    logger.error(`Error procesando webhook Yape para ${operationNumber}:`, error);
+    return res.status(500).json({ error: 'No se pudo procesar la transacción Yape.' });
+  }
 });
 
 // ---------------------------------------------------------

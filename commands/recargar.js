@@ -71,6 +71,9 @@ export async function handleRecargaModalSubmit(interaction, db) {
   if (cleanPhone.length !== 9) {
     return interaction.editReply({ content: '❌ Ingresa un celular Yape válido de 9 dígitos para recibir premios.' });
   }
+  if (!db.consumeYapeVerificationAttempt(interaction.user.id, interaction.guildId)) {
+    return interaction.editReply({ content: '❌ Demasiados intentos de recarga. Espera unos minutos antes de volver a intentar.' });
+  }
 
   try {
     let payment;
@@ -88,8 +91,13 @@ export async function handleRecargaModalSubmit(interaction, db) {
         operationNumber,
         discordId: interaction.user.id,
         guildId: interaction.guildId,
-        amount
+        amount,
+        phoneNumber: cleanPhone,
+        auditContext: { source: 'discord' }
       });
+      if (reservation.rateLimited) {
+        return interaction.editReply({ content: '❌ Alcanzaste el límite de códigos pendientes. Espera 10 minutos antes de intentar otro código.' });
+      }
       if (!reservation.reserved) {
         const message = reservation.alreadyProcessed
           ? (reservation.belongsToUser
@@ -110,7 +118,9 @@ export async function handleRecargaModalSubmit(interaction, db) {
       discordId: interaction.user.id,
       guildId: interaction.guildId,
       amount: payment.amount,
-      details: { receivedAt: payment.receivedAt }
+      phoneNumber: cleanPhone,
+      details: { receivedAt: payment.receivedAt },
+      auditContext: { source: 'discord' }
     });
 
     if (result.alreadyProcessed) {
@@ -122,8 +132,6 @@ export async function handleRecargaModalSubmit(interaction, db) {
     if (result.alreadyReserved) {
       return interaction.editReply({ content: '❌ Esta operación ya está siendo usada por otra cuenta.' });
     }
-
-    await db.setUserPhone(interaction.user.id, cleanPhone, interaction.guildId);
 
     const successEmbed = new EmbedBuilder()
       .setTitle('✅ ¡Recarga Exitosa con Yape!')
