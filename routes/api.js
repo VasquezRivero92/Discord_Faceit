@@ -13,6 +13,7 @@ import { cleanupVoiceChannel } from '../services/voice.js';
 import { env } from '../config/index.js';
 import { fetchFaceitStats, fetchPlayerHistory, fetchHubInfo, fetchLeaderboard, fetchLatestSeasonPoints, fetchCurrentHubSeason, fetchFaceitHubQueues } from '../services/faceitApi.js';
 import { getEffectiveConfig, getEffectiveConfigForGuild, CLUB_ROLES_MAP } from '../config/index.js';
+import { resolveSteamGuard } from '../steamBot.js';
 
 export function createApiRouter(client, db, config) {
   const router = Router();
@@ -119,6 +120,26 @@ export function createApiRouter(client, db, config) {
       }
     } catch (_) {}
     res.json({ user: { ...req.user, hasSavedPhone } });
+  });
+
+  // --- Steam Guard ---
+  // El código únicamente se acepta desde una sesión de administrador global.
+  // No se persiste ni se escribe en los logs.
+  router.post('/steam/guard', requireAuth, (req, res) => {
+    if (req.user?.role !== 'global_admin') {
+      return res.status(403).json({ error: 'Solo el administrador global puede enviar un código de Steam Guard.' });
+    }
+
+    const code = String(req.body?.code || '').trim().toUpperCase();
+    if (!/^[A-Z0-9]{5}$/.test(code)) {
+      return res.status(400).json({ error: 'El código de Steam Guard debe tener 5 caracteres alfanuméricos.' });
+    }
+
+    if (!resolveSteamGuard(code)) {
+      return res.status(409).json({ error: 'El bot de Steam no está esperando un código en este momento.' });
+    }
+
+    return res.json({ success: true, message: 'Código enviado al bot de Steam.' });
   });
 
   // --- Información del Sistema (Uptime y Hub) ---

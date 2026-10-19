@@ -1,7 +1,6 @@
 import SteamUser from 'steam-user';
 import SteamTotp from 'steam-totp';
 import dotenv from 'dotenv';
-import readline from 'readline';
 
 dotenv.config();
 
@@ -137,7 +136,7 @@ let steamGuardCallback = null;
 
 export function resolveSteamGuard(code) {
   if (steamGuardCallback) {
-    console.log(`🔑 Procesando código de Steam Guard recibido externamente: ${code}`);
+    console.log('🔑 Procesando código de Steam Guard recibido desde el panel de administración.');
     steamGuardCallback(code.trim());
     steamGuardCallback = null;
     return true;
@@ -151,20 +150,7 @@ client.on('steamGuard', (domain, callback) => {
   
   steamGuardCallback = callback;
 
-  console.log('👉 Puedes introducir el código visitando: /api/steam/guard?code=TU_CODIGO');
-
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  rl.question('👉 Introduce el código de Steam Guard aquí: ', (code) => {
-    rl.close();
-    if (steamGuardCallback) {
-      callback(code.trim()); // Envía el código ingresado para continuar con el inicio de sesión
-      steamGuardCallback = null;
-    }
-  });
+  console.log('👉 Ingresa el código más reciente desde el Panel de administración > Configuración > Steam Guard.');
 });
 
 // Evento: Auto-aceptar solicitudes de amistad

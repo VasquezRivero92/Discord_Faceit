@@ -339,6 +339,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [syncing, setSyncing] = useState<boolean>(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [steamGuardCode, setSteamGuardCode] = useState<string>('');
+  const [sendingSteamGuardCode, setSendingSteamGuardCode] = useState<boolean>(false);
 
   const [liveTime, setLiveTime] = useState<string>('14:24:08');
   useEffect(() => {
@@ -436,6 +438,37 @@ export default function App() {
 
   const handleLogout = () => {
     window.location.href = '/auth/logout';
+  };
+
+  const handleSubmitSteamGuardCode = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (sendingSteamGuardCode) return;
+
+    const code = steamGuardCode.trim().toUpperCase();
+    if (!/^[A-Z0-9]{5}$/.test(code)) {
+      showToast('Ingresa el código de Steam Guard de 5 caracteres.', 'error');
+      return;
+    }
+
+    setSendingSteamGuardCode(true);
+    try {
+      const res = await apiFetch('/api/admin/steam/guard', {
+        method: 'POST',
+        body: JSON.stringify({ code })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'No se pudo enviar el código a Steam.', 'error');
+        return;
+      }
+
+      setSteamGuardCode('');
+      showToast(data.message || 'Código enviado al bot de Steam.', 'success');
+    } catch {
+      showToast('Error de conexión al enviar el código a Steam.', 'error');
+    } finally {
+      setSendingSteamGuardCode(false);
+    }
   };
 
 
@@ -2286,6 +2319,37 @@ export default function App() {
                       <p className="text-xs text-neutral-400 uppercase tracking-tight font-mono">Los valores guardados aquí modifican el archivo .env del servidor en tiempo real.</p>
                     </div>
                   </div>
+
+                  {currentUser?.role === 'global_admin' && (
+                    <section className="bg-[#111] border-2 border-[#66C0F4]/30 p-6 rounded-none shadow-[8px_8px_0px_rgba(102,192,244,0.12)]">
+                      <div className="flex flex-col gap-1 mb-5">
+                        <h4 className="text-sm font-black text-[#66C0F4] uppercase tracking-tight">Steam Guard</h4>
+                        <p className="text-xs text-neutral-400 font-mono">
+                          Cuando el bot solicite verificación, pega aquí únicamente el código más reciente enviado por Steam. El código no se guarda.
+                        </p>
+                      </div>
+                      <form onSubmit={handleSubmitSteamGuardCode} className="flex flex-col sm:flex-row gap-3">
+                        <input
+                          type="text"
+                          value={steamGuardCode}
+                          onChange={(event) => setSteamGuardCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5))}
+                          placeholder="ABCDE"
+                          inputMode="text"
+                          autoComplete="one-time-code"
+                          maxLength={5}
+                          aria-label="Código de Steam Guard"
+                          className="min-w-0 flex-1 bg-[#0A0A0A] border-2 border-white/10 text-sm font-mono font-black tracking-[0.35em] text-white uppercase rounded-none px-4 py-3 outline-none focus:border-[#66C0F4] transition-colors"
+                        />
+                        <button
+                          type="submit"
+                          disabled={sendingSteamGuardCode}
+                          className="px-5 py-3 bg-[#66C0F4] hover:bg-[#8DD5FF] disabled:opacity-50 text-black text-xs font-black uppercase tracking-tight rounded-none transition-colors cursor-pointer"
+                        >
+                          {sendingSteamGuardCode ? 'Enviando...' : 'Enviar a Steam'}
+                        </button>
+                      </form>
+                    </section>
+                  )}
 
                   <form onSubmit={handleSaveConfig} className="space-y-8">
                     <datalist id="available-discord-roles-list">
