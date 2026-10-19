@@ -8,7 +8,7 @@ Bot de Discord para comunidades de CS2 integradas con Faceit. Incluye verificaci
 - Sincronizar roles por nivel de Faceit y roles especiales del club.
 - Recibir webhooks de Faceit para anunciar partidas, crear canales de voz y limpiar canales al finalizar.
 - Panel web para admins y capitanes con OAuth de Discord.
-- Lobby Mixton con jugadores listos, draft, equipos y creacion manual de partidas.
+- Lobby Mixton con jugadores listos, draft, equipos y creación de partidas por FACEIT o Steam.
 - API protegida para lanzar invitaciones de CS2 mediante el bot de Steam.
 - Sistema de soporte para llamar administradores desde Discord o desde el panel.
 
@@ -41,6 +41,7 @@ STEAM_USERNAME=
 STEAM_PASSWORD=
 STEAM_SHARED_SECRET=
 MIXTON_SERVER_IP=127.0.0.1:27015
+CS2_PRIVATE_MATCHMAKING_CODE=
 PORT=3000
 ```
 
@@ -83,6 +84,17 @@ node server.js
 ## Limitacion actual del puente CS2
 
 `steamBot.js` no crea un lobby oficial real de CS2. Genera un identificador interno, actualiza rich presence y envia mensajes a los SteamID64 indicados con el comando `connect`. Para matchmaking real habria que integrar un servicio de servidor CS2/MatchZy, RCON o una capa dedicada de orchestration.
+
+## Mixton por Steam
+
+Al lanzar un Mixton, el panel permite elegir **FACEIT** o **STEAM**. En modo Steam no se comparte IP ni puerto y no se usa una cola de FACEIT:
+
+1. Configura `CS2_PRIVATE_MATCHMAKING_CODE` en `.env`. El código se envía por DM únicamente a los capitanes.
+2. Ambos capitanes deben tener su SteamID64 vinculado y agregar al bot de Steam.
+3. Cada capitán crea su party de CS2, usa el código de matchmaking privado e invita al bot.
+4. El bot recibe el ID del lobby real, construye el enlace `steam://joinlobby/730/...` y lo envía por DM solo a los cinco integrantes de ese equipo.
+
+El bot no entra al lobby ni ocupa un cupo. La invitación vence después de 30 minutos o al cerrar/abandonar la party del capitán.
 
 ## Integración segura del escáner Yape
 

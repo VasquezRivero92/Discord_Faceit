@@ -11,7 +11,7 @@ import { invalidateSettingsCache, isFeatureEnabled } from '../utils/featureFlags
 import { EventEmitter } from 'events';
 import { fetchFaceitPlayer, fetchFaceitPlayerById, fetchFaceitPlayerBySteamId, fetchFaceitHubQueues, fetchCurrentHubSeason } from '../services/faceitApi.js';
 import { syncMemberLevelRole, syncMemberNickname, getPlayerSkillLevel } from '../services/roles.js';
-import { crearLobbyMatchmaking, steamClient } from '../steamBot.js';
+import { registerCs2LobbyInvite, steamClient } from '../steamBot.js';
 import { playTTSCountdown } from '../utils/voiceAnnouncer.js';
 import { yapeTransactionService } from '../services/yapeTransactionService.js';
 
@@ -1638,9 +1638,13 @@ export function createLobbyRouter(client, db, config, wss) {
   // 8. Crear partida mixton en Discord (Admin)
   router.post('/mixton-create-match', requireAuth, verifyGuildAdmin, async (req, res) => {
     try {
-      const { teamIdA, teamIdB, betAmount = 0, manualPaidDiscordIds = [], queueId = 'auto' } = req.body;
+      const { teamIdA, teamIdB, betAmount = 0, manualPaidDiscordIds = [], queueId = 'auto', matchMode = 'faceit' } = req.body;
       if (!teamIdA || !teamIdB) {
         return res.status(400).json({ error: 'Debes seleccionar dos equipos.' });
+      }
+
+      if (!['faceit', 'steam'].includes(matchMode)) {
+        return res.status(400).json({ error: 'El modo de partida debe ser FACEIT o STEAM.' });
       }
 
       const parsedBetAmount = Math.max(0, parseFloat(betAmount) || 0);
@@ -1671,6 +1675,29 @@ export function createLobbyRouter(client, db, config, wss) {
       }
 
       const guildIdToUse = targetGuildId || req.guildId || DISCORD_GUILD_ID;
+
+      let steamCaptains = null;
+      let steamMatchmakingCode = null;
+      if (matchMode === 'steam') {
+        if (!steamClient.steamID) {
+          return res.status(503).json({ error: 'El bot de Steam no está conectado. Inícialo antes de lanzar una partida STEAM.' });
+        }
+
+        const [captainAData, captainBData] = await Promise.all([
+          db.getFullUser(teamA.captain.discordId, guildIdToUse),
+          db.getFullUser(teamB.captain.discordId, guildIdToUse)
+        ]);
+        const captainASteamId = String(captainAData?.steam_id_64 || '').trim();
+        const captainBSteamId = String(captainBData?.steam_id_64 || '').trim();
+        if (!/^\d{17}$/.test(captainASteamId) || !/^\d{17}$/.test(captainBSteamId)) {
+          return res.status(400).json({ error: 'En modo STEAM, ambos capitanes deben tener su SteamID64 vinculado.' });
+        }
+        steamMatchmakingCode = String(process.env.CS2_PRIVATE_MATCHMAKING_CODE || '').trim();
+        if (!steamMatchmakingCode) {
+          return res.status(503).json({ error: 'Falta configurar CS2_PRIVATE_MATCHMAKING_CODE para usar el modo STEAM.' });
+        }
+        steamCaptains = { teamA: captainASteamId, teamB: captainBSteamId };
+      }
 
       // Validación estricta de saldo/cuota si hay apuesta
       const unpaidPlayers = [];
@@ -1719,31 +1746,36 @@ export function createLobbyRouter(client, db, config, wss) {
         return res.status(500).json({ error: `No se pudo conectar a Discord para la Guild ${guildIdToUse}.` });
       }
 
-      // Resolver la sala/cola de Faceit asignada (manual o auto)
-      const { queues: currentQueues, autoSelectedQueueId } = await getQueuesWithStatus(guildIdToUse, effectiveConfig);
-      let assignedQueue = null;
-      if (queueId && queueId !== 'auto') {
-        assignedQueue = currentQueues.find(q => String(q.queueId || q.id) === String(queueId));
-      }
-      if (!assignedQueue) {
-        assignedQueue = currentQueues.find(q => String(q.queueId || q.id) === String(autoSelectedQueueId)) || currentQueues[0];
-      }
-      if (!assignedQueue) {
-        assignedQueue = {
-          id: 'default',
-          queueId: 'default',
-          name: 'Sala Principal',
-          hubId: effectiveConfig.faceitHubId || 'e72c25e6-74e5-415b-97da-e541296ff1db',
-          hubName: 'Mixtones'
-        };
-      }
+      // FACEIT conserva sus colas; STEAM usa lobbies privados creados por los capitanes.
+      let assignedQueue;
+      let faceitHubUrl = null;
+      if (matchMode === 'faceit') {
+        const { queues: currentQueues, autoSelectedQueueId } = await getQueuesWithStatus(guildIdToUse, effectiveConfig);
+        if (queueId && queueId !== 'auto') {
+          assignedQueue = currentQueues.find(q => String(q.queueId || q.id) === String(queueId));
+        }
+        if (!assignedQueue) {
+          assignedQueue = currentQueues.find(q => String(q.queueId || q.id) === String(autoSelectedQueueId)) || currentQueues[0];
+        }
+        if (!assignedQueue) {
+          assignedQueue = {
+            id: 'default',
+            queueId: 'default',
+            name: 'Sala Principal',
+            hubId: effectiveConfig.faceitHubId || 'e72c25e6-74e5-415b-97da-e541296ff1db',
+            hubName: 'Mixtones'
+          };
+        }
 
-      const activeHubId = assignedQueue.hubId || effectiveConfig.faceitHubId || 'e72c25e6-74e5-415b-97da-e541296ff1db';
-      const cleanHubSlug = encodeURIComponent(assignedQueue.hubName || assignedQueue.name || 'Mixtones');
-      const queueQuery = (assignedQueue.queueId && assignedQueue.queueId !== 'default' && assignedQueue.queueId !== 'sala_a' && assignedQueue.queueId !== 'sala_b') 
-        ? `?queue=${assignedQueue.queueId}` 
-        : '';
-      const faceitHubUrl = `https://www.faceit.com/es/hub/${activeHubId}/${cleanHubSlug}${queueQuery}`;
+        const activeHubId = assignedQueue.hubId || effectiveConfig.faceitHubId || 'e72c25e6-74e5-415b-97da-e541296ff1db';
+        const cleanHubSlug = encodeURIComponent(assignedQueue.hubName || assignedQueue.name || 'Mixtones');
+        const queueQuery = (assignedQueue.queueId && assignedQueue.queueId !== 'default' && assignedQueue.queueId !== 'sala_a' && assignedQueue.queueId !== 'sala_b')
+          ? `?queue=${assignedQueue.queueId}`
+          : '';
+        faceitHubUrl = `https://www.faceit.com/es/hub/${activeHubId}/${cleanHubSlug}${queueQuery}`;
+      } else {
+        assignedQueue = { id: 'steam', queueId: 'steam', name: 'Lobby privado de Steam' };
+      }
 
       let matchesChannelId = null;
       // Priorizar canal de texto específico de la cola si está configurado
@@ -1924,7 +1956,7 @@ export function createLobbyRouter(client, db, config, wss) {
         }).join('\n');
 
         const embedFields = [
-          { name: '🌐 Modo de Juego', value: 'Mixton Competitivo', inline: true },
+          { name: '🌐 Modo de Juego', value: matchMode === 'steam' ? 'Mixton privado por Steam' : 'Mixton competitivo por FACEIT', inline: true },
           { name: '🗺️ Mapa', value: '`Elección de Capitanes`', inline: true },
           { name: '📍 Canales de Voz', value: `🔊 <#${vc1.id}>\n🔊 <#${vc2.id}>`, inline: true }
         ];
@@ -1937,8 +1969,13 @@ export function createLobbyRouter(client, db, config, wss) {
           });
         }
 
+        if (matchMode === 'faceit') {
+          embedFields.push({ name: '🎯 Sala FACEIT asignada', value: `🟢 **${assignedQueue.name}**\n[Entrar a la cola de ${assignedQueue.name}](${faceitHubUrl})`, inline: false });
+        } else {
+          embedFields.push({ name: '🎮 Lobby de Steam', value: 'Cada capitán debe crear su party de CS2 e invitar al bot. El enlace se enviará por DM solo a su equipo.', inline: false });
+        }
+
         embedFields.push(
-          { name: '🎯 Sala Faceit Asignada', value: `🟢 **${assignedQueue.name}**\n[Entrar a la cola de ${assignedQueue.name}](${faceitHubUrl})`, inline: false },
           { name: `👥 Roster A (${teamA.name}) [Promedio ELO: ${avgEloA}]`, value: team1List, inline: false },
           { name: `👥 Roster B (${teamB.name}) [Promedio ELO: ${avgEloB}]`, value: team2List, inline: false }
         );
@@ -1946,7 +1983,9 @@ export function createLobbyRouter(client, db, config, wss) {
         const startedEmbed = new EmbedBuilder()
           .setTitle(parsedBetAmount > 0 ? `🎮 ¡Partida Mixton con Apuesta (S/ ${parsedBetAmount.toFixed(2)})!` : '🎮 ¡Partida Mixton Competitiva!')
           .setColor(parsedBetAmount > 0 ? 0x15C253 : 0xFF5500)
-          .setDescription(`Lanzada por el Administrador **${req.user.username}** desde el panel web.\n🎯 **Sala Asignada en Faceit:** **${assignedQueue.name}**`)
+          .setDescription(matchMode === 'steam'
+            ? `Lanzada por el Administrador **${req.user.username}** desde el panel web.\n🎮 Los capitanes recibirán instrucciones para repartir sus lobbies de CS2.`
+            : `Lanzada por el Administrador **${req.user.username}** desde el panel web.\n🎯 **Sala asignada en FACEIT:** **${assignedQueue.name}**`)
           .addFields(embedFields)
           .setFooter({ text: 'Usa los botones para reportar el resultado de la partida' })
           .setTimestamp();
@@ -1969,17 +2008,18 @@ export function createLobbyRouter(client, db, config, wss) {
           .setStyle(ButtonStyle.Danger)
           .setEmoji('❌');
 
-        const faceitBtn = new ButtonBuilder()
-          .setLabel(`Entrar a ${assignedQueue.name.substring(0, 20)}`)
-          .setStyle(ButtonStyle.Link)
-          .setURL(faceitHubUrl)
-          .setEmoji('🟠');
-
-        const row = new ActionRowBuilder().addComponents(winA, winB, cancel, faceitBtn);
+        const row = new ActionRowBuilder().addComponents(winA, winB, cancel);
+        if (matchMode === 'faceit') {
+          row.addComponents(new ButtonBuilder()
+            .setLabel(`Entrar a ${assignedQueue.name.substring(0, 20)}`)
+            .setStyle(ButtonStyle.Link)
+            .setURL(faceitHubUrl)
+            .setEmoji('🟠'));
+        }
 
         const playerPings = [...rosterA, ...rosterB].map(p => `<@${p.discordId}>`).join(' ');
         const msg = await matchesChannel.send({ 
-          content: `📢 **¡Partida Mixtón Iniciada!** (Sala: **${assignedQueue.name}**)\nJugadores: ${playerPings}`,
+          content: `📢 **¡Partida Mixtón Iniciada!** (${matchMode === 'steam' ? 'Modo: **STEAM**' : `Sala: **${assignedQueue.name}**`})\nJugadores: ${playerPings}`,
           embeds: [startedEmbed], 
           components: [row] 
         }).catch(err => logger.error('Error enviando anuncio mixton:', err));
@@ -1988,6 +2028,51 @@ export function createLobbyRouter(client, db, config, wss) {
 
       if (messageId) {
         const messageUrl = `https://discord.com/channels/${guild.id}/${matchesChannelId}/${messageId}`;
+
+        if (matchMode === 'steam') {
+          const botSteamId = steamClient.steamID?.getSteamID64();
+          const botProfileUrl = botSteamId ? `https://steamcommunity.com/profiles/${botSteamId}` : null;
+          const sendSteamTeamInstructions = async (team, roster, voiceChannel) => {
+            const captain = team.captain;
+            const captainName = captain.faceit_nickname || captain.discordUser?.displayName || 'Capitán';
+            const teammates = roster.filter(player => player.discordId !== captain.discordId);
+            const teammatesList = teammates.map(player => `• <@${player.discordId}>`).join('\n');
+
+            const captainMember = await guild.members.fetch(captain.discordId).catch(() => null);
+            if (captainMember) {
+              const captainEmbed = new EmbedBuilder()
+                .setTitle(`👑 Capitán de ${team.name} — Lobby de Steam`)
+                .setDescription(`Crea tu party de CS2 e invita al bot de Steam. El bot detectará el lobby y enviará el enlace privado únicamente a tus cuatro compañeros. **No se compartirá IP ni puerto.**`)
+                .setColor(0x1B9AAA)
+                .addFields(
+                  { name: '1. Agrega al bot', value: botProfileUrl ? `[Abrir perfil del bot](${botProfileUrl})` : 'El bot debe estar conectado en Steam.', inline: false },
+                  { name: '2. Invítalo desde tu party de CS2', value: 'Cuando el bot acepte tu solicitud, crea el lobby de CS2 y usa la invitación normal de Steam para añadirlo.', inline: false },
+                  { name: '3. Código de matchmaking privado', value: `\`${steamMatchmakingCode}\``, inline: false },
+                  { name: '👥 Tus compañeros', value: teammatesList || 'Sin compañeros asignados', inline: false },
+                  { name: '🔊 Tu canal de voz', value: `<#${voiceChannel.id}>`, inline: true },
+                  { name: '🔗 Anuncio', value: `[Abrir en Discord](${messageUrl})`, inline: true }
+                )
+                .setFooter({ text: 'El enlace del lobby vence al cerrar o abandonar la party.' })
+                .setTimestamp();
+              await captainMember.send({ embeds: [captainEmbed] }).catch(() => {});
+            }
+
+            for (const player of teammates) {
+              const member = await guild.members.fetch(player.discordId).catch(() => null);
+              if (!member) continue;
+              const playerEmbed = new EmbedBuilder()
+                .setTitle(`🎮 ${team.name} — Esperando lobby de Steam`)
+                .setDescription(`Tu capitán es **${captainName}**. Recibirás aquí el enlace privado para unirte a la party de CS2 cuando el capitán invite al bot.`)
+                .setColor(0x1B9AAA)
+                .addFields({ name: '🔊 Tu canal de voz', value: `<#${voiceChannel.id}>`, inline: true })
+                .setTimestamp();
+              await member.send({ embeds: [playerEmbed] }).catch(() => {});
+            }
+          };
+
+          await sendSteamTeamInstructions(teamA, rosterA, vc1);
+          await sendSteamTeamInstructions(teamB, rosterB, vc2);
+        } else {
 
         // Notificaciones personalizadas para Roster A
         for (const p of rosterA) {
@@ -2074,6 +2159,7 @@ export function createLobbyRouter(client, db, config, wss) {
             logger.warn(`No se pudo enviar DM a ${p.discordId}: ${e.message}`);
           }
         }
+        }
       }
 
       // Guardar partida activa
@@ -2086,6 +2172,7 @@ export function createLobbyRouter(client, db, config, wss) {
         bet_amount_per_player: parsedBetAmount,
         total_pot: parseFloat((parsedBetAmount * 10).toFixed(2)),
         manual_paid_players: Array.from(manualPaidSet),
+        launch_mode: matchMode,
         queue_id: assignedQueue.queueId || assignedQueue.id,
         queue_name: assignedQueue.name
       };
@@ -2108,6 +2195,40 @@ export function createLobbyRouter(client, db, config, wss) {
         matchesChannelId,
         waitingRoomId
       );
+
+      if (matchMode === 'steam' && steamCaptains) {
+        const registerTeamLobby = (team, roster, captainSteamId) => {
+          registerCs2LobbyInvite({
+            captainSteamId,
+            onLobbyReady: async ({ lobbyLink }) => {
+              const deliveredTo = [];
+              for (const player of roster) {
+                const member = await guild.members.fetch(player.discordId).catch(() => null);
+                if (!member) continue;
+                const lobbyEmbed = new EmbedBuilder()
+                  .setTitle(`🎮 Lobby de Steam listo — ${team.name}`)
+                  .setDescription('Tu capitán invitó al bot a su party de CS2. Abre el enlace para unirte al lobby de tu equipo. **No contiene IP ni puerto.**')
+                  .setColor(0x1B9AAA)
+                  .addFields({ name: 'Enlace del lobby', value: `\`${lobbyLink}\``, inline: false })
+                  .setFooter({ text: 'El enlace deja de funcionar si el capitán cierra o abandona la party.' })
+                  .setTimestamp();
+                const sent = await member.send({ content: lobbyLink, embeds: [lobbyEmbed] }).then(() => true).catch(() => false);
+                if (sent) deliveredTo.push(player.discordId);
+              }
+              await db.addLogEntry('info', `Lobby Steam de ${team.name} distribuido a ${deliveredTo.length}/5 jugadores para partida ${matchId}`, 'steam_lobby', guildIdToUse);
+            },
+            onError: async (message) => {
+              const captainMember = await guild.members.fetch(team.captain.discordId).catch(() => null);
+              if (captainMember) {
+                await captainMember.send(`⚠️ **Lobby de Steam:** ${message}`).catch(() => {});
+              }
+            }
+          });
+        };
+
+        registerTeamLobby(teamA, rosterA, steamCaptains.teamA);
+        registerTeamLobby(teamB, rosterB, steamCaptains.teamB);
+      }
       await updateLivePanel(client, matchesChannelId, db);
 
       // Quitar estado mixton_ready
@@ -2127,57 +2248,8 @@ export function createLobbyRouter(client, db, config, wss) {
       await db.saveMixtonLobbyState(state, guildIdToUse);
       mixtonEvents.emit('update', guildIdToUse);
 
-      logger.success(`Partida mixton ${matchId} (Sala: ${assignedQueue.name}) iniciada desde web por ${req.user.username}`);
+      logger.success(`Partida mixton ${matchId} (${matchMode.toUpperCase()}) iniciada desde web por ${req.user.username}`);
       res.json({ success: true, matchId, faceitHubUrl, assignedQueue });
-
-      // Ejecutar el envío de invitaciones de Steam en segundo plano
-      (async () => {
-        try {
-          const allPlayers = [...rosterA, ...rosterB];
-          logger.info(`🤖 Steam Bot: Obteniendo SteamID64 para ${allPlayers.length} jugadores desde Faceit...`);
-          
-          const steamIDs = await Promise.all(
-            allPlayers.map(async (p) => {
-              try {
-                if (!p.faceit_player_id) return null;
-                const profile = await fetchFaceitPlayerById(p.faceit_player_id);
-                const steamId = profile.steam_id_64 || profile.platforms?.steam;
-                if (steamId) {
-                  logger.info(`🔍 Steam ID encontrado para ${p.faceit_nickname}: ${steamId}`);
-                } else {
-                  logger.warn(`⚠️ No se encontró Steam ID para ${p.faceit_nickname}`);
-                }
-                return steamId;
-              } catch (err) {
-                logger.error(`Error al consultar perfil de Faceit para ${p.faceit_nickname}: ${err.message}`);
-                return null;
-              }
-            })
-          );
-
-          const validSteamIDs = [...new Set(steamIDs.filter(Boolean))];
-          if (!steamClient.steamID) {
-            logger.warn('Steam Bot: se omitieron invitaciones porque Steam no tiene una sesion activa. La partida mixton ya fue creada en Discord.');
-            return;
-          }
-
-          if (validSteamIDs.length !== 10) {
-            logger.warn(`Steam Bot: se omitieron invitaciones porque se requieren 10 SteamID64 unicos y se obtuvieron ${validSteamIDs.length}. La partida mixton ya fue creada en Discord.`);
-            return;
-          }
-
-          const serverIp = process.env.MIXTON_SERVER_IP;
-          if (!serverIp) {
-            logger.warn('Steam Bot: MIXTON_SERVER_IP no esta configurado. Se omitieron invitaciones automaticas.');
-            return;
-          }
-
-          logger.info(`Steam Bot: iniciando invitaciones del lobby CS2 para el servidor ${serverIp}...`);
-          await crearLobbyMatchmaking(validSteamIDs, serverIp);
-        } catch (steamErr) {
-          logger.error('❌ Error al procesar invitaciones automáticas de Steam:', steamErr);
-        }
-      })();
     } catch (err) {
       logger.error('Error al crear partida mixton desde web:', err);
       res.status(500).json({ error: 'Error al iniciar la partida en el servidor.' });

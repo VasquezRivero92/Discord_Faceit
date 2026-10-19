@@ -156,6 +156,7 @@ export default function App() {
   const [matchTeamA, setMatchTeamA] = useState<string>('');
   const [matchTeamB, setMatchTeamB] = useState<string>('');
   const [isLaunchingMatch, setIsLaunchingMatch] = useState(false);
+  const [matchMode, setMatchMode] = useState<'faceit' | 'steam'>('faceit');
 
   // Bet Modal state (Cuota / Apuesta por jugador y verificación de los 10 jugadores)
   const [isBetModalOpen, setIsBetModalOpen] = useState(false);
@@ -1591,6 +1592,7 @@ export default function App() {
 
     setManualPaidMap({});
     setSelectedQueueId('auto');
+    setMatchMode('faceit');
     setIsBetModalOpen(true);
     fetchQueues();
     await fetchBetStatus(effectiveBetAmount);
@@ -1714,14 +1716,15 @@ export default function App() {
           teamIdB: matchTeamB,
           betAmount: effectiveBetAmount,
           manualPaidDiscordIds,
-          queueId: selectedQueueId
+          queueId: selectedQueueId,
+          matchMode
         })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al lanzar el encuentro.');
 
       showToast(`¡Encuentro creado! ${effectiveBetAmount > 0 ? `Pozo Total: S/ ${(effectiveBetAmount * 10).toFixed(2)}` : 'Modo Gratis'}. Canales de voz creados.`, 'success');
-      if (data.faceitHubUrl) {
+      if (matchMode === 'faceit' && data.faceitHubUrl) {
         window.open(data.faceitHubUrl, '_blank');
       }
       setIsBetModalOpen(false);
@@ -3030,8 +3033,46 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Section 1.5: Selector de Sala / Cola Faceit */}
-              {(() => {
+              {/* Section 1.5: Método de inicio */}
+              <div className="bg-[#161616] border border-[#2D2D2D] p-4 flex flex-col gap-3">
+                <label className="text-[10px] font-black uppercase text-neutral-400 tracking-wider">
+                  MÉTODO PARA INICIAR EL MIXTON
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setMatchMode('faceit')}
+                    className={`text-left p-3 border transition-all cursor-pointer ${
+                      matchMode === 'faceit'
+                        ? 'bg-[#FF5500]/15 border-[#FF5500] text-white'
+                        : 'bg-[#1F1F1F] border-[#333] hover:border-neutral-500 text-neutral-300'
+                    }`}
+                  >
+                    <span className="block text-xs font-black uppercase">🟠 FACEIT</span>
+                    <span className="block mt-1 text-[10px] leading-relaxed text-neutral-400">Asigna una cola del club; los capitanes forman sus parties y juegan desde FACEIT.</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMatchMode('steam')}
+                    className={`text-left p-3 border transition-all cursor-pointer ${
+                      matchMode === 'steam'
+                        ? 'bg-sky-500/15 border-sky-400 text-white'
+                        : 'bg-[#1F1F1F] border-[#333] hover:border-neutral-500 text-neutral-300'
+                    }`}
+                  >
+                    <span className="block text-xs font-black uppercase">🔵 STEAM</span>
+                    <span className="block mt-1 text-[10px] leading-relaxed text-neutral-400">Cada capitán invita al bot a su party de CS2; el bot envía el enlace privado a los cuatro compañeros.</span>
+                  </button>
+                </div>
+                {matchMode === 'steam' && (
+                  <p className="text-[10px] text-sky-200 bg-sky-950/30 border border-sky-800/60 px-3 py-2">
+                    Los dos capitanes deben tener Steam vinculado y agregar al bot. Este modo no comparte IP ni puerto y no usa una cola de FACEIT.
+                  </p>
+                )}
+              </div>
+
+              {/* Section 1.6: Selector de Sala / Cola Faceit */}
+              {matchMode === 'faceit' && (() => {
                 const autoAssignedQueue = availableQueues.find(q => q.status === 'free') || availableQueues[0];
                 const selectedQueueObj = selectedQueueId === 'auto' 
                   ? autoAssignedQueue 

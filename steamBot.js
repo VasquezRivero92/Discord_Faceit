@@ -15,6 +15,49 @@ const STEAM_SHARED_SECRET = process.env.STEAM_SHARED_SECRET;
 
 // Objeto para almacenar la información de los lobbies activos creados por el bot
 const activeLobbies = new Map();
+const pendingCs2LobbyInvites = new Map();
+const CS2_APP_ID = 730;
+
+function getSteamId64(value) {
+  if (!value) return null;
+  if (typeof value.getSteamID64 === 'function') return value.getSteamID64();
+  return String(value);
+}
+
+/**
+ * Espera la invitación real de un capitán a su lobby de CS2. No se une al
+ * lobby: solo obtiene su ID y entrega el enlace a los compañeros del equipo.
+ */
+export function registerCs2LobbyInvite({ captainSteamId, onLobbyReady, onError, timeoutMs = 30 * 60 * 1000 }) {
+  const cleanCaptainSteamId = String(captainSteamId || '').trim();
+  if (!/^\d{17}$/.test(cleanCaptainSteamId)) {
+    throw new Error('El capitán no tiene un SteamID64 válido.');
+  }
+  if (!client.steamID) {
+    throw new Error('El bot de Steam no tiene una sesión activa.');
+  }
+
+  const previous = pendingCs2LobbyInvites.get(cleanCaptainSteamId);
+  if (previous?.timeout) clearTimeout(previous.timeout);
+
+  const request = {
+    onLobbyReady,
+    onError,
+    timeout: setTimeout(async () => {
+      if (pendingCs2LobbyInvites.get(cleanCaptainSteamId) !== request) return;
+      pendingCs2LobbyInvites.delete(cleanCaptainSteamId);
+      await onError?.('Se agotó el tiempo para recibir la invitación del lobby de CS2.');
+    }, timeoutMs)
+  };
+
+  pendingCs2LobbyInvites.set(cleanCaptainSteamId, request);
+  return () => {
+    if (pendingCs2LobbyInvites.get(cleanCaptainSteamId) === request) {
+      clearTimeout(request.timeout);
+      pendingCs2LobbyInvites.delete(cleanCaptainSteamId);
+    }
+  };
+}
 
 /**
  * Inicia la sesión del bot en Steam
@@ -138,6 +181,39 @@ client.on('friendRelationship', (steamID, relationship) => {
         console.log(`✅ Ahora somos amigos de ${name || steamID64}.`);
       }
     });
+  }
+});
+
+// El capitán invita al bot desde un lobby real de CS2. SteamUser expone el
+// lobbyID recibido, que permite construir un enlace steam://joinlobby seguro
+// para el equipo sin revelar la dirección del servidor.
+client.on('lobbyInvite', async (inviterID, lobbyID) => {
+  const captainSteamId = getSteamId64(inviterID);
+  const request = pendingCs2LobbyInvites.get(captainSteamId);
+  if (!request) return;
+
+  const lobbySteamId = getSteamId64(lobbyID);
+  if (!lobbySteamId) {
+    await request.onError?.('Steam no entregó un ID válido para el lobby invitado.');
+    return;
+  }
+
+  const persona = client.users?.[captainSteamId];
+  const appId = Number(persona?.game_played_app_id || persona?.gameid || 0);
+  if (appId !== CS2_APP_ID) {
+    await request.onError?.('No se pudo verificar un lobby de Counter-Strike 2. Abre CS2, crea la party e invita al bot nuevamente.');
+    return;
+  }
+
+  clearTimeout(request.timeout);
+  pendingCs2LobbyInvites.delete(captainSteamId);
+
+  const lobbyLink = `steam://joinlobby/${CS2_APP_ID}/${lobbySteamId}/${captainSteamId}`;
+  try {
+    await request.onLobbyReady?.({ lobbyId: lobbySteamId, lobbyLink, captainSteamId });
+    console.log(`✅ Lobby de CS2 recibido del capitán ${captainSteamId}.`);
+  } catch (error) {
+    console.error(`❌ No se pudo procesar el lobby de CS2 de ${captainSteamId}:`, error.message);
   }
 });
 
