@@ -39,6 +39,7 @@ YAPE_AUDIT_SECRET=
 STEAM_BOT_API_KEY=
 STEAM_USERNAME=
 STEAM_PASSWORD=
+# Opcional: úsalo únicamente con el autenticador móvil de Steam (2FA).
 STEAM_SHARED_SECRET=
 MIXTON_SERVER_IP=127.0.0.1:27015
 CS2_PRIVATE_MATCHMAKING_CODE=
@@ -70,6 +71,12 @@ node server.js
 - `GET /api/matchmaking/status`: estado del bot de Steam, protegido por API key.
 - `POST /api/matchmaking/launch`: lanza invitaciones para 10 SteamID64 unicos, protegido por API key.
 - `GET /admin`: panel web de administracion.
+
+### Inicio manual de Steam Guard
+
+El bot de Steam no inicia sesión automáticamente al arrancar. Un administrador global debe abrir **Panel admin > Configuración > Steam Guard** y usar **Solicitar código de Steam**. El panel muestra si el bot está conectado, esperando un código, validando, bloqueado temporalmente o con error; evita reintentos automáticos y bloquea nuevos envíos durante el enfriamiento indicado por Steam.
+
+Si Steam solicita un código por correo, `STEAM_SHARED_SECRET` debe quedar vacío. Solo configúralo si la cuenta usa el autenticador móvil de Steam y el secreto pertenece exactamente a esa cuenta.
 
 ## Seguridad operativa
 

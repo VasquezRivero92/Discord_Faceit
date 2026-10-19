@@ -4,8 +4,9 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Inicializamos el cliente de Steam
-const client = new SteamUser();
+// El inicio de sesión se controla exclusivamente desde el panel. Desactivamos
+// los reintentos automáticos del cliente para evitar que Steam bloquee la IP.
+const client = new SteamUser({ autoRelogin: false });
 
 // Configuración de credenciales y parámetros
 const STEAM_USERNAME = process.env.STEAM_USERNAME;
@@ -16,6 +17,52 @@ const STEAM_SHARED_SECRET = process.env.STEAM_SHARED_SECRET;
 const activeLobbies = new Map();
 const pendingCs2LobbyInvites = new Map();
 const CS2_APP_ID = 730;
+const RATE_LIMIT_COOLDOWN_MS = 2 * 60 * 60 * 1000;
+const GUARD_RETRY_COOLDOWN_MS = 60 * 1000;
+
+let steamGuardCallback = null;
+let steamLoginState = {
+  status: 'idle',
+  guardType: null,
+  codeAttempts: 0,
+  lastCodeWrong: false,
+  startedAt: null,
+  retryAfter: null,
+  message: 'El bot de Steam está desconectado.'
+};
+
+function setSteamLoginState(update) {
+  steamLoginState = { ...steamLoginState, ...update };
+}
+
+function remainingRetryMs() {
+  return Math.max(0, (steamLoginState.retryAfter || 0) - Date.now());
+}
+
+function formatRetryMessage(retryAfterMs) {
+  const minutes = Math.max(1, Math.ceil(retryAfterMs / 60000));
+  return `Steam limita nuevos intentos. Espera aproximadamente ${minutes} min antes de solicitar otro código.`;
+}
+
+export function getSteamLoginStatus() {
+  const retryAfterMs = remainingRetryMs();
+  const connected = steamLoginState.status === 'connected' && Boolean(client.steamID);
+  const waitingForCode = Boolean(steamGuardCallback);
+  const status = connected ? 'connected' : steamLoginState.status;
+
+  return {
+    connected,
+    waitingForCode,
+    status,
+    guardType: steamLoginState.guardType,
+    codeAttempts: steamLoginState.codeAttempts,
+    lastCodeWrong: steamLoginState.lastCodeWrong,
+    retryAfterMs,
+    message: retryAfterMs && status !== 'connected'
+      ? formatRetryMessage(retryAfterMs)
+      : steamLoginState.message
+  };
+}
 
 function getSteamId64(value) {
   if (!value) return null;
@@ -64,7 +111,20 @@ export function registerCs2LobbyInvite({ captainSteamId, onLobbyReady, onError, 
 export function startSteamBot() {
   if (!STEAM_USERNAME || !STEAM_PASSWORD) {
     console.error('❌ Error: STEAM_USERNAME o STEAM_PASSWORD no están configurados en el archivo .env');
-    return false;
+    return { ok: false, code: 'MISSING_CREDENTIALS', message: 'Faltan las credenciales de Steam en el servidor.' };
+  }
+
+  if (getSteamLoginStatus().connected) {
+    return { ok: true, code: 'ALREADY_CONNECTED', message: 'El bot de Steam ya está conectado.', status: getSteamLoginStatus() };
+  }
+
+  if (steamGuardCallback || ['starting', 'reconnecting', 'verifying'].includes(steamLoginState.status)) {
+    return { ok: false, code: 'LOGIN_IN_PROGRESS', message: 'El bot ya está esperando un código de Steam Guard.', status: getSteamLoginStatus() };
+  }
+
+  const retryAfterMs = remainingRetryMs();
+  if (retryAfterMs) {
+    return { ok: false, code: 'RATE_LIMITED', message: formatRetryMessage(retryAfterMs), retryAfterMs, status: getSteamLoginStatus() };
   }
 
   const logOnDetails = {
@@ -82,14 +142,34 @@ export function startSteamBot() {
     }
   }
 
+  setSteamLoginState({
+    status: 'starting',
+    guardType: null,
+    codeAttempts: 0,
+    lastCodeWrong: false,
+    startedAt: Date.now(),
+    retryAfter: null,
+    message: 'Solicitando inicio de sesión a Steam.'
+  });
+  client.autoRelogin = false;
   console.log(`🤖 Iniciando sesión en Steam como: ${STEAM_USERNAME}...`);
   client.logOn(logOnDetails);
-  return true;
+  return { ok: true, code: 'LOGIN_STARTED', message: 'Inicio de sesión solicitado a Steam.', status: getSteamLoginStatus() };
 }
 
 // Evento: Sesión iniciada correctamente
 client.on('loggedOn', (details) => {
   console.log('✅ Bot de Steam: Sesión iniciada con éxito en Steam.');
+  steamGuardCallback = null;
+  setSteamLoginState({
+    status: 'connected',
+    guardType: null,
+    lastCodeWrong: false,
+    retryAfter: null,
+    message: 'El bot de Steam está conectado.'
+  });
+  // Una vez autenticado, sí permitimos recuperar cortes de red normales.
+  client.autoRelogin = true;
   
   // Ponemos al bot Online
   client.setPersona(SteamUser.EPersonaState.Online);
@@ -119,6 +199,12 @@ client.on('error', (err) => {
         break;
       case 84: // RateLimitExceeded
         console.error('  - Diagnóstico: Límite de intentos excedido (Rate Limit). Steam ha bloqueado temporalmente las peticiones de login de tu IP. Espera entre 30 minutos y 2 horas.');
+        setSteamLoginState({
+          status: 'rate_limited',
+          guardType: null,
+          retryAfter: Date.now() + RATE_LIMIT_COOLDOWN_MS,
+          message: 'Steam bloqueó temporalmente los inicios de sesión desde esta IP.'
+        });
         break;
       case 85: // AccountLoginDeniedNeedTwoFactor
         console.error('  - Diagnóstico: Se requiere autenticador móvil de Steam Guard (2FA). Revisa tu STEAM_SHARED_SECRET o ingresa el código.');
@@ -130,30 +216,87 @@ client.on('error', (err) => {
         console.error('  - Diagnóstico: Revisa el código EResult en la documentación de Steamworks para más detalles.');
     }
   }
+  if (err.eresult !== 84) {
+    setSteamLoginState({
+      status: 'error',
+      guardType: null,
+      message: 'Steam rechazó el inicio de sesión. Revisa el registro del servidor antes de reintentarlo.'
+    });
+  }
+  client.autoRelogin = false;
+  steamGuardCallback = null;
   console.error('  - Pila de llamada:', err.stack || err);
 });
 
-let steamGuardCallback = null;
+client.on('disconnected', (_eresult, message) => {
+  if (steamLoginState.status === 'rate_limited' || steamLoginState.status === 'error') return;
+
+  if (client.autoRelogin) {
+    setSteamLoginState({
+      status: 'reconnecting',
+      guardType: null,
+      message: 'La conexión con Steam se interrumpió. El bot intenta recuperarla automáticamente.'
+    });
+    return;
+  }
+
+  setSteamLoginState({
+    status: 'idle',
+    guardType: null,
+    message: message ? `El bot de Steam se desconectó: ${message}` : 'El bot de Steam se desconectó.'
+  });
+});
 
 export function isSteamGuardPending() {
   return Boolean(steamGuardCallback);
 }
 
 export function resolveSteamGuard(code) {
-  if (steamGuardCallback) {
-    console.log('🔑 Procesando código de Steam Guard recibido desde el panel de administración.');
-    steamGuardCallback(code.trim());
-    steamGuardCallback = null;
-    return true;
+  if (!steamGuardCallback) {
+    return { ok: false, code: 'NO_PENDING_CODE', message: 'El bot no está esperando un código de Steam Guard.', status: getSteamLoginStatus() };
   }
-  return false;
+
+  const retryAfterMs = remainingRetryMs();
+  if (retryAfterMs) {
+    return { ok: false, code: 'RETRY_COOLDOWN', message: formatRetryMessage(retryAfterMs), retryAfterMs, status: getSteamLoginStatus() };
+  }
+
+  const callback = steamGuardCallback;
+  // Limpiar primero evita reutilizar un callback si Steam emite el siguiente
+  // desafío de forma síncrona al procesar el código.
+  steamGuardCallback = null;
+  const isTwoFactor = steamLoginState.guardType === 'two_factor';
+  const cooldownMs = isTwoFactor ? 30 * 1000 : GUARD_RETRY_COOLDOWN_MS;
+  setSteamLoginState({
+    status: 'verifying',
+    codeAttempts: steamLoginState.codeAttempts + 1,
+    retryAfter: Date.now() + cooldownMs,
+    message: 'Código entregado a Steam. Esperando la validación.'
+  });
+  console.log('🔑 Procesando código de Steam Guard recibido desde el panel de administración.');
+  callback(code.trim());
+  return { ok: true, message: 'Código enviado a Steam para validación.', status: getSteamLoginStatus() };
 }
 
 // Evento: Manejo de solicitudes de Steam Guard en tiempo real
-client.on('steamGuard', (domain, callback) => {
+client.on('steamGuard', (domain, callback, lastCodeWrong = false) => {
+  const guardType = domain ? 'email' : 'two_factor';
+  const retryAfter = lastCodeWrong && !domain ? Date.now() + 30 * 1000 : steamLoginState.retryAfter;
   console.log(`\n🔒 [Steam Guard] Se requiere código de verificación (${domain ? `Correo: ${domain}` : '2FA App'}).`);
+  if (lastCodeWrong) {
+    console.warn('⚠️ Steam rechazó el código anterior. No envíes otro de inmediato.');
+  }
   
   steamGuardCallback = callback;
+  setSteamLoginState({
+    status: `waiting_${guardType}`,
+    guardType,
+    lastCodeWrong,
+    retryAfter,
+    message: lastCodeWrong
+      ? 'Steam rechazó el código anterior. Usa un código nuevo cuando el panel habilite el envío.'
+      : `Steam espera un código de ${guardType === 'email' ? 'correo' : 'autenticador móvil'}.`
+  });
 
   console.log('👉 Ingresa el código más reciente desde el Panel de administración > Configuración > Steam Guard.');
 });

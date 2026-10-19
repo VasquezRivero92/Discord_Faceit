@@ -13,7 +13,7 @@ import { cleanupVoiceChannel } from '../services/voice.js';
 import { env } from '../config/index.js';
 import { fetchFaceitStats, fetchPlayerHistory, fetchHubInfo, fetchLeaderboard, fetchLatestSeasonPoints, fetchCurrentHubSeason, fetchFaceitHubQueues } from '../services/faceitApi.js';
 import { getEffectiveConfig, getEffectiveConfigForGuild, CLUB_ROLES_MAP } from '../config/index.js';
-import { isSteamGuardPending, resolveSteamGuard, startSteamBot, steamClient } from '../steamBot.js';
+import { getSteamLoginStatus, resolveSteamGuard, startSteamBot } from '../steamBot.js';
 
 export function createApiRouter(client, db, config) {
   const router = Router();
@@ -125,6 +125,14 @@ export function createApiRouter(client, db, config) {
   // --- Steam Guard ---
   // El código únicamente se acepta desde una sesión de administrador global.
   // No se persiste ni se escribe en los logs.
+  router.get('/steam/status', requireAuth, (req, res) => {
+    if (req.user?.role !== 'global_admin') {
+      return res.status(403).json({ error: 'Solo el administrador global puede consultar el estado de Steam.' });
+    }
+
+    return res.json({ success: true, status: getSteamLoginStatus() });
+  });
+
   router.post('/steam/guard', requireAuth, (req, res) => {
     if (req.user?.role !== 'global_admin') {
       return res.status(403).json({ error: 'Solo el administrador global puede enviar un código de Steam Guard.' });
@@ -135,11 +143,13 @@ export function createApiRouter(client, db, config) {
       return res.status(400).json({ error: 'El código de Steam Guard debe tener 5 caracteres alfanuméricos.' });
     }
 
-    if (!resolveSteamGuard(code)) {
-      return res.status(409).json({ error: 'El bot de Steam no está esperando un código en este momento.' });
+    const result = resolveSteamGuard(code);
+    if (!result.ok) {
+      const statusCode = result.code === 'RETRY_COOLDOWN' ? 429 : 409;
+      return res.status(statusCode).json({ error: result.message, code: result.code, retryAfterMs: result.retryAfterMs, status: result.status });
     }
 
-    return res.json({ success: true, message: 'Código enviado al bot de Steam.' });
+    return res.json({ success: true, message: result.message, status: result.status });
   });
 
   // --- Inicio de Steam Guard ---
@@ -148,19 +158,17 @@ export function createApiRouter(client, db, config) {
       return res.status(403).json({ error: 'Solo el administrador global puede iniciar sesión en Steam.' });
     }
 
-    if (steamClient.steamID) {
-      return res.json({ success: true, connected: true, message: 'El bot de Steam ya está conectado.' });
+    const result = startSteamBot();
+    if (!result.ok) {
+      const statusCode = result.code === 'MISSING_CREDENTIALS'
+        ? 503
+        : result.code === 'RATE_LIMITED'
+          ? 429
+          : 409;
+      return res.status(statusCode).json({ error: result.message, code: result.code, retryAfterMs: result.retryAfterMs, status: result.status });
     }
 
-    if (isSteamGuardPending()) {
-      return res.status(409).json({ error: 'El bot ya está esperando un código de Steam Guard. Revisa el correo e ingresa el código más reciente.' });
-    }
-
-    if (!startSteamBot()) {
-      return res.status(503).json({ error: 'Faltan las credenciales STEAM_USERNAME o STEAM_PASSWORD en el servidor.' });
-    }
-
-    return res.json({ success: true, connected: false, message: 'Inicio de sesión solicitado. Revisa el correo de Steam Guard e ingresa el código más reciente.' });
+    return res.json({ success: true, message: result.message, status: result.status });
   });
 
   // --- Información del Sistema (Uptime y Hub) ---

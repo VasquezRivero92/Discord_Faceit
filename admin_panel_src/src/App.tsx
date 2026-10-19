@@ -64,6 +64,28 @@ const apiFetch = (url: string, options: RequestInit = {}) => {
   });
 };
 
+type SteamLoginStatus = {
+  connected: boolean;
+  waitingForCode: boolean;
+  status: string;
+  guardType: 'email' | 'two_factor' | null;
+  codeAttempts: number;
+  lastCodeWrong: boolean;
+  retryAfterMs: number;
+  message: string;
+};
+
+const defaultSteamLoginStatus: SteamLoginStatus = {
+  connected: false,
+  waitingForCode: false,
+  status: 'idle',
+  guardType: null,
+  codeAttempts: 0,
+  lastCodeWrong: false,
+  retryAfterMs: 0,
+  message: 'Consulta el estado para iniciar Steam Guard.'
+};
+
 export default function App() {
   // Authentication State
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
@@ -342,6 +364,8 @@ export default function App() {
   const [steamGuardCode, setSteamGuardCode] = useState<string>('');
   const [sendingSteamGuardCode, setSendingSteamGuardCode] = useState<boolean>(false);
   const [requestingSteamGuardCode, setRequestingSteamGuardCode] = useState<boolean>(false);
+  const [steamLoginStatus, setSteamLoginStatus] = useState<SteamLoginStatus>(defaultSteamLoginStatus);
+  const steamLoginBusy = ['starting', 'verifying', 'reconnecting'].includes(steamLoginStatus.status);
 
   const [liveTime, setLiveTime] = useState<string>('14:24:08');
   useEffect(() => {
@@ -441,6 +465,18 @@ export default function App() {
     window.location.href = '/auth/logout';
   };
 
+  const refreshSteamLoginStatus = async () => {
+    try {
+      const res = await apiFetch('/api/admin/steam/status');
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.status) {
+        setSteamLoginStatus(data.status);
+      }
+    } catch {
+      // El estado se vuelve a consultar en el siguiente intervalo.
+    }
+  };
+
   const handleSubmitSteamGuardCode = async (event: React.FormEvent) => {
     event.preventDefault();
     if (sendingSteamGuardCode) return;
@@ -459,11 +495,13 @@ export default function App() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (data.status) setSteamLoginStatus(data.status);
         showToast(data.error || 'No se pudo enviar el código a Steam.', 'error');
         return;
       }
 
       setSteamGuardCode('');
+      if (data.status) setSteamLoginStatus(data.status);
       showToast(data.message || 'Código enviado al bot de Steam.', 'success');
     } catch {
       showToast('Error de conexión al enviar el código a Steam.', 'error');
@@ -479,6 +517,7 @@ export default function App() {
     try {
       const res = await apiFetch('/api/admin/steam/login', { method: 'POST' });
       const data = await res.json().catch(() => ({}));
+      if (data.status) setSteamLoginStatus(data.status);
       showToast(data.message || data.error || 'No se pudo iniciar Steam Guard.', res.ok ? 'info' : 'error');
     } catch {
       showToast('Error de conexión al iniciar Steam Guard.', 'error');
@@ -486,6 +525,13 @@ export default function App() {
       setRequestingSteamGuardCode(false);
     }
   };
+
+  useEffect(() => {
+    if (!isLoggedIn || activeTab !== 'config' || currentUser?.role !== 'global_admin') return;
+    refreshSteamLoginStatus();
+    const interval = window.setInterval(refreshSteamLoginStatus, 5000);
+    return () => window.clearInterval(interval);
+  }, [isLoggedIn, activeTab, currentUser?.role]);
 
 
 
@@ -2341,16 +2387,39 @@ export default function App() {
                       <div className="flex flex-col gap-1 mb-5">
                         <h4 className="text-sm font-black text-[#66C0F4] uppercase tracking-tight">Steam Guard</h4>
                         <p className="text-xs text-neutral-400 font-mono">
-                          Solicita el código para iniciar el bot. Steam lo enviará a su correo; luego pega aquí únicamente el código más reciente. El código no se guarda.
+                          Solicita el inicio una vez. Steam enviará el código al correo o lo pedirá desde el autenticador; el panel mostrará el estado real de la validación.
                         </p>
+                      </div>
+                      <div className={`mb-4 p-3 border text-xs font-mono ${
+                        steamLoginStatus.connected
+                          ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
+                          : steamLoginStatus.status === 'rate_limited' || steamLoginStatus.status === 'error'
+                            ? 'bg-red-500/10 border-red-500/40 text-red-300'
+                            : 'bg-[#0A0A0A] border-white/10 text-neutral-300'
+                      }`}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-black uppercase tracking-wide">
+                            {steamLoginStatus.connected
+                              ? '● Conectado a Steam'
+                              : steamLoginStatus.waitingForCode
+                                ? `● Esperando código de ${steamLoginStatus.guardType === 'email' ? 'correo' : 'autenticador'}`
+                                : steamLoginBusy
+                                  ? '● Validando conexión con Steam'
+                                : '● Desconectado'}
+                          </span>
+                          {steamLoginStatus.codeAttempts > 0 && (
+                            <span className="text-[10px] opacity-80">Intentos en esta sesión: {steamLoginStatus.codeAttempts}</span>
+                          )}
+                        </div>
+                        <p className="mt-1 leading-relaxed">{steamLoginStatus.message}</p>
                       </div>
                       <button
                         type="button"
                         onClick={handleRequestSteamGuardCode}
-                        disabled={requestingSteamGuardCode}
+                        disabled={requestingSteamGuardCode || steamLoginStatus.connected || steamLoginStatus.waitingForCode || steamLoginBusy || steamLoginStatus.retryAfterMs > 0}
                         className="mb-3 px-5 py-3 bg-[#1B4F72] hover:bg-[#236B99] disabled:opacity-50 text-white text-xs font-black uppercase tracking-tight rounded-none transition-colors cursor-pointer"
                       >
-                        {requestingSteamGuardCode ? 'Solicitando...' : 'Solicitar código de Steam'}
+                        {requestingSteamGuardCode ? 'Solicitando...' : steamLoginStatus.connected ? 'Bot conectado' : 'Solicitar código de Steam'}
                       </button>
                       <form onSubmit={handleSubmitSteamGuardCode} className="flex flex-col sm:flex-row gap-3">
                         <input
@@ -2362,11 +2431,12 @@ export default function App() {
                           autoComplete="one-time-code"
                           maxLength={5}
                           aria-label="Código de Steam Guard"
+                          disabled={!steamLoginStatus.waitingForCode || steamLoginStatus.retryAfterMs > 0}
                           className="min-w-0 flex-1 bg-[#0A0A0A] border-2 border-white/10 text-sm font-mono font-black tracking-[0.35em] text-white uppercase rounded-none px-4 py-3 outline-none focus:border-[#66C0F4] transition-colors"
                         />
                         <button
                           type="submit"
-                          disabled={sendingSteamGuardCode}
+                          disabled={sendingSteamGuardCode || !steamLoginStatus.waitingForCode || steamLoginStatus.retryAfterMs > 0}
                           className="px-5 py-3 bg-[#66C0F4] hover:bg-[#8DD5FF] disabled:opacity-50 text-black text-xs font-black uppercase tracking-tight rounded-none transition-colors cursor-pointer"
                         >
                           {sendingSteamGuardCode ? 'Enviando...' : 'Enviar a Steam'}
