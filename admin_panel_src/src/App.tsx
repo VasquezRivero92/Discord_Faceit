@@ -806,6 +806,23 @@ export default function App() {
     }
   };
 
+  const [resettingSteamCooldown, setResettingSteamCooldown] = useState<boolean>(false);
+
+  const handleResetSteamCooldown = async () => {
+    if (resettingSteamCooldown) return;
+    setResettingSteamCooldown(true);
+    try {
+      const res = await apiFetch('/api/admin/steam/reset', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (data.status) setSteamLoginStatus(data.status);
+      showToast(data.message || 'Cooldown reiniciado con éxito.', res.ok ? 'success' : 'error');
+    } catch {
+      showToast('Error al reiniciar cooldown de Steam.', 'error');
+    } finally {
+      setResettingSteamCooldown(false);
+    }
+  };
+
   const handleRequestSteamGuardCode = async () => {
     if (requestingSteamGuardCode) return;
 
@@ -3432,14 +3449,26 @@ export default function App() {
                         </div>
                         <p className="mt-1 leading-relaxed">{steamLoginStatus.message}</p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={handleRequestSteamGuardCode}
-                        disabled={requestingSteamGuardCode || steamLoginStatus.connected || steamLoginStatus.waitingForCode || steamLoginBusy || steamLoginStatus.retryAfterMs > 0}
-                        className="mb-3 px-5 py-3 bg-[#1B4F72] hover:bg-[#236B99] disabled:opacity-50 text-white text-xs font-black uppercase tracking-tight rounded-none transition-colors cursor-pointer"
-                      >
-                        {requestingSteamGuardCode ? 'Solicitando...' : steamLoginStatus.connected ? 'Bot conectado' : 'Solicitar código de Steam'}
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                        <button
+                          type="button"
+                          onClick={handleRequestSteamGuardCode}
+                          disabled={requestingSteamGuardCode || steamLoginStatus.connected || steamLoginStatus.waitingForCode || steamLoginBusy || steamLoginStatus.retryAfterMs > 0}
+                          className="px-5 py-3 bg-[#1B4F72] hover:bg-[#236B99] disabled:opacity-50 text-white text-xs font-black uppercase tracking-tight rounded-none transition-colors cursor-pointer"
+                        >
+                          {requestingSteamGuardCode ? 'Solicitando...' : steamLoginStatus.connected ? 'Bot conectado' : 'Solicitar código de Steam'}
+                        </button>
+                        {steamLoginStatus.retryAfterMs > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleResetSteamCooldown}
+                            disabled={resettingSteamCooldown}
+                            className="px-4 py-3 bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-500/30 text-xs font-black uppercase tracking-tight rounded-none transition-colors cursor-pointer"
+                          >
+                            {resettingSteamCooldown ? 'Reiniciando...' : 'Resetear Cooldown'}
+                          </button>
+                        )}
+                      </div>
                       <form onSubmit={handleSubmitSteamGuardCode} className="flex flex-col sm:flex-row gap-3">
                         <input
                           type="text"

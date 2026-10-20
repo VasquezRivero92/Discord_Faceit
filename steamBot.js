@@ -17,7 +17,7 @@ const STEAM_SHARED_SECRET = process.env.STEAM_SHARED_SECRET;
 const activeLobbies = new Map();
 const pendingCs2LobbyInvites = new Map();
 const CS2_APP_ID = 730;
-const RATE_LIMIT_COOLDOWN_MS = 2 * 60 * 60 * 1000;
+const RATE_LIMIT_COOLDOWN_MS = 20 * 60 * 1000;
 const GUARD_RETRY_COOLDOWN_MS = 60 * 1000;
 
 let steamGuardCallback = null;
@@ -246,6 +246,19 @@ client.on('disconnected', (_eresult, message) => {
     message: message ? `El bot de Steam se desconectó: ${message}` : 'El bot de Steam se desconectó.'
   });
 });
+
+export function resetSteamLoginCooldown() {
+  steamGuardCallback = null;
+  setSteamLoginState({
+    status: 'idle',
+    guardType: null,
+    codeAttempts: 0,
+    lastCodeWrong: false,
+    retryAfter: null,
+    message: 'Cooldown reiniciado. Puedes solicitar el código de nuevo.'
+  });
+  return getSteamLoginStatus();
+}
 
 export function isSteamGuardPending() {
   return Boolean(steamGuardCallback);

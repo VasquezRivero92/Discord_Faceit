@@ -13,7 +13,7 @@ import { cleanupVoiceChannel } from '../services/voice.js';
 import { env } from '../config/index.js';
 import { fetchFaceitStats, fetchPlayerHistory, fetchHubInfo, fetchLeaderboard, fetchLatestSeasonPoints, fetchCurrentHubSeason, fetchFaceitHubQueues } from '../services/faceitApi.js';
 import { getEffectiveConfig, getEffectiveConfigForGuild, CLUB_ROLES_MAP } from '../config/index.js';
-import { getSteamLoginStatus, resolveSteamGuard, startSteamBot } from '../steamBot.js';
+import { getSteamLoginStatus, resolveSteamGuard, startSteamBot, resetSteamLoginCooldown } from '../steamBot.js';
 
 export function createApiRouter(client, db, config) {
   const router = Router();
@@ -169,6 +169,16 @@ export function createApiRouter(client, db, config) {
     }
 
     return res.json({ success: true, message: result.message, status: result.status });
+  });
+
+  // --- Resetear Cooldown de Steam Guard ---
+  router.post('/steam/reset', requireAuth, (req, res) => {
+    if (req.user?.role !== 'global_admin') {
+      return res.status(403).json({ error: 'Solo el administrador global puede resetear el cooldown de Steam.' });
+    }
+
+    const status = resetSteamLoginCooldown();
+    return res.json({ success: true, message: 'Cooldown de Steam reiniciado.', status });
   });
 
   // --- Información del Sistema (Uptime y Hub) ---
