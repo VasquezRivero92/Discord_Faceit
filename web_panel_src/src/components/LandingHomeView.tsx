@@ -83,24 +83,6 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
               <Trophy className="w-4 h-4" />
               <span>Entrar al Mixtón en Vivo</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveView(currentUser ? 'cuenta' : 'login')}
-              className="px-7 py-3.5 rounded-lg bg-[#742284] hover:bg-[#8B2FA0] border border-[#A855F7]/40 text-white font-black tracking-wider shadow-[0_4px_20px_rgba(168,85,247,0.25)] hover:shadow-[0_6px_30px_rgba(168,85,247,0.45)] transition-all flex items-center gap-2.5 cursor-pointer active:scale-[0.98]"
-            >
-              <YapeLogo className="w-5 h-5 rounded-sm shrink-0" />
-              <span>{currentUser ? 'Mi Billetera & Recargar' : 'Recargar con Yape'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveView('guia-faceit')}
-              className="px-6 py-3.5 rounded-lg bg-neutral-900/80 hover:bg-neutral-800/90 border border-white/[0.12] hover:border-[#FF5500]/60 text-neutral-200 hover:text-white tracking-wider transition-all flex items-center gap-2 cursor-pointer active:scale-[0.98]"
-            >
-              <FaceitLogo className="w-4 h-4 text-[#FF5500]" />
-              <span>Guía FACEIT</span>
-            </button>
           </div>
 
           {/* Live Telemetry Highlights (Stats HUD) */}
