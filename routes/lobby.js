@@ -2251,12 +2251,26 @@ export function createLobbyRouter(client, db, config, wss) {
       const guildIdToUse = targetGuildId || req.guildId || DISCORD_GUILD_ID;
 
       if (matchMode === 'steam') {
-        // Enriquecer SteamID64 para todos los 10 jugadores desde la BD si no lo traen en memoria
+        // Enriquecer SteamID64 para todos los 10 jugadores (desde BD o directamente desde FACEIT API)
         for (const p of [...rosterA, ...rosterB]) {
           if (!p.steam_id_64) {
             const uData = await db.getFullUser(p.discordId, guildIdToUse);
             if (uData?.steam_id_64) {
               p.steam_id_64 = uData.steam_id_64;
+            } else if (p.faceit_player_id || p.faceit_nickname) {
+              try {
+                const fcPlayer = p.faceit_player_id
+                  ? await fetchFaceitPlayerById(p.faceit_player_id).catch(() => null)
+                  : await fetchFaceitPlayer(p.faceit_nickname).catch(() => null);
+                const s64 = fcPlayer?.games?.cs2?.game_player_id || fcPlayer?.games?.csgo?.game_player_id || fcPlayer?.steam_id_64;
+                if (s64) {
+                  p.steam_id_64 = String(s64).trim();
+                  // Guardar en la base de datos para tenerlo en caché
+                  await db.saveUser(p.discordId, { steam_id_64: p.steam_id_64 }, guildIdToUse).catch(() => {});
+                }
+              } catch (fcErr) {
+                logger.warn(`No se pudo obtener SteamID64 desde FACEIT para ${p.faceit_nickname}: ${fcErr.message}`);
+              }
             }
           }
         }
