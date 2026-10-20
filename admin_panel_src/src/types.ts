@@ -162,11 +162,23 @@ export interface BotConfig {
   queues?: HubQueue[];
 }
 
+export type FeatureCategory = 
+  | 'voice_music' 
+  | 'faceit_matches' 
+  | 'community_roles' 
+  | 'mixton_queues' 
+  | 'moderation_support' 
+  | 'wallet_economy';
+
 export interface FeatureFlag {
   key: string;
   name: string;
   desc: string;
   enabled: boolean;
+  type?: 'module' | 'command';
+  category?: FeatureCategory;
+  channelKey?: string;
+  channelLabel?: string;
 }
 
 export interface PlayerStats {

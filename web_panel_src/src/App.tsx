@@ -27,7 +27,10 @@ import {
   Layers,
   Radio,
   KeyRound,
-  User
+  User,
+  Zap,
+  Flame,
+  MapPin
 } from 'lucide-react';
 import {
   Player, 
@@ -39,7 +42,9 @@ import {
   PlayerBetStatus, 
   BetStatusResponse, 
   MixtonQueue,
-  ActiveView
+  ActiveView,
+  MapVetoItem,
+  MapVetoState
 } from './types';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -157,6 +162,10 @@ export default function App() {
   const [matchTeamB, setMatchTeamB] = useState<string>('');
   const [isLaunchingMatch, setIsLaunchingMatch] = useState(false);
   const [matchMode, setMatchMode] = useState<'faceit' | 'steam'>('faceit');
+  const [isAutoAssigning, setIsAutoAssigning] = useState(false);
+  const [isStartingVeto, setIsStartingVeto] = useState(false);
+  const [isBanningMap, setIsBanningMap] = useState(false);
+  const [chosenMapForMatch, setChosenMapForMatch] = useState<MapVetoItem | null>(null);
 
   // Bet Modal state (Cuota / Apuesta por jugador y verificación de los 10 jugadores)
   const [isBetModalOpen, setIsBetModalOpen] = useState(false);
@@ -478,7 +487,7 @@ export default function App() {
   useEffect(() => {
     if (!pendingPick) return;
     
-    const currentTeamId = lobbyState.pickOrder[lobbyState.currentPickIndex];
+    const currentTeamId = lobbyState.pickSequence?.[lobbyState.currentPickIndex] || lobbyState.pickOrder[lobbyState.currentPickIndex % (lobbyState.pickOrder.length || 1)];
     const currentTeam = lobbyState.teams.find(t => t.id === currentTeamId);
     const isMyTurn = currentTeam?.captain && currentUser && currentTeam.captain.discordId === currentUser.userId;
     
@@ -563,7 +572,7 @@ export default function App() {
     }
 
     // 3. Encontrar equipo activo
-    const currentTeamId = lobbyState.pickOrder[lobbyState.currentPickIndex];
+    const currentTeamId = lobbyState.pickSequence?.[lobbyState.currentPickIndex] || lobbyState.pickOrder[lobbyState.currentPickIndex % (lobbyState.pickOrder.length || 1)];
     const nextTeams = lobbyState.teams.map(team => {
       if (team.id === currentTeamId) {
         return {
@@ -575,11 +584,9 @@ export default function App() {
     });
 
     // 4. Calcular el siguiente pick index
-    const nextPickIndex = (lobbyState.currentPickIndex + 1) >= lobbyState.pickOrder.length
-      ? lobbyState.currentPickIndex
-      : lobbyState.currentPickIndex + 1;
-
-    const draftFinished = (lobbyState.currentPickIndex + 1) >= lobbyState.pickOrder.length;
+    const totalPicks = lobbyState.pickSequence?.length || (lobbyState.teams.length * 4);
+    const nextPickIndex = lobbyState.currentPickIndex + 1;
+    const draftFinished = nextPickIndex >= totalPicks || nextTeams.every(t => (t.players || []).length === 4);
 
     // 5. Aplicar cambios locales instantáneamente
     setLobbyState(prev => ({
@@ -1407,6 +1414,33 @@ export default function App() {
     }
   };
 
+  // Admin Action: Auto-assign and balance players
+  const handleAutoAssignPlayers = async () => {
+    if (!hasCaptainsForAll) {
+      showToast('Debes asignar manualmente los capitanes a todos los equipos primero.', 'error');
+      return;
+    }
+    if (!window.confirm('¿Deseas autocompletar y balancear automáticamente los equipos con los jugadores disponibles de la cola según su Tier/ELO?')) {
+      return;
+    }
+    setIsAutoAssigning(true);
+    try {
+      const res = await apiFetch('/api/lobby/mixton-auto-assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al auto-asignar jugadores.');
+      
+      showToast('¡Jugadores auto-asignados y equipos balanceados con éxito!', 'success');
+      await fetchState();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsAutoAssigning(false);
+    }
+  };
+
   // Admin Action: Reset Lobby
   const handleResetLobby = async () => {
     if (!window.confirm('¿Estás seguro de reiniciar todo el lobby mixton? Se borrarán todos los equipos, capitanes y miembros elegidos.')) {
@@ -1577,6 +1611,96 @@ export default function App() {
     }
   };
 
+  // Start Map Veto when clicking LANZAR ENCUENTRO
+  const handleLaunchEncounterClick = async () => {
+    if (!matchTeamA || !matchTeamB) {
+      showToast('Debes seleccionar dos equipos.', 'error');
+      return;
+    }
+    const teamA = lobbyState.teams.find(t => t.id === matchTeamA);
+    const teamB = lobbyState.teams.find(t => t.id === matchTeamB);
+    if (!teamA?.captain || teamA.players.length !== 4 || !teamB?.captain || teamB.players.length !== 4) {
+      showToast('Ambos equipos deben estar completos con 5 jugadores (Capitán + 4 compañeros).', 'error');
+      return;
+    }
+
+    setIsStartingVeto(true);
+    try {
+      const res = await apiFetch('/api/lobby/mixton-start-veto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teamIdA: matchTeamA,
+          teamIdB: matchTeamB,
+          betAmount: effectiveBetAmount,
+          queueId: selectedQueueId,
+          matchMode
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al iniciar fase de veto.');
+      showToast('¡Fase de veto de mapas iniciada! Los capitanes deben banear mapas.', 'success');
+      await fetchState();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsStartingVeto(false);
+    }
+  };
+
+  // Ban Map handler
+  const handleBanMap = async (mapId: string) => {
+    if (isBanningMap) return;
+    setIsBanningMap(true);
+    try {
+      const res = await apiFetch('/api/lobby/mixton-ban-map', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mapId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al banear mapa.');
+      await fetchState();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsBanningMap(false);
+    }
+  };
+
+  // Cancel Map Veto
+  const handleCancelVeto = async () => {
+    if (!window.confirm('¿Deseas cancelar la fase de veto de mapas actual?')) return;
+    try {
+      const res = await apiFetch('/api/lobby/mixton-cancel-veto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!res.ok) throw new Error('Error al cancelar veto.');
+      showToast('Veto de mapas cancelado.', 'info');
+      await fetchState();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  // Sincronizar automáticamente el mapa elegido y abrir el modal de saldos/apuestas para el Admin
+  useEffect(() => {
+    if (lobbyState.mapVeto?.completed && lobbyState.mapVeto.chosenMap) {
+      setChosenMapForMatch(lobbyState.mapVeto.chosenMap);
+      if (currentUser?.isAdmin && !isBetModalOpen) {
+        const timer = setTimeout(() => {
+          setMatchTeamA(lobbyState.mapVeto!.teamIdA);
+          setMatchTeamB(lobbyState.mapVeto!.teamIdB);
+          setIsBetModalOpen(true);
+          fetchQueues();
+          fetchBetStatus(effectiveBetAmount);
+        }, 1500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [lobbyState.mapVeto?.completed, lobbyState.mapVeto?.chosenMap, currentUser?.isAdmin, isBetModalOpen]);
+
   // Open Bet & Quota Verification Modal
   const handleOpenBetModal = async () => {
     if (!matchTeamA || !matchTeamB) {
@@ -1717,7 +1841,8 @@ export default function App() {
           betAmount: effectiveBetAmount,
           manualPaidDiscordIds,
           queueId: selectedQueueId,
-          matchMode
+          matchMode,
+          chosenMap: chosenMapForMatch || lobbyState.mapVeto?.chosenMap || null
         })
       });
       const data = await res.json();
@@ -1728,6 +1853,7 @@ export default function App() {
         window.open(data.faceitHubUrl, '_blank');
       }
       setIsBetModalOpen(false);
+      setChosenMapForMatch(null);
       setMatchTeamA('');
       setMatchTeamB('');
       await fetchState();
@@ -1776,22 +1902,39 @@ export default function App() {
     }
 
     if (lobbyState.draftStarted) {
-      const currentTeamId = lobbyState.pickOrder[lobbyState.currentPickIndex];
+      const currentTeamId = lobbyState.pickSequence?.[lobbyState.currentPickIndex] || lobbyState.pickOrder[lobbyState.currentPickIndex % (lobbyState.pickOrder.length || 1)];
       const currentTeam = lobbyState.teams.find(t => t.id === currentTeamId);
       
       if (currentTeam) {
         const captainName = currentTeam.captain ? currentTeam.captain.faceit_nickname : 'DESCONOCIDO';
         const isMyTurn = currentTeam.captain && currentUser && currentTeam.captain.discordId === currentUser.userId;
         
+        let turnPickDetail = '';
+        if (lobbyState.pickSequence && lobbyState.pickSequence.length > 0) {
+          const seq = lobbyState.pickSequence;
+          const idx = lobbyState.currentPickIndex;
+          let start = idx;
+          while (start > 0 && seq[start - 1] === seq[idx]) start--;
+          let end = idx;
+          while (end < seq.length - 1 && seq[end + 1] === seq[idx]) end++;
+          const blockTotal = end - start + 1;
+          const pickInBlock = idx - start + 1;
+          if (blockTotal > 1) {
+            turnPickDetail = ` (ELECCIÓN ${pickInBlock} DE ${blockTotal})`;
+          } else {
+            turnPickDetail = ` (1 ELECCIÓN)`;
+          }
+        }
+
         if (isMyTurn) {
           return {
             className: 'border-2 border-[#FF5500] bg-[#FF5500]/10 text-[#FF5500] px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-wider animate-pulse shadow-[0_0_15px_rgba(255,85,0,0.15)]',
-            text: `🌟 ¡ES TU TURNO! ELIGE JUGADOR PARA ${getTeamName(currentTeam).toUpperCase()}`
+            text: `🌟 ¡ES TU TURNO! ELIGE JUGADOR PARA ${getTeamName(currentTeam).toUpperCase()}${turnPickDetail}`
           };
         } else {
           return {
             className: 'border-2 border-neutral-700 bg-neutral-900/50 text-neutral-400 px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-wider',
-            text: `⏳ SELECCIÓN EN CURSO: TURNO DE ${getTeamName(currentTeam).toUpperCase()} (CAP: ${captainName.toUpperCase()})`
+            text: `⏳ SELECCIÓN EN CURSO: TURNO DE ${getTeamName(currentTeam).toUpperCase()} (CAP: ${captainName.toUpperCase()})${turnPickDetail}`
           };
         }
       }
@@ -1837,7 +1980,7 @@ export default function App() {
   // Check if current user is captain and it's their turn
   const checkIsMyTurn = () => {
     if (!lobbyState.draftStarted || lobbyState.draftFinished) return false;
-    const currentTeamId = lobbyState.pickOrder[lobbyState.currentPickIndex];
+    const currentTeamId = lobbyState.pickSequence?.[lobbyState.currentPickIndex] || lobbyState.pickOrder[lobbyState.currentPickIndex % (lobbyState.pickOrder.length || 1)];
     const currentTeam = lobbyState.teams.find(t => t.id === currentTeamId);
     return !!(currentTeam?.captain && currentUser && currentTeam.captain.discordId === currentUser.userId);
   };
@@ -2251,7 +2394,8 @@ export default function App() {
                         lobbyState.pickOrder.map((teamId, index) => {
                           const team = lobbyState.teams.find(t => t.id === teamId);
                           if (!team) return null;
-                          const isCurrent = lobbyState.draftStarted && lobbyState.currentPickIndex === index;
+                          const currentActiveTeamId = lobbyState.pickSequence?.[lobbyState.currentPickIndex] || lobbyState.pickOrder[lobbyState.currentPickIndex % (lobbyState.pickOrder.length || 1)];
+                          const isCurrent = lobbyState.draftStarted && currentActiveTeamId === teamId;
                           return (
                             <div key={teamId} className={`flex items-center justify-between text-[9px] p-1 border ${
                               isCurrent ? 'border-[#FF5500] bg-[#FF5500]/5 text-[#FF5500]' : 'border-[#222] bg-[#151515] text-neutral-400'
@@ -2303,6 +2447,17 @@ export default function App() {
                       REINICIAR
                     </button>
                   </div>
+
+                  {/* Botón de Asignación Automática y Balanceo */}
+                  <button 
+                    className="w-full bg-[#1B9AAA]/20 hover:bg-[#1B9AAA]/30 border border-[#1B9AAA] text-[#1B9AAA] font-bold uppercase text-[10px] py-1.5 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-30 cursor-pointer shadow-[0_0_10px_rgba(27,154,170,0.15)]"
+                    onClick={handleAutoAssignPlayers}
+                    disabled={!hasCaptainsForAll || lobbyState.draftFinished || isAutoAssigning}
+                    title="Asigna y balancea automáticamente a los jugadores disponibles por Tier / ELO (requiere capitanes asignados)"
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-current" />
+                    {isAutoAssigning ? 'BALANCEANDO EQUIPOS...' : '⚡ AUTO-ASIGNAR JUGADORES'}
+                  </button>
                   
                   <button 
                     className="w-full bg-transparent border border-yellow-600 hover:border-yellow-500 text-yellow-500 font-bold uppercase text-[10px] py-0.5 transition-colors"
@@ -2367,11 +2522,11 @@ export default function App() {
                     </button>
                     <button 
                       className="bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] hover:border-[#FF7733] text-white font-bold uppercase text-[10px] py-1.5 px-6 rounded-none transition-all disabled:opacity-30 cursor-pointer flex items-center gap-1.5"
-                      disabled={!matchTeamA || !matchTeamB || matchTeamA === matchTeamB || isLaunchingMatch}
-                      onClick={handleOpenBetModal}
+                      disabled={!matchTeamA || !matchTeamB || matchTeamA === matchTeamB || isLaunchingMatch || isStartingVeto}
+                      onClick={handleLaunchEncounterClick}
                     >
                       <Coins className="w-3.5 h-3.5" />
-                      LANZAR ENCUENTRO
+                      {isStartingVeto ? 'INICIANDO VETO...' : 'LANZAR ENCUENTRO'}
                     </button>
                   </div>
                 </div>
@@ -2394,8 +2549,8 @@ export default function App() {
             {/* Teams Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {lobbyState.teams.map((team, tIdx) => {
-                const isCurrentTurn = lobbyState.draftStarted && !lobbyState.draftFinished && 
-                                      lobbyState.pickOrder[lobbyState.currentPickIndex] === team.id;
+                const currentActiveTeamId = lobbyState.pickSequence?.[lobbyState.currentPickIndex] || lobbyState.pickOrder[lobbyState.currentPickIndex % (lobbyState.pickOrder.length || 1)];
+                const isCurrentTurn = lobbyState.draftStarted && !lobbyState.draftFinished && currentActiveTeamId === team.id;
                 const avgElo = getAverageElo(team);
 
                 // Render Captain Slot
@@ -2921,6 +3076,256 @@ export default function App() {
         </div>
       )}
 
+      {/* MAP VETO MODAL (CS2 Competitive Map Ban Phase) */}
+      {lobbyState.mapVeto && (lobbyState.mapVeto.active || lobbyState.mapVeto.completed) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/90 backdrop-blur-md overflow-y-auto">
+          <div className="bg-[#121212] border-2 border-neutral-700 w-full max-w-6xl my-auto flex flex-col shadow-2xl rounded-none font-mono text-white animate-fade-in overflow-hidden">
+            {/* Veto Header */}
+            <div className="bg-[#181818] border-b border-neutral-700 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#FF5500]/20 border border-[#FF5500] flex items-center justify-center text-[#FF5500] flex-shrink-0">
+                  <Flame className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-white flex items-center gap-2">
+                    FASE DE VETO DE MAPAS (CS2)
+                  </h3>
+                  <p className="text-[10px] text-neutral-400">
+                    Baneo por turnos: 1er capitán banea 1, 2do capitán banea 2, y así hasta definir 1 solo mapa.
+                  </p>
+                </div>
+              </div>
+
+              {/* Matchup badges */}
+              {(() => {
+                const teamA = lobbyState.teams.find(t => t.id === lobbyState.mapVeto?.teamIdA);
+                const teamB = lobbyState.teams.find(t => t.id === lobbyState.mapVeto?.teamIdB);
+                return (
+                  <div className="flex items-center gap-2 bg-[#0E0E0E] px-3 py-1.5 border border-neutral-800 text-xs">
+                    <span className="font-bold text-[#FF5500]">{teamA ? getTeamName(teamA).toUpperCase() : 'EQUIPO A'}</span>
+                    <span className="text-neutral-500 font-black text-[10px]">VS</span>
+                    <span className="font-bold text-[#0088FF]">{teamB ? getTeamName(teamB).toUpperCase() : 'EQUIPO B'}</span>
+                  </div>
+                );
+              })()}
+
+              {currentUser?.isAdmin && (
+                <button 
+                  onClick={handleCancelVeto}
+                  className="text-neutral-400 hover:text-red-400 text-[10px] uppercase font-bold border border-neutral-800 hover:border-red-900 px-2.5 py-1 transition-colors cursor-pointer"
+                >
+                  ✕ CANCELAR VETO
+                </button>
+              )}
+            </div>
+
+            {/* Turn & Status Banner */}
+            {(() => {
+              const veto = lobbyState.mapVeto!;
+              if (veto.completed && veto.chosenMap) {
+                return (
+                  <div className="bg-[#15C253]/15 border-b border-[#15C253]/40 p-4 text-center flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">🏆</span>
+                      <div className="text-left">
+                        <span className="text-xs uppercase text-[#15C253] font-black tracking-widest block">MAPA DECIDIDO</span>
+                        <span className="text-lg font-black text-white uppercase">{veto.chosenMap.name}</span>
+                      </div>
+                    </div>
+                    {currentUser?.isAdmin ? (
+                      <button 
+                        onClick={() => {
+                          setChosenMapForMatch(veto.chosenMap);
+                          setMatchTeamA(veto.teamIdA);
+                          setMatchTeamB(veto.teamIdB);
+                          setIsBetModalOpen(true);
+                          fetchQueues();
+                          fetchBetStatus(effectiveBetAmount);
+                        }}
+                        className="bg-[#15C253] hover:bg-[#15C253]/90 text-black font-black uppercase text-xs px-5 py-2 transition-all cursor-pointer shadow-[0_0_15px_rgba(21,194,83,0.4)]"
+                      >
+                        ➡️ CONTINUAR A SALDOS Y LANZAR PARTIDA
+                      </button>
+                    ) : (
+                      <span className="text-xs text-neutral-400 animate-pulse font-bold">
+                        Esperando a que el Administrador confirme las cuotas y envíe la partida...
+                      </span>
+                    )}
+                  </div>
+                );
+              }
+
+              const currentTurnTeamId = veto.banSequence[veto.currentBanIndex];
+              const teamInTurn = lobbyState.teams.find(t => t.id === currentTurnTeamId);
+              const isMyTurn = (teamInTurn?.captain && currentUser && teamInTurn.captain.discordId === currentUser.userId);
+
+              // Compute bans in current block
+              let start = veto.currentBanIndex;
+              while (start > 0 && veto.banSequence[start - 1] === veto.banSequence[veto.currentBanIndex]) start--;
+              let end = veto.currentBanIndex;
+              while (end < veto.banSequence.length - 1 && veto.banSequence[end + 1] === veto.banSequence[veto.currentBanIndex]) end++;
+              const blockTotal = end - start + 1;
+              const pickInBlock = veto.currentBanIndex - start + 1;
+              const blockLabel = blockTotal > 1 ? `(BANEO ${pickInBlock} DE ${blockTotal})` : `(1 BANEO)`;
+
+              return (
+                <div className={`p-3.5 border-b text-center flex flex-col sm:flex-row items-center justify-between gap-2 ${
+                  isMyTurn 
+                    ? 'bg-[#FF5500]/15 border-[#FF5500]/50' 
+                    : 'bg-neutral-900 border-neutral-800'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs uppercase text-neutral-400 font-bold">TURNO ACTUAL:</span>
+                    <span className="text-xs font-black uppercase text-white bg-black/60 px-2 py-0.5 border border-neutral-700">
+                      {teamInTurn ? getTeamName(teamInTurn).toUpperCase() : 'EQUIPO'} {blockLabel}
+                    </span>
+                    <span className="text-[10px] text-neutral-400">
+                      (Capitán: {teamInTurn?.captain?.faceit_nickname || 'Desconocido'})
+                    </span>
+                  </div>
+
+                  <div>
+                    {isMyTurn ? (
+                      <span className="text-xs font-black uppercase text-[#FF5500] animate-pulse">
+                        👉 ¡ES TU TURNO! HAZ CLIC EN EL MAPA QUE DESEAS BANEAR
+                      </span>
+                    ) : (
+                      currentUser?.isAdmin ? (
+                        <span className="text-[11px] font-bold text-[#1B9AAA]">
+                          👑 Modo Administrador: Puedes banear en nombre del capitán si tarda
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-neutral-400 animate-pulse">
+                          ⏳ Esperando el baneo de {teamInTurn?.captain?.faceit_nickname || 'Capitán'}...
+                        </span>
+                      )
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Map Cards Grid */}
+            <div className="p-4 sm:p-6 overflow-y-auto max-h-[60vh]">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                {((lobbyState.mapVeto?.pool && lobbyState.mapVeto.pool.length > 0) ? lobbyState.mapVeto.pool : []).map(mapItem => {
+                  const veto = lobbyState.mapVeto!;
+                  const isBanned = (veto.bannedMaps || []).includes(mapItem.id);
+                  const isChosen = veto.chosenMap?.id === mapItem.id;
+                  const banInfo = (veto.banHistory || []).find(b => b.mapId === mapItem.id);
+
+                  const currentTurnTeamId = veto.banSequence[veto.currentBanIndex];
+                  const teamInTurn = lobbyState.teams.find(t => t.id === currentTurnTeamId);
+                  const isMyTurn = (teamInTurn?.captain && currentUser && teamInTurn.captain.discordId === currentUser.userId);
+                  const canBan = veto.active && !veto.completed && !isBanned && (isMyTurn || currentUser?.isAdmin);
+
+                  return (
+                    <div
+                      key={mapItem.id}
+                      onClick={() => {
+                        if (canBan && !isBanningMap) {
+                          handleBanMap(mapItem.id);
+                        }
+                      }}
+                      className={`relative group rounded-none overflow-hidden h-72 sm:h-80 flex flex-col justify-between p-3 select-none transition-all duration-300 ${
+                        isChosen
+                          ? 'border-4 border-[#15C253] shadow-[0_0_25px_rgba(21,194,83,0.5)] scale-[1.02]'
+                          : isBanned
+                            ? 'border-2 border-red-950 opacity-45 cursor-not-allowed'
+                            : canBan
+                              ? 'border-2 border-neutral-700 hover:border-white hover:scale-[1.03] hover:shadow-[0_0_20px_rgba(255,255,255,0.25)] cursor-pointer'
+                              : 'border-2 border-neutral-800 opacity-80 cursor-default'
+                      }`}
+                    >
+                      {/* Background Map Screenshot */}
+                      <img 
+                        src={mapItem.image} 
+                        alt={mapItem.name} 
+                        className={`absolute inset-0 w-full h-full object-cover transition-transform duration-500 ${
+                          canBan ? 'group-hover:scale-105' : ''
+                        } ${isBanned ? 'grayscale contrast-125' : ''}`}
+                      />
+
+                      {/* Dark Gradient Overlay */}
+                      <div className={`absolute inset-0 ${
+                        isChosen
+                          ? 'bg-gradient-to-t from-black/90 via-[#15C253]/10 to-black/60'
+                          : isBanned
+                            ? 'bg-red-950/70 backdrop-grayscale'
+                            : 'bg-gradient-to-t from-black/95 via-black/40 to-black/60'
+                      }`} />
+
+                      {/* Top Bar: CS2 tag & status badge */}
+                      <div className="relative z-10 flex items-center justify-between">
+                        <span className="text-[9px] font-black uppercase tracking-wider bg-black/70 px-1.5 py-0.5 border border-white/20 text-neutral-300">
+                          CS2
+                        </span>
+                        {isChosen && (
+                          <span className="text-[8px] font-black uppercase tracking-wider bg-[#15C253] text-black px-1.5 py-0.5 animate-pulse font-bold">
+                            MAPA ELEGIDO
+                          </span>
+                        )}
+                        {isBanned && (
+                          <span className="text-[8px] font-black uppercase tracking-wider bg-red-600 text-white px-1.5 py-0.5">
+                            BANEADO
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Center: Official CS2 Pin / Badge */}
+                      <div className="relative z-10 my-auto flex flex-col items-center justify-center">
+                        <img 
+                          src={mapItem.icon} 
+                          alt={mapItem.name} 
+                          className={`w-20 h-20 sm:w-24 sm:h-24 object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.8)] transition-transform duration-300 ${
+                            canBan ? 'group-hover:scale-110' : ''
+                          } ${isBanned ? 'opacity-40 grayscale' : ''}`}
+                        />
+                        {isBanned && (
+                          <div className="mt-2 text-[9px] font-black uppercase text-red-300 bg-black/80 px-2 py-0.5 border border-red-800 text-center">
+                            Baneado por {banInfo?.teamName || 'Equipo'}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Bottom: Map Name & Ban Action Prompt */}
+                      <div className="relative z-10 text-center">
+                        <span className={`block font-black uppercase tracking-wider text-sm sm:text-base drop-shadow-md ${
+                          isChosen ? 'text-[#15C253]' : isBanned ? 'text-neutral-500 line-through' : 'text-white'
+                        }`}>
+                          {mapItem.name}
+                        </span>
+                        {canBan && !isBanned && (
+                          <span className="text-[9px] font-bold uppercase text-[#FF5500] bg-black/70 px-2 py-0.5 mt-1 inline-block border border-[#FF5500]/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                            Hacer clic para banear
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Ban History Footer */}
+            {lobbyState.mapVeto?.banHistory && lobbyState.mapVeto.banHistory.length > 0 && (
+              <div className="bg-[#101010] border-t border-neutral-800 p-3 px-5 flex items-center gap-2 overflow-x-auto text-[10px]">
+                <span className="text-neutral-500 font-bold uppercase flex-shrink-0">Historial de Baneos:</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {lobbyState.mapVeto.banHistory.map((item, idx) => (
+                    <span key={idx} className="bg-neutral-900 border border-neutral-800 px-2 py-0.5 text-neutral-300 flex items-center gap-1">
+                      <span className="text-neutral-500">{idx + 1}.</span>
+                      <span className="text-red-400 line-through font-bold">{item.mapName}</span>
+                      <span className="text-[9px] text-neutral-500">({item.teamName})</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Bet & Quota Verification Modal (Antes de lanzar el encuentro) */}
       {isBetModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/85 backdrop-blur-md">
@@ -2951,6 +3356,37 @@ export default function App() {
 
             {/* Content Scrollable */}
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+
+              {/* Chosen Map Banner (si viene de veto) */}
+              {(() => {
+                const mapObj = chosenMapForMatch || lobbyState.mapVeto?.chosenMap;
+                if (!mapObj) return null;
+                return (
+                  <div className="bg-[#181818] border-2 border-neutral-700 p-3 sm:p-4 flex items-center justify-between gap-4 relative overflow-hidden">
+                    <img 
+                      src={mapObj.image} 
+                      alt={mapObj.name} 
+                      className="absolute right-0 top-0 h-full w-1/3 object-cover opacity-20 pointer-events-none"
+                    />
+                    <div className="flex items-center gap-3 relative z-10">
+                      <img src={mapObj.icon} alt={mapObj.name} className="w-12 h-12 object-contain drop-shadow" />
+                      <div>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-[#FF5500] block">
+                          MAPA DEFINIDO EN FASE DE VETO
+                        </span>
+                        <span className="text-base sm:text-lg font-black uppercase text-white tracking-wider flex items-center gap-2">
+                          🗺️ {mapObj.name}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="hidden sm:block text-right relative z-10">
+                      <span className="text-[10px] uppercase font-bold text-neutral-400 bg-black/60 px-2 py-1 border border-neutral-700">
+                        Pool Competitivo CS2
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
               
               {/* Section 1: Selector de Apuesta / Cuota */}
               <div className="bg-[#161616] border border-[#2D2D2D] p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -3485,7 +3921,7 @@ export default function App() {
                       {isLaunchingMatch 
                         ? 'LANZANDO ENCUENTRO...' 
                         : isAllReady 
-                          ? `🚀 CONFIRMAR Y LANZAR (POZO: S/ ${(effectiveBetAmount * 10).toFixed(2)})` 
+                          ? `🚀 CONFIRMAR Y LANZAR ${(chosenMapForMatch?.name || lobbyState.mapVeto?.chosenMap?.name) ? `[${chosenMapForMatch?.name || lobbyState.mapVeto?.chosenMap?.name}] ` : ''}(POZO: S/ ${(effectiveBetAmount * 10).toFixed(2)})` 
                           : `BLOQUEADO (${readyCount}/10 LISTOS)`}
                     </button>
                   </div>

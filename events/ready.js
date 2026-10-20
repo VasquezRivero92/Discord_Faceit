@@ -319,14 +319,18 @@ export async function checkAndDeployRechargePanel(client, db) {
     const channelsToDeploy = new Set();
 
     // 1. Canal configurado globalmente o en .env
+    const globalRechargeEnabled = await isFeatureEnabled('rechargeWalletSystem');
     const globalChannel = globalSettings.discordRechargeChannelId || env.DISCORD_RECHARGE_CHANNEL_ID;
-    if (globalChannel && !globalChannel.startsWith('ID_')) {
+    if (globalRechargeEnabled && globalChannel && !globalChannel.startsWith('ID_')) {
       globalChannel.split(',').map(id => id.trim()).filter(Boolean).forEach(id => channelsToDeploy.add(id));
     }
 
     // 2. Canales configurados por cada servidor (Guild) en Firestore
     for (const guild of client.guilds.cache.values()) {
       try {
+        if (!(await isFeatureEnabled('rechargeWalletSystem', guild.id))) {
+          continue;
+        }
         const guildSettings = await db.getGuildSettings(guild.id).catch(() => ({}));
         if (guildSettings && guildSettings.discordRechargeChannelId && !guildSettings.discordRechargeChannelId.startsWith('ID_')) {
           guildSettings.discordRechargeChannelId.split(',').map(id => id.trim()).filter(Boolean).forEach(id => channelsToDeploy.add(id));
@@ -665,6 +669,10 @@ export async function checkAndDeployMusicPanel(client, db) {
     for (const gId of guilds) {
       const guildConfig = await getEffectiveConfigForGuild(gId).catch(() => null);
       if (!guildConfig) continue;
+
+      if (!(await isFeatureEnabled('musicBot', gId))) {
+        continue;
+      }
 
       let musicChannelId = guildConfig.discordMusicChannelId;
 

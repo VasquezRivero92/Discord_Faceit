@@ -30,6 +30,7 @@ export async function loadCommands() {
     await import('../commands/say.js'),
     await import('../commands/recargar.js'),
     await import('../commands/setupRecargas.js'),
+    await import('../commands/cs2_play.js'),
   ];
 
   for (const mod of commandFiles) {
@@ -46,6 +47,49 @@ export async function onInteractionCreate(interaction, db, commandMap) {
     if (!handler) {
       logger.warn(`Comando desconocido: ${interaction.commandName}`);
       return;
+    }
+
+    const commandFeatureMap = {
+      'verificar_fc': 'command_verificar',
+      'desvincular_fc': 'command_desvincular',
+      'leaderboard': 'command_leaderboard',
+      'stats': 'command_stats',
+      'info': 'command_info',
+      'llamar_admin': 'command_llamar_admin',
+      'setup_soporte': 'command_setup_soporte',
+      'sincronizar_fc': 'command_sincronizar',
+      'partidas': 'command_partidas',
+      'crear_sala': 'command_crear_sala',
+      'listo': 'command_mixton_listo',
+      'nolisto': 'command_mixton_no_listo',
+      'sancionar': 'command_sancionar',
+      'desancionar': 'command_desancionar',
+      'say': 'command_say',
+      'recargar': 'command_recargar',
+      'setup_recargas': 'command_setup_recargas',
+      'cs2_play': 'command_cs2_play',
+    };
+
+    const featureKey = commandFeatureMap[interaction.commandName];
+    if (featureKey && !(await isFeatureEnabled(featureKey, interaction.guildId))) {
+      return interaction.reply({
+        content: `❌ El comando \`/${interaction.commandName}\` está desactivado temporalmente en este servidor.`,
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    if (interaction.commandName === 'cs2_play' && !(await isFeatureEnabled('musicBot', interaction.guildId))) {
+      return interaction.reply({
+        content: '❌ El servicio del bot de música está desactivado en este servidor.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    if (['recargar', 'setup_recargas'].includes(interaction.commandName) && !(await isFeatureEnabled('rechargeWalletSystem', interaction.guildId))) {
+      return interaction.reply({
+        content: '❌ El sistema de billetera y recargas está desactivado en este servidor.',
+        flags: MessageFlags.Ephemeral
+      });
     }
 
     try {
@@ -86,6 +130,9 @@ export async function onInteractionCreate(interaction, db, commandMap) {
     }
 
     if (customId === 'recargar_yape_modal') {
+      if (!(await isFeatureEnabled('rechargeWalletSystem', interaction.guildId))) {
+        return interaction.reply({ content: '❌ El sistema de recargas está desactivado temporalmente en este servidor.', flags: MessageFlags.Ephemeral });
+      }
       try {
         const { handleRecargaModalSubmit } = await import('../commands/recargar.js');
         await handleRecargaModalSubmit(interaction, db);
@@ -101,6 +148,9 @@ export async function onInteractionCreate(interaction, db, commandMap) {
     }
 
     if (customId === 'music_modal') {
+      if (!(await isFeatureEnabled('musicBot', interaction.guildId))) {
+        return interaction.reply({ content: '❌ El servicio de música está desactivado en este servidor.', flags: MessageFlags.Ephemeral });
+      }
       const link = interaction.fields.getTextInputValue('music_link_input');
       try {
         const { playMusicFromInteraction } = await import('../commands/cs2_play.js');
@@ -294,6 +344,9 @@ export async function onInteractionCreate(interaction, db, commandMap) {
     // --- Botón de Iniciar Recarga de Saldo con Yape ---
     if (customId === 'iniciar_recarga_btn') {
       try {
+        if (!(await isFeatureEnabled('rechargeWalletSystem', interaction.guildId))) {
+          return interaction.reply({ content: '❌ El sistema de recargas está desactivado temporalmente en este servidor.', flags: MessageFlags.Ephemeral });
+        }
         const { execute: openRechargeModal } = await import('../commands/recargar.js');
         await openRechargeModal(interaction, db);
       } catch (err) {
@@ -306,6 +359,9 @@ export async function onInteractionCreate(interaction, db, commandMap) {
     // --- Botón de Iniciar Música ---
     if (customId === 'iniciar_musica_btn') {
       try {
+        if (!(await isFeatureEnabled('musicBot', interaction.guildId))) {
+          return interaction.reply({ content: '❌ El servicio de música está desactivado temporalmente en este servidor.', flags: MessageFlags.Ephemeral });
+        }
         const modal = new ModalBuilder()
           .setCustomId('music_modal')
           .setTitle('Reproducir Música');
@@ -331,6 +387,9 @@ export async function onInteractionCreate(interaction, db, commandMap) {
     // --- Botones de Control de Música ---
     if (customId.startsWith('music_') && customId !== 'iniciar_musica_btn') {
       try {
+        if (!(await isFeatureEnabled('musicBot', interaction.guildId))) {
+          return interaction.reply({ content: '❌ El servicio de música está desactivado.', flags: MessageFlags.Ephemeral });
+        }
         const { handleMusicButton } = await import('../commands/cs2_play.js');
         await handleMusicButton(interaction);
       } catch (err) {

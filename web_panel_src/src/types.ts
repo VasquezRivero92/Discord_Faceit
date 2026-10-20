@@ -21,12 +21,47 @@ export interface Team {
   players: Player[];
 }
 
+export interface MapVetoItem {
+  id: string;
+  name: string;
+  image: string;
+  icon: string;
+}
+
+export interface MapVetoHistoryItem {
+  mapId: string;
+  mapName: string;
+  teamId: string;
+  teamName: string;
+  bannedByNickname?: string;
+  timestamp: number;
+}
+
+export interface MapVetoState {
+  active: boolean;
+  completed?: boolean;
+  teamIdA: string;
+  teamIdB: string;
+  pool: MapVetoItem[];
+  bannedMaps: string[];
+  banHistory: MapVetoHistoryItem[];
+  banSequence: string[];
+  currentBanIndex: number;
+  chosenMap: MapVetoItem | null;
+  betAmount?: number;
+  queueId?: string;
+  matchMode?: 'faceit' | 'steam';
+  startedAt?: number;
+}
+
 export interface LobbyState {
   teams: Team[];
   pickOrder: string[];
+  pickSequence?: string[];
   currentPickIndex: number;
   draftStarted: boolean;
   draftFinished: boolean;
+  mapVeto?: MapVetoState | null;
 }
 
 export interface CurrentUser {

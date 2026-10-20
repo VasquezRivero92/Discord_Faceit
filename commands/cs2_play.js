@@ -10,6 +10,7 @@ import {
 } from '@discordjs/voice';
 import play from 'play-dl';
 import { getEffectiveConfigForGuild } from '../config/index.js';
+import { isFeatureEnabled } from '../utils/featureFlags.js';
 import { logger } from '../utils/logger.js';
 import fs from 'fs';
 import path from 'path';
@@ -330,6 +331,14 @@ export async function playMusicFromInteraction(interaction, link) {
 
 async function processPlayCommand(interaction, link) {
   const { guildId, channelId, member, guild } = interaction;
+  
+  // 0. Validar feature flags del bot de música
+  if (!(await isFeatureEnabled('musicBot', guildId)) || !(await isFeatureEnabled('command_cs2_play', guildId))) {
+    return interaction.reply({
+      content: '❌ El servicio del bot de música está desactivado en este servidor.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
   
   // 1. Obtener configuración y validar canal de texto
   const config = await getEffectiveConfigForGuild(guildId);

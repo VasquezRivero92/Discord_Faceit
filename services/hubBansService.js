@@ -1,6 +1,7 @@
 import { EmbedBuilder } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { env, getEffectiveConfigForGuild } from '../config/index.js';
+import { isFeatureEnabled } from '../utils/featureFlags.js';
 import { fetchAllHubBans, fetchFaceitPlayerById } from './faceitApi.js';
 
 export async function checkAndNotifyHubBans(client, db) {
@@ -16,6 +17,10 @@ export async function checkAndNotifyHubBans(client, db) {
       const sanctionsChannelId = config.discordSanctionsChannelId;
 
       if (!hubId || hubId.startsWith('ID_') || !sanctionsChannelId || sanctionsChannelId.startsWith('ID_')) {
+        continue;
+      }
+
+      if (!(await isFeatureEnabled('hubBansNotifications', guildId))) {
         continue;
       }
 

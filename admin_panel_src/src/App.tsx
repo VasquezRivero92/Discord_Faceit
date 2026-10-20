@@ -38,7 +38,15 @@ import {
   Wallet,
   DollarSign,
   Scale,
-  CheckCircle
+  CheckCircle,
+  Music,
+  Swords,
+  Sliders,
+  Flame,
+  Layers,
+  ListFilter,
+  Power,
+  Radio
 } from 'lucide-react';
 import {
   LinkedUser,
@@ -46,6 +54,7 @@ import {
   SystemLog,
   BotConfig,
   FeatureFlag,
+  FeatureCategory,
   PlayerStats,
   ClaimItem,
   OrderItem,
@@ -58,7 +67,9 @@ import {
   initialMatches,
   initialFeatureFlags,
   initialConfig,
-  initialLogs
+  initialLogs,
+  buildFeatureFlags,
+  FEATURE_DEFINITIONS
 } from './data';
 
 // Helper para todas las peticiones a la API — siempre envía cookies de sesión
@@ -331,28 +342,7 @@ export default function App() {
         try {
           const s = (await settingsRes.json()).settings || {};
           setConfig(s);
-          const features = [
-            { key: 'autoWelcomeDm', name: 'Welcome DM', desc: 'Enviar mensaje de bienvenida por DM a nuevos miembros', enabled: s.autoWelcomeDm !== false },
-            { key: 'autoRoleSync', name: 'Role Sync', desc: 'Sincronizar roles de nivel y club automáticamente', enabled: s.autoRoleSync !== false },
-            { key: 'autoNickSync', name: 'Nick Sync', desc: 'Sincronizar apodos de Discord al iniciar partida de Faceit', enabled: s.autoNickSync !== false },
-            { key: 'autoVoiceChannels', name: 'Voice Channels', desc: 'Crear canales de voz temporales para partidas', enabled: s.autoVoiceChannels !== false },
-            { key: 'autoMovePlayers', name: 'Auto Move', desc: 'Mover jugadores a sus canales de voz al iniciar partida', enabled: s.autoMovePlayers !== false },
-            { key: 'matchAnnouncements', name: 'Match Announcements', desc: 'Anunciar partidas en Discord', enabled: s.matchAnnouncements !== false },
-            { key: 'serverStatusAnnouncements', name: 'Server Status', desc: 'Anunciar estado de servidores LATAM', enabled: s.serverStatusAnnouncements !== false },
-            { key: 'liveMatchPanel', name: 'Live Panel', desc: 'Panel de partidas en vivo fijado', enabled: s.liveMatchPanel !== false },
-            { key: 'webhookValidation', name: 'Webhook Validation', desc: 'Validar firma de webhooks de Faceit', enabled: s.webhookValidation === true },
-            { key: 'adminCallNotifications', name: 'Admin Call Notifications', desc: 'Notificar alertas cuando un usuario llama a soporte', enabled: s.adminCallNotifications !== false },
-            { key: 'command_verificar', name: 'Cmd /verificar_fc', desc: 'Comando verificar perfil de Faceit', enabled: s.command_verificar !== false },
-            { key: 'command_desvincular', name: 'Cmd /desvincular_fc', desc: 'Comando desvincular perfil de Faceit', enabled: s.command_desvincular !== false },
-            { key: 'command_leaderboard', name: 'Cmd /leaderboard', desc: 'Comando ver tabla de posiciones', enabled: s.command_leaderboard !== false },
-            { key: 'command_stats', name: 'Cmd /stats', desc: 'Comando ver estadísticas de jugador', enabled: s.command_stats !== false },
-            { key: 'command_info', name: 'Cmd /info', desc: 'Comando ver información del bot y servidores', enabled: s.command_info !== false },
-            { key: 'command_sincronizar', name: 'Cmd /sincronizar_fc', desc: 'Comando sincronizar roles manualmente', enabled: s.command_sincronizar !== false },
-            { key: 'command_partidas', name: 'Cmd /partidas', desc: 'Comando ver partidas activas', enabled: s.command_partidas !== false },
-            { key: 'command_mixton_listo', name: 'Cmd /listo', desc: 'Comando marcar listo en mixton', enabled: s.command_mixton_listo !== false },
-            { key: 'command_mixton_no_listo', name: 'Cmd /nolisto', desc: 'Comando marcar no listo en mixton', enabled: s.command_mixton_no_listo !== false }
-          ];
-          setFeatureFlags(features);
+          setFeatureFlags(buildFeatureFlags(s));
         } catch (err) {
           console.error('Error parsing settings data:', err);
         }
@@ -479,7 +469,11 @@ export default function App() {
   const [statsSearch, setStatsSearch] = useState<string>('');
   const [featuresSearch, setFeaturesSearch] = useState<string>('');
   const [featuresCategory, setFeaturesCategory] = useState<'all' | 'modules' | 'commands'>('all');
+  const [featuresStatusFilter, setFeaturesStatusFilter] = useState<'all' | 'active' | 'standby'>('all');
+  const [featuresDomainFilter, setFeaturesDomainFilter] = useState<'all' | FeatureCategory>('all');
+  const [featuresViewMode, setFeaturesViewMode] = useState<'grouped' | 'list'>('grouped');
   const [togglingFeatureKey, setTogglingFeatureKey] = useState<string | null>(null);
+  const [batchUpdatingFeatures, setBatchUpdatingFeatures] = useState<boolean>(false);
   const [refreshingFeatures, setRefreshingFeatures] = useState<boolean>(false);
   
   // Pagination & Simulation States
@@ -1209,20 +1203,183 @@ export default function App() {
     }
   };
 
+  // Feature Categories Metadata for Visual Grouping
+  const CATEGORY_META = {
+    voice_music: {
+      label: 'Música & Canales de Voz',
+      badge: 'AUDIO & VOZ',
+      desc: 'Bot de música interactivo de YouTube, canales temporales automáticos y movimiento de jugadores.',
+      icon: Music,
+      color: 'text-purple-400',
+      borderColor: 'border-purple-500/30',
+      bgColor: 'bg-purple-500/10',
+      accentBg: 'bg-purple-500/20',
+      badgeBg: 'bg-purple-500/10 text-purple-300 border-purple-500/20',
+    },
+    faceit_matches: {
+      label: 'FACEIT & Partidas en Vivo',
+      badge: 'COMPETITIVO CS2',
+      desc: 'Anuncios automáticos, panel fijado en vivo, estado de servidores LATAM y armado de salas 5v5.',
+      icon: Flame,
+      color: 'text-emerald-400',
+      borderColor: 'border-emerald-500/30',
+      bgColor: 'bg-emerald-500/10',
+      accentBg: 'bg-emerald-500/20',
+      badgeBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+    },
+    community_roles: {
+      label: 'Perfiles, Roles & Comunidad',
+      badge: 'COMUNIDAD & ELO',
+      desc: 'Verificación de cuentas FACEIT, asignación de roles de nivel (1-10), apodos y ranking por puntos.',
+      icon: Users,
+      color: 'text-blue-400',
+      borderColor: 'border-blue-500/30',
+      bgColor: 'bg-blue-500/10',
+      accentBg: 'bg-blue-500/20',
+      badgeBg: 'bg-blue-500/10 text-blue-300 border-blue-500/20',
+    },
+    mixton_queues: {
+      label: 'Mixton 5v5 & Colas',
+      badge: 'COLAS MIXTON',
+      desc: 'Panel fijado de jugadores listos y comandos /listo y /nolisto para partidas mixtas.',
+      icon: Swords,
+      color: 'text-amber-400',
+      borderColor: 'border-amber-500/30',
+      bgColor: 'bg-amber-500/10',
+      accentBg: 'bg-amber-500/20',
+      badgeBg: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
+    },
+    moderation_support: {
+      label: 'Moderación, Alertas & Soporte',
+      badge: 'STAFF & SEGURIDAD',
+      desc: 'Llamados de auxilio en partida activa, avisos automáticos de sanciones de Hub y comunicados oficiales.',
+      icon: ShieldAlert,
+      color: 'text-red-400',
+      borderColor: 'border-red-500/30',
+      bgColor: 'bg-red-500/10',
+      accentBg: 'bg-red-500/20',
+      badgeBg: 'bg-red-500/10 text-red-300 border-red-500/20',
+    },
+    wallet_economy: {
+      label: 'Billetera & Recargas Yape',
+      badge: 'FINANZAS & APUESTAS',
+      desc: 'Validación de transferencias Yape, saldo de billetera virtual y paneles de recarga instantánea.',
+      icon: Wallet,
+      color: 'text-pink-400',
+      borderColor: 'border-pink-500/30',
+      bgColor: 'bg-pink-500/10',
+      accentBg: 'bg-pink-500/20',
+      badgeBg: 'bg-pink-500/10 text-pink-300 border-pink-500/20',
+    },
+  } as const;
+
   // Filtered Feature Flags
   const filteredFeatureFlags = useMemo(() => {
     return featureFlags.filter(flag => {
-      if (featuresCategory === 'modules' && flag.key.startsWith('command_')) return false;
-      if (featuresCategory === 'commands' && !flag.key.startsWith('command_')) return false;
+      // Type Filter
+      if (featuresCategory === 'modules' && flag.type !== 'module') return false;
+      if (featuresCategory === 'commands' && flag.type !== 'command') return false;
+      // Status Filter
+      if (featuresStatusFilter === 'active' && !flag.enabled) return false;
+      if (featuresStatusFilter === 'standby' && flag.enabled) return false;
+      // Domain Category Filter
+      if (featuresDomainFilter !== 'all' && flag.category !== featuresDomainFilter) return false;
+      // Search
       if (featuresSearch.trim()) {
         const query = featuresSearch.toLowerCase();
-        return flag.name.toLowerCase().includes(query) ||
-               flag.desc.toLowerCase().includes(query) ||
-               flag.key.toLowerCase().includes(query);
+        return (
+          flag.name.toLowerCase().includes(query) ||
+          flag.desc.toLowerCase().includes(query) ||
+          flag.key.toLowerCase().includes(query) ||
+          (flag.channelLabel && flag.channelLabel.toLowerCase().includes(query))
+        );
       }
       return true;
     });
-  }, [featureFlags, featuresCategory, featuresSearch]);
+  }, [featureFlags, featuresCategory, featuresStatusFilter, featuresDomainFilter, featuresSearch]);
+
+  // Statistics for KPIs
+  const featureStats = useMemo(() => {
+    const total = featureFlags.length;
+    const active = featureFlags.filter(f => f.enabled).length;
+    const standby = total - active;
+    const modules = featureFlags.filter(f => f.type === 'module');
+    const modulesActive = modules.filter(f => f.enabled).length;
+    const commands = featureFlags.filter(f => f.type === 'command');
+    const commandsActive = commands.filter(f => f.enabled).length;
+
+    const channelsTotal = featureFlags.filter(f => !!f.channelKey).length;
+    const channelsAssigned = featureFlags.filter(f => {
+      if (!f.channelKey) return false;
+      const val = (config as any)?.[f.channelKey];
+      return val && String(val).trim() !== '' && !String(val).startsWith('ID_');
+    }).length;
+
+    const percent = total > 0 ? Math.round((active / total) * 100) : 0;
+
+    return {
+      total,
+      active,
+      standby,
+      percent,
+      modulesTotal: modules.length,
+      modulesActive,
+      commandsTotal: commands.length,
+      commandsActive,
+      channelsTotal,
+      channelsAssigned
+    };
+  }, [featureFlags, config]);
+
+  // Batch toggle features handler
+  const handleBatchToggleFeatures = async (action: 'enable_all' | 'disable_all' | 'toggle_category', targetCategory?: string) => {
+    if (batchUpdatingFeatures) return;
+    setBatchUpdatingFeatures(true);
+    try {
+      const targetFlags = featureFlags.filter(f => {
+        if (targetCategory && f.category !== targetCategory) return false;
+        return true;
+      });
+
+      if (targetFlags.length === 0) {
+        showToast('No hay servicios que coincidan con la acción.', 'info');
+        setBatchUpdatingFeatures(false);
+        return;
+      }
+
+      const nextState = action === 'enable_all' ? true : action === 'disable_all' ? false : null;
+      const updates: Record<string, boolean> = {};
+
+      targetFlags.forEach(f => {
+        updates[f.key] = nextState !== null ? nextState : !f.enabled;
+      });
+
+      const guildQuery = selectedGuildId ? `?guildId=${selectedGuildId}` : '';
+      const res = await apiFetch(`/api/admin/features-batch${guildQuery}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates })
+      });
+
+      if (res.ok) {
+        setFeatureFlags(prev => prev.map(f => {
+          if (updates[f.key] !== undefined) {
+            return { ...f, enabled: updates[f.key] };
+          }
+          return f;
+        }));
+        setConfig(prev => ({ ...prev, ...updates }));
+        showToast(`Servicios actualizados correctamente (${Object.keys(updates).length} modificados).`, 'success');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.error || 'Error al actualizar servicios por lote.', 'error');
+      }
+    } catch {
+      showToast('Error de conexión al procesar cambio por lote.', 'error');
+    } finally {
+      setBatchUpdatingFeatures(false);
+    }
+  };
 
   // Update Feature Toggle States
   const handleToggleFeature = async (key: string) => {
@@ -1263,28 +1420,7 @@ export default function App() {
       if (res.ok) {
         const s = (await res.json()).settings || {};
         setConfig(s);
-        const features = [
-          { key: 'autoWelcomeDm', name: 'Welcome DM', desc: 'Enviar mensaje de bienvenida por DM a nuevos miembros', enabled: s.autoWelcomeDm !== false },
-          { key: 'autoRoleSync', name: 'Role Sync', desc: 'Sincronizar roles de nivel y club automáticamente', enabled: s.autoRoleSync !== false },
-          { key: 'autoNickSync', name: 'Nick Sync', desc: 'Sincronizar apodos de Discord al iniciar partida de Faceit', enabled: s.autoNickSync !== false },
-          { key: 'autoVoiceChannels', name: 'Voice Channels', desc: 'Crear canales de voz temporales para partidas', enabled: s.autoVoiceChannels !== false },
-          { key: 'autoMovePlayers', name: 'Auto Move', desc: 'Mover jugadores a sus canales de voz al iniciar partida', enabled: s.autoMovePlayers !== false },
-          { key: 'matchAnnouncements', name: 'Match Announcements', desc: 'Anunciar partidas en Discord', enabled: s.matchAnnouncements !== false },
-          { key: 'serverStatusAnnouncements', name: 'Server Status', desc: 'Anunciar estado de servidores LATAM', enabled: s.serverStatusAnnouncements !== false },
-          { key: 'liveMatchPanel', name: 'Live Panel', desc: 'Panel de partidas en vivo fijado', enabled: s.liveMatchPanel !== false },
-          { key: 'webhookValidation', name: 'Webhook Validation', desc: 'Validar firma de webhooks de Faceit', enabled: s.webhookValidation === true },
-          { key: 'adminCallNotifications', name: 'Admin Call Notifications', desc: 'Notificar alertas cuando un usuario llama a soporte', enabled: s.adminCallNotifications !== false },
-          { key: 'command_verificar', name: 'Cmd /verificar_fc', desc: 'Comando verificar perfil de Faceit', enabled: s.command_verificar !== false },
-          { key: 'command_desvincular', name: 'Cmd /desvincular_fc', desc: 'Comando desvincular perfil de Faceit', enabled: s.command_desvincular !== false },
-          { key: 'command_leaderboard', name: 'Cmd /leaderboard', desc: 'Comando ver tabla de posiciones', enabled: s.command_leaderboard !== false },
-          { key: 'command_stats', name: 'Cmd /stats', desc: 'Comando ver estadísticas de jugador', enabled: s.command_stats !== false },
-          { key: 'command_info', name: 'Cmd /info', desc: 'Comando ver información del bot y servidores', enabled: s.command_info !== false },
-          { key: 'command_sincronizar', name: 'Cmd /sincronizar_fc', desc: 'Comando sincronizar roles manualmente', enabled: s.command_sincronizar !== false },
-          { key: 'command_partidas', name: 'Cmd /partidas', desc: 'Comando ver partidas activas', enabled: s.command_partidas !== false },
-          { key: 'command_mixton_listo', name: 'Cmd /listo', desc: 'Comando marcar listo en mixton', enabled: s.command_mixton_listo !== false },
-          { key: 'command_mixton_no_listo', name: 'Cmd /nolisto', desc: 'Comando marcar no listo en mixton', enabled: s.command_mixton_no_listo !== false }
-        ];
-        setFeatureFlags(features);
+        setFeatureFlags(buildFeatureFlags(s));
         showToast('Servicios sincronizados correctamente con la base de datos.', 'success');
       } else {
         showToast('Error al consultar configuración de servicios en la base de datos.', 'error');
@@ -3792,133 +3928,601 @@ export default function App() {
 
               {/* VIEW 7: SERVICIOS */}
               {activeTab === 'features' && (
-                <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
+                <div className="space-y-6 animate-fade-in max-w-6xl mx-auto font-mono">
                   
-                  <div className="bg-[#111] border-2 border-white/10 p-8 rounded-none">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-3 mb-1">
-                          <h3 className="text-xl font-black text-white uppercase tracking-tighter italic">SERVICIOS ACTIVOS</h3>
-                          <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                            EN LÍNEA
+                  {/* Encabezado Principal */}
+                  <div className="bg-[#111] border-2 border-white/10 p-6 md:p-8 rounded-none shadow-[10px_10px_0px_rgba(0,0,0,0.5)]">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] font-black uppercase px-2.5 py-0.5 bg-white/10 text-neutral-300 border border-white/20 tracking-wider">
+                            PANEL DE CONTROL DE SERVICIOS
+                          </span>
+                          <span className="flex items-center gap-1.5 text-[10px] font-black uppercase px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 tracking-wider">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" />
+                            {featureStats.active}/{featureStats.total} ACTIVOS ({featureStats.percent}%)
                           </span>
                         </div>
-                        <p className="text-xs text-neutral-400 uppercase tracking-tight font-mono">
-                          Control maestro en tiempo real de los módulos lógicos y comandos del Bot.
+                        <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter italic">
+                          FUNCIONALIDADES Y MÓDULOS DEL BOT
+                        </h3>
+                        <p className="text-xs text-neutral-400 uppercase tracking-tight">
+                          Control maestro en tiempo real de los 32 servicios lógicos, bot de música, automatizaciones y comandos de Discord.
                         </p>
-                        <div className="mt-3 flex items-center gap-2">
-                          <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest font-black">ÁMBITO:</span>
-                          <span className="text-[10px] font-mono font-black text-white bg-white/10 px-2.5 py-0.5 border border-white/20 uppercase">
+                        <div className="pt-2 flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] text-neutral-500 uppercase tracking-widest font-black">ÁMBITO ACTIVO:</span>
+                          <span className="text-[10px] font-black text-white bg-white/10 px-3 py-1 border border-white/20 uppercase flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 bg-[#FF5500]" />
                             {selectedGuildId 
                               ? `Servidor: ${guilds.find(g => g.id === selectedGuildId)?.name || selectedGuildId}`
-                              : 'Configuración Global (Valores por defecto)'}
+                              : 'Configuración Global (Valores por defecto del Bot)'}
                           </span>
                         </div>
                       </div>
 
-                      <button
-                        onClick={handleRefreshFeatures}
-                        disabled={refreshingFeatures}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-white text-black hover:bg-neutral-200 text-xs font-black uppercase tracking-tighter rounded-none cursor-pointer self-start md:self-auto transition-all active:translate-y-[1px] shrink-0"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${refreshingFeatures ? 'animate-spin' : ''}`} />
-                        <span>{refreshingFeatures ? 'Sincronizando...' : 'Verificar Sincronización'}</span>
-                      </button>
-                    </div>
-                  </div>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                        {/* Selector de Modo de Vista */}
+                        <div className="flex items-center border border-white/20 bg-black p-0.5">
+                          <button
+                            onClick={() => setFeaturesViewMode('grouped')}
+                            className={`flex items-center gap-1.5 px-3 py-2 text-[10px] font-black uppercase transition-colors cursor-pointer ${
+                              featuresViewMode === 'grouped'
+                                ? 'bg-white text-black'
+                                : 'text-neutral-400 hover:text-white'
+                            }`}
+                            title="Ver organizado por categorías temáticas"
+                          >
+                            <Layers className="w-3.5 h-3.5" />
+                            <span>Por Categorías</span>
+                          </button>
+                          <button
+                            onClick={() => setFeaturesViewMode('list')}
+                            className={`flex items-center gap-1.5 px-3 py-2 text-[10px] font-black uppercase transition-colors cursor-pointer ${
+                              featuresViewMode === 'list'
+                                ? 'bg-white text-black'
+                                : 'text-neutral-400 hover:text-white'
+                            }`}
+                            title="Ver en lista compacta / tabla"
+                          >
+                            <ListFilter className="w-3.5 h-3.5" />
+                            <span>Lista Tabla</span>
+                          </button>
+                        </div>
 
-                  {/* Barra de Filtro y Búsqueda */}
-                  <div className="bg-[#111] border-2 border-white/10 p-4 flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                      <button
-                        onClick={() => setFeaturesCategory('all')}
-                        className={`px-3 py-1.5 text-[10px] font-black uppercase border transition-colors cursor-pointer ${
-                          featuresCategory === 'all'
-                            ? 'bg-white text-black border-white'
-                            : 'bg-[#151515] text-neutral-400 border-white/10 hover:border-white/30'
-                        }`}
-                      >
-                        Todos ({featureFlags.length})
-                      </button>
-                      <button
-                        onClick={() => setFeaturesCategory('modules')}
-                        className={`px-3 py-1.5 text-[10px] font-black uppercase border transition-colors cursor-pointer ${
-                          featuresCategory === 'modules'
-                            ? 'bg-white text-black border-white'
-                            : 'bg-[#151515] text-neutral-400 border-white/10 hover:border-white/30'
-                        }`}
-                      >
-                        Módulos ({featureFlags.filter(f => !f.key.startsWith('command_')).length})
-                      </button>
-                      <button
-                        onClick={() => setFeaturesCategory('commands')}
-                        className={`px-3 py-1.5 text-[10px] font-black uppercase border transition-colors cursor-pointer ${
-                          featuresCategory === 'commands'
-                            ? 'bg-white text-black border-white'
-                            : 'bg-[#151515] text-neutral-400 border-white/10 hover:border-white/30'
-                        }`}
-                      >
-                        Comandos ({featureFlags.filter(f => f.key.startsWith('command_')).length})
-                      </button>
-                    </div>
-
-                    <div className="relative w-full sm:w-64">
-                      <input
-                        type="text"
-                        value={featuresSearch}
-                        onChange={(e) => setFeaturesSearch(e.target.value)}
-                        placeholder="Buscar servicio..."
-                        className="w-full bg-[#0A0A0A] border border-white/20 text-xs text-white px-3 py-1.5 outline-none focus:border-white font-mono uppercase"
-                      />
-                      {featuresSearch && (
+                        {/* Botón de Sincronización */}
                         <button
-                          onClick={() => setFeaturesSearch('')}
-                          className="absolute right-2 top-1.5 text-neutral-500 hover:text-white text-xs cursor-pointer"
+                          onClick={handleRefreshFeatures}
+                          disabled={refreshingFeatures}
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-black hover:bg-neutral-200 text-xs font-black uppercase tracking-tighter rounded-none cursor-pointer transition-all active:translate-y-[1px]"
                         >
-                          ×
+                          <RefreshCw className={`w-3.5 h-3.5 ${refreshingFeatures ? 'animate-spin' : ''}`} />
+                          <span>{refreshingFeatures ? 'Sincronizando...' : 'Verificar DB'}</span>
                         </button>
-                      )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="bg-[#111] border-2 border-white/10 overflow-hidden shadow-[10px_10px_0px_rgba(0,0,0,0.5)] rounded-none">
-                    <div className="divide-y divide-white/5 font-mono">
-                      {filteredFeatureFlags.map(flag => {
-                        const isToggling = togglingFeatureKey === flag.key;
+                  {/* Tablero KPI Estadístico Superior */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-[#111] border-2 border-white/10 p-4 space-y-2">
+                      <div className="flex items-center justify-between text-neutral-400">
+                        <span className="text-[10px] font-black uppercase tracking-wider">TOTAL REGISTRADOS</span>
+                        <Sliders className="w-3.5 h-3.5 text-neutral-500" />
+                      </div>
+                      <div className="text-2xl font-black text-white">{featureStats.total}</div>
+                      <div className="space-y-1">
+                        <div className="w-full bg-neutral-900 h-1.5 border border-white/10 overflow-hidden">
+                          <div 
+                            className="bg-emerald-500 h-full transition-all duration-500"
+                            style={{ width: `${featureStats.percent}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[9px] text-neutral-400 font-black uppercase">
+                          <span className="text-emerald-400">{featureStats.active} Activos</span>
+                          <span className="text-neutral-500">{featureStats.standby} Standby</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-[#111] border-2 border-white/10 p-4 space-y-2">
+                      <div className="flex items-center justify-between text-neutral-400">
+                        <span className="text-[10px] font-black uppercase tracking-wider">MÓDULOS DE SISTEMA</span>
+                        <Radio className="w-3.5 h-3.5 text-blue-400" />
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-black text-white">{featureStats.modulesActive}</span>
+                        <span className="text-xs text-neutral-500">/ {featureStats.modulesTotal} activos</span>
+                      </div>
+                      <p className="text-[9px] text-neutral-400 uppercase">
+                        Automatizaciones, música, voz y monitoreo
+                      </p>
+                    </div>
+
+                    <div className="bg-[#111] border-2 border-white/10 p-4 space-y-2">
+                      <div className="flex items-center justify-between text-neutral-400">
+                        <span className="text-[10px] font-black uppercase tracking-wider">COMANDOS SLASH</span>
+                        <Power className="w-3.5 h-3.5 text-amber-400" />
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-black text-white">{featureStats.commandsActive}</span>
+                        <span className="text-xs text-neutral-500">/ {featureStats.commandsTotal} activos</span>
+                      </div>
+                      <p className="text-[9px] text-neutral-400 uppercase">
+                        Comandos interactivos registrados en Discord
+                      </p>
+                    </div>
+
+                    <div className="bg-[#111] border-2 border-white/10 p-4 space-y-2">
+                      <div className="flex items-center justify-between text-neutral-400">
+                        <span className="text-[10px] font-black uppercase tracking-wider">CANALES VINCULADOS</span>
+                        <ExternalLink className="w-3.5 h-3.5 text-purple-400" />
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-black text-white">{featureStats.channelsAssigned}</span>
+                        <span className="text-xs text-neutral-500">/ {featureStats.channelsTotal} requeridos</span>
+                      </div>
+                      <p className="text-[9px] text-neutral-400 uppercase">
+                        {featureStats.channelsAssigned === featureStats.channelsTotal ? 'Todos los canales asignados' : 'Algunos canales pendientes de asignar'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Barra de Filtro, Búsqueda y Acciones por Lote */}
+                  <div className="bg-[#111] border-2 border-white/10 p-4 space-y-3">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                      {/* Filtros de Tipo y Estado */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Tipo */}
+                        <div className="flex items-center border border-white/15 bg-black p-0.5">
+                          <button
+                            onClick={() => setFeaturesCategory('all')}
+                            className={`px-2.5 py-1 text-[10px] font-black uppercase transition-colors cursor-pointer ${
+                              featuresCategory === 'all'
+                                ? 'bg-white text-black'
+                                : 'text-neutral-400 hover:text-white'
+                            }`}
+                          >
+                            Todos ({featureFlags.length})
+                          </button>
+                          <button
+                            onClick={() => setFeaturesCategory('modules')}
+                            className={`px-2.5 py-1 text-[10px] font-black uppercase transition-colors cursor-pointer ${
+                              featuresCategory === 'modules'
+                                ? 'bg-white text-black'
+                                : 'text-neutral-400 hover:text-white'
+                            }`}
+                          >
+                            Módulos ({featureStats.modulesTotal})
+                          </button>
+                          <button
+                            onClick={() => setFeaturesCategory('commands')}
+                            className={`px-2.5 py-1 text-[10px] font-black uppercase transition-colors cursor-pointer ${
+                              featuresCategory === 'commands'
+                                ? 'bg-white text-black'
+                                : 'text-neutral-400 hover:text-white'
+                            }`}
+                          >
+                            Comandos ({featureStats.commandsTotal})
+                          </button>
+                        </div>
+
+                        {/* Estado */}
+                        <div className="flex items-center border border-white/15 bg-black p-0.5">
+                          <button
+                            onClick={() => setFeaturesStatusFilter('all')}
+                            className={`px-2 py-1 text-[10px] font-black uppercase transition-colors cursor-pointer ${
+                              featuresStatusFilter === 'all'
+                                ? 'bg-neutral-200 text-black'
+                                : 'text-neutral-400 hover:text-white'
+                            }`}
+                          >
+                            Todos
+                          </button>
+                          <button
+                            onClick={() => setFeaturesStatusFilter('active')}
+                            className={`px-2 py-1 text-[10px] font-black uppercase transition-colors cursor-pointer ${
+                              featuresStatusFilter === 'active'
+                                ? 'bg-emerald-500 text-black'
+                                : 'text-neutral-400 hover:text-white'
+                            }`}
+                          >
+                            Activos ({featureStats.active})
+                          </button>
+                          <button
+                            onClick={() => setFeaturesStatusFilter('standby')}
+                            className={`px-2 py-1 text-[10px] font-black uppercase transition-colors cursor-pointer ${
+                              featuresStatusFilter === 'standby'
+                                ? 'bg-neutral-600 text-white'
+                                : 'text-neutral-400 hover:text-white'
+                            }`}
+                          >
+                            Standby ({featureStats.standby})
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Buscador y Acciones Masivas */}
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        {/* Buscador */}
+                        <div className="relative w-full sm:w-64">
+                          <input
+                            type="text"
+                            value={featuresSearch}
+                            onChange={(e) => setFeaturesSearch(e.target.value)}
+                            placeholder="Buscar por nombre, key o canal..."
+                            className="w-full bg-[#0A0A0A] border border-white/20 text-xs text-white px-3 py-1.5 outline-none focus:border-white font-mono uppercase placeholder:text-neutral-600"
+                          />
+                          {featuresSearch && (
+                            <button
+                              onClick={() => setFeaturesSearch('')}
+                              className="absolute right-2 top-1.5 text-neutral-500 hover:text-white text-xs cursor-pointer font-black"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Botones de Acción Masiva */}
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleBatchToggleFeatures('enable_all')}
+                            disabled={batchUpdatingFeatures}
+                            className="px-2.5 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 text-[9px] font-black uppercase transition-colors cursor-pointer disabled:opacity-50"
+                            title="Activar todos los servicios mostrados"
+                          >
+                            Activar Todos
+                          </button>
+                          <button
+                            onClick={() => handleBatchToggleFeatures('disable_all')}
+                            disabled={batchUpdatingFeatures}
+                            className="px-2.5 py-1.5 bg-neutral-800 text-neutral-400 border border-white/10 hover:bg-neutral-700 hover:text-white text-[9px] font-black uppercase transition-colors cursor-pointer disabled:opacity-50"
+                            title="Desactivar todos los servicios mostrados"
+                          >
+                            Desactivar Todos
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Filtro por Categorías Temáticas (Pills con Iconos) */}
+                    <div className="pt-2 border-t border-white/5 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-neutral-500 mr-1">
+                        CATEGORÍAS:
+                      </span>
+                      <button
+                        onClick={() => setFeaturesDomainFilter('all')}
+                        className={`px-2.5 py-1 text-[9px] font-black uppercase border transition-colors cursor-pointer ${
+                          featuresDomainFilter === 'all'
+                            ? 'bg-white text-black border-white'
+                            : 'bg-black text-neutral-400 border-white/10 hover:border-white/30'
+                        }`}
+                      >
+                        Todas ({featureFlags.length})
+                      </button>
+                      {(Object.entries(CATEGORY_META) as [FeatureCategory, typeof CATEGORY_META[FeatureCategory]][]).map(([catKey, meta]) => {
+                        const count = featureFlags.filter(f => f.category === catKey).length;
+                        const activeCount = featureFlags.filter(f => f.category === catKey && f.enabled).length;
+                        const isSelected = featuresDomainFilter === catKey;
+                        const IconComponent = meta.icon;
                         return (
-                          <div key={flag.key} className="p-6 flex items-center justify-between hover:bg-white/[0.02] border-b border-white/5 transition-colors">
-                            <div className="space-y-1 pr-4">
-                              <div className="flex items-center gap-2">
-                                <h4 className="text-xs font-black uppercase tracking-tight text-white">{flag.name}</h4>
-                                <span className="text-[9px] text-neutral-500 font-mono">({flag.key})</span>
+                          <button
+                            key={catKey}
+                            onClick={() => setFeaturesDomainFilter(isSelected ? 'all' : catKey)}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-black uppercase border transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-white text-black border-white shadow-[0_0_10px_rgba(255,255,255,0.2)]'
+                                : 'bg-[#0E0E0E] text-neutral-300 border-white/10 hover:border-white/30 hover:bg-white/[0.03]'
+                            }`}
+                          >
+                            <IconComponent className={`w-3 h-3 ${isSelected ? 'text-black' : meta.color}`} />
+                            <span>{meta.label}</span>
+                            <span className={`text-[8px] font-mono px-1 py-0.2 border ${isSelected ? 'bg-black text-white border-black' : 'bg-white/5 text-neutral-400 border-white/10'}`}>
+                              {activeCount}/{count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* VISTA A: AGRUPADA POR CATEGORÍAS */}
+                  {featuresViewMode === 'grouped' && (
+                    <div className="space-y-6">
+                      {(Object.entries(CATEGORY_META) as [FeatureCategory, typeof CATEGORY_META[FeatureCategory]][]).map(([catKey, meta]) => {
+                        // Flags para esta categoría según los filtros activos
+                        const categoryFlags = filteredFeatureFlags.filter(f => f.category === catKey);
+                        if (categoryFlags.length === 0) return null;
+
+                        const allFlagsInCat = featureFlags.filter(f => f.category === catKey);
+                        const activeInCat = allFlagsInCat.filter(f => f.enabled).length;
+                        const IconComponent = meta.icon;
+
+                        return (
+                          <div 
+                            key={catKey}
+                            className="bg-[#111] border-2 border-white/10 rounded-none overflow-hidden shadow-[10px_10px_0px_rgba(0,0,0,0.5)]"
+                          >
+                            {/* Cabecera de Categoría */}
+                            <div className="p-5 bg-gradient-to-r from-[#181818] via-[#141414] to-[#101010] border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                              <div className="flex items-start gap-3.5">
+                                <div className={`p-2.5 border ${meta.borderColor} ${meta.bgColor} rounded-none shrink-0`}>
+                                  <IconComponent className={`w-5 h-5 ${meta.color}`} />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="text-base font-black text-white uppercase tracking-tight">
+                                      {meta.label}
+                                    </h4>
+                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 border ${meta.badgeBg}`}>
+                                      {meta.badge}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-neutral-400 uppercase tracking-tight mt-0.5">
+                                    {meta.desc}
+                                  </p>
+                                </div>
                               </div>
-                              <p className="text-[11px] text-neutral-400 uppercase">{flag.desc}</p>
+
+                              <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                                <span className={`text-[10px] font-black font-mono uppercase px-2.5 py-1 border ${
+                                  activeInCat === allFlagsInCat.length
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                    : activeInCat > 0
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                      : 'bg-neutral-800 text-neutral-400 border-white/10'
+                                }`}>
+                                  {activeInCat} / {allFlagsInCat.length} ACTIVOS
+                                </span>
+                                <button
+                                  onClick={() => handleBatchToggleFeatures('toggle_category', catKey)}
+                                  disabled={batchUpdatingFeatures}
+                                  className="px-2.5 py-1 bg-white/5 hover:bg-white/10 text-neutral-300 border border-white/15 text-[9px] font-black uppercase cursor-pointer transition-colors"
+                                  title="Alternar estado de todos los servicios en esta categoría"
+                                >
+                                  Alternar Categoría
+                                </button>
+                              </div>
                             </div>
 
-                            <button
-                              onClick={() => handleToggleFeature(flag.key)}
-                              disabled={isToggling}
-                              className={`px-4 py-2 border text-[9px] font-mono font-black uppercase rounded-none transition-colors cursor-pointer flex items-center gap-2 ${
-                                isToggling
-                                  ? 'bg-neutral-800 text-neutral-400 border-white/20 cursor-wait'
-                                  : flag.enabled 
-                                    ? 'bg-white text-black border-white hover:bg-neutral-200' 
-                                    : 'bg-neutral-800 text-neutral-500 border-white/10 hover:bg-neutral-700'
-                              }`}
-                            >
-                              {isToggling && <RefreshCw className="w-3 h-3 animate-spin" />}
-                              <span>{isToggling ? 'GUARDANDO...' : flag.enabled ? 'ACTIVO' : 'STANDBY'}</span>
-                            </button>
+                            {/* Grid 2 Columnas de Servicios */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 p-4 md:p-5 bg-[#0A0A0A]">
+                              {categoryFlags.map(flag => {
+                                const isToggling = togglingFeatureKey === flag.key;
+                                const channelVal = flag.channelKey ? (config as any)?.[flag.channelKey] : null;
+                                const hasChannelConfigured = channelVal && String(channelVal).trim() !== '' && !String(channelVal).startsWith('ID_');
+
+                                return (
+                                  <div 
+                                    key={flag.key}
+                                    className={`p-4 border transition-all flex flex-col justify-between gap-3.5 ${
+                                      flag.enabled 
+                                        ? 'bg-[#121212] border-white/15 hover:border-white/30' 
+                                        : 'bg-[#0E0E0E] border-white/5 opacity-75 hover:opacity-100 hover:border-white/15'
+                                    }`}
+                                  >
+                                    {/* Fila Superior: Badge Tipo, Nombre y Status Dot */}
+                                    <div className="space-y-1.5">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 border ${
+                                            flag.type === 'module'
+                                              ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                                              : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                          }`}>
+                                            {flag.type === 'module' ? 'MÓDULO' : 'COMANDO'}
+                                          </span>
+                                          <h5 className="text-xs font-black uppercase tracking-tight text-white">
+                                            {flag.name}
+                                          </h5>
+                                        </div>
+
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          <span className={`w-2 h-2 rounded-full ${
+                                            flag.enabled ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-600'
+                                          }`} />
+                                          <span className={`text-[9px] font-black uppercase ${
+                                            flag.enabled ? 'text-emerald-400' : 'text-neutral-500'
+                                          }`}>
+                                            {flag.enabled ? 'ACTIVO' : 'STANDBY'}
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <div className="text-[9px] text-neutral-500 font-mono">
+                                        key: <span className="text-neutral-400 font-bold">{flag.key}</span>
+                                      </div>
+
+                                      <p className="text-[11px] text-neutral-300 leading-relaxed uppercase">
+                                        {flag.desc}
+                                      </p>
+                                    </div>
+
+                                    {/* Estado del Canal Discord (si aplica) */}
+                                    {flag.channelKey && (
+                                      <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[9px] font-mono">
+                                        <span className="text-neutral-500 uppercase font-black">
+                                          {flag.channelLabel || 'CANAL'}:
+                                        </span>
+                                        {hasChannelConfigured ? (
+                                          <span className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 flex items-center gap-1 font-bold">
+                                            <span>#</span>{channelVal}
+                                          </span>
+                                        ) : (
+                                          <span className="text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 flex items-center gap-1 font-bold">
+                                            ⚠️ No Asignado
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Botón de Toggle con Feedback */}
+                                    <button
+                                      onClick={() => handleToggleFeature(flag.key)}
+                                      disabled={isToggling}
+                                      className={`w-full py-2 px-3 border text-[10px] font-mono font-black uppercase rounded-none transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                                        isToggling
+                                          ? 'bg-neutral-800 text-neutral-400 border-white/20 cursor-wait'
+                                          : flag.enabled 
+                                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30' 
+                                            : 'bg-neutral-800 text-neutral-400 border-white/10 hover:bg-neutral-700 hover:text-white'
+                                      }`}
+                                    >
+                                      {isToggling ? (
+                                        <>
+                                          <RefreshCw className="w-3 h-3 animate-spin" />
+                                          <span>GUARDANDO CAMBIOS...</span>
+                                        </>
+                                      ) : flag.enabled ? (
+                                        <>
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                          <span>HABILITADO • CLICK PARA DESACTIVAR</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className="w-1.5 h-1.5 rounded-full bg-neutral-600" />
+                                          <span>DESHABILITADO • CLICK PARA ACTIVAR</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
                         );
                       })}
-                      {filteredFeatureFlags.length === 0 && (
-                        <div className="p-8 text-center text-xs text-neutral-500 uppercase font-mono">
-                          No se encontraron servicios que coincidan con la búsqueda.
-                        </div>
-                      )}
                     </div>
-                  </div>
+                  )}
+
+                  {/* VISTA B: LISTA TABLA COMPACTA */}
+                  {featuresViewMode === 'list' && (
+                    <div className="bg-[#111] border-2 border-white/10 overflow-hidden shadow-[10px_10px_0px_rgba(0,0,0,0.5)] rounded-none">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left font-mono border-collapse">
+                          <thead>
+                            <tr className="bg-black/60 border-b-2 border-white/10 text-[9px] font-black uppercase text-neutral-400 tracking-wider">
+                              <th className="p-3 w-12 text-center">ESTADO</th>
+                              <th className="p-3">FUNCIONALIDAD / SERVICIO</th>
+                              <th className="p-3">CATEGORÍA</th>
+                              <th className="p-3">TIPO</th>
+                              <th className="p-3">CANAL ASOCIADO</th>
+                              <th className="p-3 text-right">ACCIÓN</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5 text-xs">
+                            {filteredFeatureFlags.map(flag => {
+                              const isToggling = togglingFeatureKey === flag.key;
+                              const channelVal = flag.channelKey ? (config as any)?.[flag.channelKey] : null;
+                              const hasChannelConfigured = channelVal && String(channelVal).trim() !== '' && !String(channelVal).startsWith('ID_');
+                              const catMeta = flag.category ? CATEGORY_META[flag.category] : null;
+
+                              return (
+                                <tr key={flag.key} className="hover:bg-white/[0.02] transition-colors">
+                                  {/* Estado Dot */}
+                                  <td className="p-3 text-center">
+                                    <span className={`inline-block w-2.5 h-2.5 rounded-full ${
+                                      flag.enabled ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-600'
+                                    }`} />
+                                  </td>
+
+                                  {/* Nombre y Clave */}
+                                  <td className="p-3">
+                                    <div className="font-black text-white uppercase">{flag.name}</div>
+                                    <div className="text-[10px] text-neutral-500 font-mono">({flag.key})</div>
+                                    <div className="text-[10px] text-neutral-400 uppercase mt-0.5 max-w-md line-clamp-1">
+                                      {flag.desc}
+                                    </div>
+                                  </td>
+
+                                  {/* Categoría */}
+                                  <td className="p-3">
+                                    {catMeta ? (
+                                      <span className={`text-[8px] font-black uppercase px-2 py-0.5 border ${catMeta.badgeBg}`}>
+                                        {catMeta.label}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[8px] text-neutral-500 uppercase font-mono">GENERAL</span>
+                                    )}
+                                  </td>
+
+                                  {/* Tipo */}
+                                  <td className="p-3">
+                                    <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 border ${
+                                      flag.type === 'module'
+                                        ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                                        : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                    }`}>
+                                      {flag.type === 'module' ? 'MÓDULO' : 'COMANDO'}
+                                    </span>
+                                  </td>
+
+                                  {/* Canal */}
+                                  <td className="p-3">
+                                    {flag.channelKey ? (
+                                      hasChannelConfigured ? (
+                                        <span className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[9px] font-mono">
+                                          #{channelVal}
+                                        </span>
+                                      ) : (
+                                        <span className="text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-[9px] font-mono">
+                                          ⚠️ No Asignado
+                                        </span>
+                                      )
+                                    ) : (
+                                      <span className="text-neutral-600 text-[10px]">—</span>
+                                    )}
+                                  </td>
+
+                                  {/* Botón Acción */}
+                                  <td className="p-3 text-right">
+                                    <button
+                                      onClick={() => handleToggleFeature(flag.key)}
+                                      disabled={isToggling}
+                                      className={`px-3 py-1.5 border text-[9px] font-black uppercase transition-colors cursor-pointer ${
+                                        isToggling
+                                          ? 'bg-neutral-800 text-neutral-400 border-white/20'
+                                          : flag.enabled
+                                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                                            : 'bg-neutral-800 text-neutral-400 border-white/10 hover:bg-neutral-700 hover:text-white'
+                                      }`}
+                                    >
+                                      {isToggling ? 'GUARDANDO...' : flag.enabled ? 'ACTIVO' : 'STANDBY'}
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Estado vacío cuando la búsqueda o filtros no devuelven nada */}
+                  {filteredFeatureFlags.length === 0 && (
+                    <div className="bg-[#111] border-2 border-white/10 p-12 text-center rounded-none shadow-[10px_10px_0px_rgba(0,0,0,0.5)] space-y-4">
+                      <div className="text-neutral-500 font-mono text-3xl">🔍</div>
+                      <div className="space-y-1">
+                        <h4 className="text-base font-black text-white uppercase">
+                          No se encontraron funcionalidades coincidentes
+                        </h4>
+                        <p className="text-xs text-neutral-400 uppercase font-mono max-w-md mx-auto">
+                          Ningún servicio coincide con los filtros aplicados ({featuresSearch ? `búsqueda: "${featuresSearch}"` : 'filtros de categoría o estado'}).
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setFeaturesSearch('');
+                          setFeaturesCategory('all');
+                          setFeaturesStatusFilter('all');
+                          setFeaturesDomainFilter('all');
+                        }}
+                        className="px-4 py-2 bg-white text-black hover:bg-neutral-200 text-xs font-black uppercase cursor-pointer"
+                      >
+                        Restablecer Todos los Filtros
+                      </button>
+                    </div>
+                  )}
 
                 </div>
               )}

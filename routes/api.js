@@ -1185,6 +1185,15 @@ export function createApiRouter(client, db, config) {
         invalidateSettingsCache();
         const statusStr = guildSettings[key] ? 'activado' : 'desactivado';
         await db.addLogEntry(guildSettings[key] ? 'success' : 'warn', `El servicio "${key}" fue ${statusStr} para el servidor ${targetGuildId} desde el panel web.`, 'system', targetGuildId);
+
+        // Si se activó musicBot, intentar desplegar panel de música si no existe
+        if (key === 'musicBot' && guildSettings[key]) {
+          try {
+            const { checkAndDeployMusicPanel } = await import('../events/ready.js');
+            checkAndDeployMusicPanel(client, db).catch(e => logger.warn('Error al autodesplegar panel de música desde toggle:', e.message));
+          } catch (e) {}
+        }
+
         res.json({ success: true, key, enabled: guildSettings[key] });
       } else {
         // Global feature toggle (solo global_admin)
@@ -1198,11 +1207,75 @@ export function createApiRouter(client, db, config) {
         invalidateSettingsCache();
         const statusStr = settings[key] ? 'activado' : 'desactivado';
         await db.addLogEntry(settings[key] ? 'success' : 'warn', `El servicio "${key}" fue ${statusStr} desde el panel web.`, 'system');
+
+        // Si se activó musicBot, intentar desplegar panel de música si no existe
+        if (key === 'musicBot' && settings[key]) {
+          try {
+            const { checkAndDeployMusicPanel } = await import('../events/ready.js');
+            checkAndDeployMusicPanel(client, db).catch(e => logger.warn('Error al autodesplegar panel de música desde toggle:', e.message));
+          } catch (e) {}
+        }
+
         res.json({ success: true, key, enabled: settings[key] });
       }
     } catch (err) {
       logger.error('Error en /features/:key:', err);
       res.status(500).json({ error: 'Error al actualizar feature flag' });
+    }
+  });
+
+  // --- Feature Flags (actualización masiva/por lote) ---
+  router.post('/features-batch', requireAuth, async (req, res) => {
+    try {
+      const { updates } = req.body;
+      if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({ error: 'El cuerpo de la petición debe contener un objeto "updates" con los pares servicio/estado.' });
+      }
+      const targetGuildId = resolveTargetGuildId(req);
+
+      if (targetGuildId) {
+        const guildSettings = await db.getGuildSettings(targetGuildId);
+        for (const [key, val] of Object.entries(updates)) {
+          guildSettings[key] = val === true;
+        }
+        await db.setGuildSettings(targetGuildId, guildSettings);
+        db.invalidateSettingsCache();
+        invalidateSettingsCache();
+        await db.addLogEntry('info', `Actualización de lote de servicios (${Object.keys(updates).length} flags modificados) para el servidor ${targetGuildId}.`, 'system', targetGuildId);
+
+        if (updates.musicBot === true) {
+          try {
+            const { checkAndDeployMusicPanel } = await import('../events/ready.js');
+            checkAndDeployMusicPanel(client, db).catch(() => {});
+          } catch (e) {}
+        }
+
+        return res.json({ success: true, settings: guildSettings });
+      } else {
+        if (req.user?.role !== 'global_admin') {
+          return res.status(403).json({ error: 'Solo el administrador global puede modificar la configuración global.' });
+        }
+        const settings = await getSettings(true);
+        for (const [key, val] of Object.entries(updates)) {
+          settings[key] = val === true;
+        }
+        await db.setSettings(settings);
+        db.invalidateSettingsCache();
+        invalidateSettingsCache();
+        await db.addLogEntry('info', `Actualización de lote de servicios (${Object.keys(updates).length} flags modificados) globales.`, 'system');
+
+        if (updates.musicBot === true) {
+          try {
+            const { checkAndDeployMusicPanel } = await import('../events/ready.js');
+            checkAndDeployMusicPanel(client, db).catch(() => {});
+          } catch (e) {}
+        }
+
+        return res.json({ success: true, settings });
+      }
+    } catch (err) {
+      logger.error('Error en /features-batch:', err);
+      res.status(500).json({ error: 'Error al actualizar servicios por lote' });
     }
   });
 

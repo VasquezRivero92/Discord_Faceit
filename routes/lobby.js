@@ -1039,9 +1039,11 @@ export function createLobbyRouter(client, db, config, wss) {
 
       state.teams = newTeams;
       state.pickOrder = [];
+      state.pickSequence = [];
       state.currentPickIndex = 0;
       state.draftStarted = false;
       state.draftFinished = false;
+      state.mapVeto = null;
 
       await db.saveMixtonLobbyState(state, req.guildId);
       mixtonEvents.emit('update', req.guildId);
@@ -1179,6 +1181,131 @@ export function createLobbyRouter(client, db, config, wss) {
     }
   });
 
+  /**
+   * Pool oficial de 7 mapas competitivos de CS2 para la fase de Veto.
+   */
+  const CS2_OFFICIAL_MAP_POOL = [
+    {
+      id: 'de_mirage',
+      name: 'Mirage',
+      image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_mirage.png',
+      icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_mirage.png'
+    },
+    {
+      id: 'de_inferno',
+      name: 'Inferno',
+      image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_inferno.png',
+      icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_inferno.png'
+    },
+    {
+      id: 'de_dust2',
+      name: 'Dust II',
+      image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_dust2.png',
+      icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_dust2.png'
+    },
+    {
+      id: 'de_nuke',
+      name: 'Nuke',
+      image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_nuke.png',
+      icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_nuke.png'
+    },
+    {
+      id: 'de_ancient',
+      name: 'Ancient',
+      image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_ancient.png',
+      icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_ancient.png'
+    },
+    {
+      id: 'de_anubis',
+      name: 'Anubis',
+      image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_anubis.png',
+      icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_anubis.png'
+    },
+    {
+      id: 'de_vertigo',
+      name: 'Vertigo',
+      image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_vertigo.png',
+      icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_vertigo.png'
+    }
+  ];
+
+  /**
+   * Genera la secuencia exacta de elecciones de jugadores por equipo.
+   * Regla solicitada:
+   * - El 1er equipo pickea 1
+   * - El 2do equipo pickea 2
+   * - Luego el 1er equipo pickea 2
+   * - Y al último el 2do equipo pickea 1 (o lo necesario hasta completar 4 c/u).
+   * Si hay 4 equipos: el 3ro pickea 1, el 4to pickea 2, etc.
+   */
+  function generateDraftPickSequence(teamIds, targetPlayersPerTeam = 4) {
+    if (!Array.isArray(teamIds) || teamIds.length === 0) return [];
+    const counts = {};
+    teamIds.forEach(id => { counts[id] = 0; });
+    const sequence = [];
+
+    // Ronda 1: Impares (idx 0, 2...) 1 pick, Pares (idx 1, 3...) 2 picks
+    teamIds.forEach((id, idx) => {
+      const toPick = (idx % 2 === 0) ? 1 : 2;
+      for (let i = 0; i < toPick && counts[id] < targetPlayersPerTeam; i++) {
+        sequence.push(id);
+        counts[id]++;
+      }
+    });
+
+    // Ronda 2: Impares (idx 0, 2...) 2 picks, Pares (idx 1, 3...) 1 pick
+    teamIds.forEach((id, idx) => {
+      const toPick = (idx % 2 === 0) ? 2 : 1;
+      for (let i = 0; i < toPick && counts[id] < targetPlayersPerTeam; i++) {
+        sequence.push(id);
+        counts[id]++;
+      }
+    });
+
+    // Rondas subsiguientes: 1 pick por equipo hasta que todos tengan targetPlayersPerTeam
+    let remainingNeeded = true;
+    while (remainingNeeded) {
+      remainingNeeded = false;
+      for (const id of teamIds) {
+        if (counts[id] < targetPlayersPerTeam) {
+          sequence.push(id);
+          counts[id]++;
+          remainingNeeded = true;
+        }
+      }
+    }
+
+    return sequence;
+  }
+
+  /**
+   * Genera la secuencia de turnos para el baneo de mapas entre 2 equipos.
+   * Regla:
+   * El 1er capitán banea 1, luego el 2do banea 2, luego el 1ero banea 2,
+   * y así sucesivamente hasta que solo quede exactamente 1 mapa.
+   */
+  function generateMapBanSequence(teamAId, teamBId, totalMaps = 7) {
+    const bansNeeded = Math.max(0, totalMaps - 1);
+    const sequence = [];
+    let remaining = bansNeeded;
+    let turn = 0;
+
+    while (remaining > 0) {
+      const isTeamA = (turn % 2 === 0);
+      const teamId = isTeamA ? teamAId : teamBId;
+      const targetBans = (turn === 0) ? 1 : 2;
+      const bansThisTurn = Math.min(targetBans, remaining);
+
+      for (let i = 0; i < bansThisTurn; i++) {
+        sequence.push(teamId);
+        remaining--;
+      }
+      turn++;
+    }
+
+    return sequence;
+  }
+
   // 5. Iniciar draft (Admin)
   router.post('/mixton-start', requireAuth, verifyGuildAdmin, async (req, res) => {
     try {
@@ -1197,6 +1324,7 @@ export function createLobbyRouter(client, db, config, wss) {
         state.pickOrder = state.teams.map(t => t.id);
       }
 
+      state.pickSequence = generateDraftPickSequence(state.pickOrder, 4);
       state.draftStarted = true;
       state.draftFinished = false;
       state.currentPickIndex = 0;
@@ -1225,7 +1353,11 @@ export function createLobbyRouter(client, db, config, wss) {
         return res.status(400).json({ error: 'La selección de jugadores no está activa.' });
       }
 
-      const currentTeamId = state.pickOrder[state.currentPickIndex];
+      if (!state.pickSequence || state.pickSequence.length === 0) {
+        state.pickSequence = generateDraftPickSequence(state.pickOrder, 4);
+      }
+
+      const currentTeamId = state.pickSequence[state.currentPickIndex] || state.pickOrder[state.currentPickIndex % state.pickOrder.length];
       const currentTeam = state.teams.find(t => t.id === currentTeamId);
       
       if (!currentTeam || !currentTeam.captain) {
@@ -1282,12 +1414,12 @@ export function createLobbyRouter(client, db, config, wss) {
 
       currentTeam.players.push(playerObj);
 
-      // Avanzar al siguiente
-      state.currentPickIndex = (state.currentPickIndex + 1) % state.pickOrder.length;
+      // Avanzar al siguiente pick en la secuencia
+      state.currentPickIndex++;
 
       // Verificar si terminó el draft
-      const allDone = state.teams.every(t => t.players.length === 4);
-      if (allDone) {
+      const allDone = state.teams.every(t => (t.players || []).length === 4);
+      if (allDone || state.currentPickIndex >= state.pickSequence.length) {
         state.draftFinished = true;
         state.draftStarted = false;
       }
@@ -1301,6 +1433,106 @@ export function createLobbyRouter(client, db, config, wss) {
     }
   });
 
+  // 6.5. Asignar automáticamente y balancear jugadores (Admin)
+  router.post('/mixton-auto-assign', requireAuth, verifyGuildAdmin, async (req, res) => {
+    try {
+      const state = await db.getMixtonLobbyState(req.guildId);
+
+      if (!state.teams || state.teams.length < 2) {
+        return res.status(400).json({ error: 'Se requieren al menos 2 equipos configurados.' });
+      }
+
+      const missingCaptains = state.teams.some(t => !t.captain);
+      if (missingCaptains) {
+        return res.status(400).json({ error: 'Debes asignar manualmente los capitanes a todos los equipos antes de autocompletar.' });
+      }
+
+      // Obtener todos los jugadores listos
+      const readyPlayers = await db.getReadyPlayers(req.guildId);
+
+      // Filtrar los que ya están como capitanes o ya en algún equipo
+      const occupiedDiscordIds = new Set();
+      state.teams.forEach(t => {
+        if (t.captain) occupiedDiscordIds.add(t.captain.discordId);
+        (t.players || []).forEach(p => occupiedDiscordIds.add(p.discordId));
+      });
+
+      const pool = readyPlayers.filter(p => !occupiedDiscordIds.has(p.discordId));
+      const totalNeeded = state.teams.reduce((acc, t) => acc + (4 - (t.players ? t.players.length : 0)), 0);
+
+      if (pool.length < totalNeeded) {
+        return res.status(400).json({ 
+          error: `No hay suficientes jugadores disponibles en la cola. Se necesitan ${totalNeeded} jugadores más, pero solo hay ${pool.length} disponibles.` 
+        });
+      }
+
+      // Ordenar pool de mayor a menor nivel/habilidad (Tier -> ELO -> Nivel)
+      const tierRank = { S: 4, A: 3, B: 2, C: 1 };
+      const getPlayerTierValue = (p) => {
+        const t = p.mixton_tier_override || (p.faceit_level >= 10 ? 'S' : (p.faceit_level >= 8 ? 'A' : (p.faceit_level >= 5 ? 'B' : 'C')));
+        return tierRank[t] || 1;
+      };
+
+      pool.sort((a, b) => {
+        const tierDiff = getPlayerTierValue(b) - getPlayerTierValue(a);
+        if (tierDiff !== 0) return tierDiff;
+        const eloDiff = (b.faceit_elo || 1000) - (a.faceit_elo || 1000);
+        if (eloDiff !== 0) return eloDiff;
+        return (b.faceit_level || 1) - (a.faceit_level || 1);
+      });
+
+      const targetGuildId = req.guildId || DISCORD_GUILD_ID;
+      const guild = client.guilds.cache.get(targetGuildId) || await client.guilds.fetch(targetGuildId).catch(() => null);
+
+      // Repartición balanceada: el equipo incompleto con menor ELO acumulado recibe al mejor jugador restante
+      for (const p of pool) {
+        const incompleteTeams = state.teams.filter(t => (t.players || []).length < 4);
+        if (incompleteTeams.length === 0) break;
+
+        incompleteTeams.sort((a, b) => {
+          const eloA = (a.captain?.faceit_elo || 1000) + (a.players || []).reduce((sum, pl) => sum + (pl.faceit_elo || 1000), 0);
+          const eloB = (b.captain?.faceit_elo || 1000) + (b.players || []).reduce((sum, pl) => sum + (pl.faceit_elo || 1000), 0);
+          return eloA - eloB;
+        });
+
+        const targetTeam = incompleteTeams[0];
+        const discordId = p.discordId;
+        let discordUser = null;
+        if (guild) {
+          discordUser = await getDiscordUserDetails(guild, discordId);
+        }
+
+        const playerObj = {
+          discordId,
+          faceit_player_id: p.faceit_player_id || '',
+          faceit_nickname: p.faceit_nickname || '',
+          faceit_level: p.faceit_level || 1,
+          faceit_elo: p.faceit_elo || 1000,
+          mixton_tier_override: p.mixton_tier_override || null,
+          mixton_guild_id: p.mixton_guild_id || null,
+          discordUser
+        };
+
+        if (!targetTeam.players) targetTeam.players = [];
+        targetTeam.players.push(playerObj);
+      }
+
+      state.draftFinished = true;
+      state.draftStarted = false;
+      state.currentPickIndex = 0;
+
+      await db.saveMixtonLobbyState(state, req.guildId);
+      mixtonEvents.emit('update', req.guildId);
+
+      await db.addLogEntry('info', `El administrador ${req.user.username} autocompletó los equipos de Mixton de forma balanceada.`, 'system');
+
+      res.json({ success: true, state });
+    } catch (err) {
+      logger.error('Error en mixton-auto-assign:', err);
+      res.status(500).json({ error: 'Error al auto-asignar jugadores: ' + err.message });
+    }
+  });
+
   // 7. Reiniciar lobby mixton (Admin)
   router.post('/mixton-reset', requireAuth, verifyGuildAdmin, async (req, res) => {
     try {
@@ -1310,9 +1542,11 @@ export function createLobbyRouter(client, db, config, wss) {
           { id: 'team_2', name: 'Equipo 2', captain: null, players: [] }
         ],
         pickOrder: [],
+        pickSequence: [],
         currentPickIndex: 0,
         draftStarted: false,
         draftFinished: false,
+        mapVeto: null,
         updatedAt: Date.now()
       };
 
@@ -1322,6 +1556,141 @@ export function createLobbyRouter(client, db, config, wss) {
     } catch (err) {
       logger.error('Error en mixton-reset:', err);
       res.status(500).json({ error: 'Error al reiniciar el lobby.' });
+    }
+  });
+
+  // 7.1. Iniciar fase de veto de mapas al pulsar Lanzar Encuentro (Admin)
+  router.post('/mixton-start-veto', requireAuth, verifyGuildAdmin, async (req, res) => {
+    try {
+      const { teamIdA, teamIdB, betAmount = 0, queueId = 'auto', matchMode = 'faceit' } = req.body;
+      if (!teamIdA || !teamIdB) {
+        return res.status(400).json({ error: 'Debes seleccionar dos equipos para el encuentro.' });
+      }
+
+      const state = await db.getMixtonLobbyState(req.guildId);
+      const teamA = state.teams.find(t => t.id === teamIdA);
+      const teamB = state.teams.find(t => t.id === teamIdB);
+
+      if (!teamA || !teamB) {
+        return res.status(404).json({ error: 'Equipos no encontrados.' });
+      }
+
+      if (!teamA.captain || teamA.players.length !== 4 || !teamB.captain || teamB.players.length !== 4) {
+        return res.status(400).json({ error: 'Ambos equipos deben estar completos (5 jugadores c/u).' });
+      }
+
+      const mapPool = [...CS2_OFFICIAL_MAP_POOL];
+      const banSequence = generateMapBanSequence(teamIdA, teamIdB, mapPool.length);
+
+      state.mapVeto = {
+        active: true,
+        completed: false,
+        teamIdA,
+        teamIdB,
+        pool: mapPool,
+        bannedMaps: [],
+        banHistory: [],
+        banSequence,
+        currentBanIndex: 0,
+        chosenMap: null,
+        betAmount: Math.max(0, parseFloat(betAmount) || 0),
+        queueId,
+        matchMode,
+        startedAt: Date.now()
+      };
+
+      await db.saveMixtonLobbyState(state, req.guildId);
+      mixtonEvents.emit('update', req.guildId);
+
+      res.json({ success: true, mapVeto: state.mapVeto });
+    } catch (err) {
+      logger.error('Error en mixton-start-veto:', err);
+      res.status(500).json({ error: 'Error al iniciar veto de mapas: ' + err.message });
+    }
+  });
+
+  // 7.2. Banear un mapa (Capitán del equipo en turno o Admin)
+  router.post('/mixton-ban-map', requireAuth, verifyGuildAccess, async (req, res) => {
+    try {
+      const { mapId } = req.body;
+      if (!mapId) {
+        return res.status(400).json({ error: 'Debes indicar el mapa a banear.' });
+      }
+
+      const state = await db.getMixtonLobbyState(req.guildId);
+      const veto = state.mapVeto;
+
+      if (!veto || !veto.active || veto.completed) {
+        return res.status(400).json({ error: 'No hay una fase de veto de mapas activa.' });
+      }
+
+      if (veto.bannedMaps && veto.bannedMaps.includes(mapId)) {
+        return res.status(400).json({ error: 'Este mapa ya fue baneado.' });
+      }
+
+      const mapItem = (veto.pool || CS2_OFFICIAL_MAP_POOL).find(m => m.id === mapId);
+      if (!mapItem) {
+        return res.status(404).json({ error: 'Mapa no válido en el pool.' });
+      }
+
+      const currentTurnTeamId = veto.banSequence[veto.currentBanIndex];
+      const teamInTurn = state.teams.find(t => t.id === currentTurnTeamId);
+
+      if (!teamInTurn || !teamInTurn.captain) {
+        return res.status(500).json({ error: 'Equipo o capitán en turno no encontrado.' });
+      }
+
+      const isCaptain = teamInTurn.captain.discordId === req.user.userId;
+      const isAdmin = req.user.role === 'global_admin' || req.user.role === 'admin' || req.user.isAdmin === true;
+
+      if (!isCaptain && !isAdmin) {
+        return res.status(403).json({ error: `No es tu turno para banear. Es turno del capitán de ${teamInTurn.name}.` });
+      }
+
+      if (!veto.bannedMaps) veto.bannedMaps = [];
+      if (!veto.banHistory) veto.banHistory = [];
+
+      veto.bannedMaps.push(mapId);
+      veto.banHistory.push({
+        mapId,
+        mapName: mapItem.name,
+        teamId: currentTurnTeamId,
+        teamName: teamInTurn.name,
+        bannedByNickname: isCaptain ? teamInTurn.captain.faceit_nickname : `Admin (${req.user.username})`,
+        timestamp: Date.now()
+      });
+
+      veto.currentBanIndex++;
+
+      // Verificar si solo queda 1 mapa sin banear
+      const remainingMaps = (veto.pool || CS2_OFFICIAL_MAP_POOL).filter(m => !veto.bannedMaps.includes(m.id));
+      if (remainingMaps.length === 1) {
+        veto.chosenMap = remainingMaps[0];
+        veto.active = false;
+        veto.completed = true;
+      }
+
+      await db.saveMixtonLobbyState(state, req.guildId);
+      mixtonEvents.emit('update', req.guildId);
+
+      res.json({ success: true, mapVeto: veto });
+    } catch (err) {
+      logger.error('Error en mixton-ban-map:', err);
+      res.status(500).json({ error: 'Error al banear mapa: ' + err.message });
+    }
+  });
+
+  // 7.3. Cancelar veto de mapas (Admin)
+  router.post('/mixton-cancel-veto', requireAuth, verifyGuildAdmin, async (req, res) => {
+    try {
+      const state = await db.getMixtonLobbyState(req.guildId);
+      state.mapVeto = null;
+      await db.saveMixtonLobbyState(state, req.guildId);
+      mixtonEvents.emit('update', req.guildId);
+      res.json({ success: true, state });
+    } catch (err) {
+      logger.error('Error en mixton-cancel-veto:', err);
+      res.status(500).json({ error: 'Error al cancelar veto.' });
     }
   });
 
@@ -1638,7 +2007,7 @@ export function createLobbyRouter(client, db, config, wss) {
   // 8. Crear partida mixton en Discord (Admin)
   router.post('/mixton-create-match', requireAuth, verifyGuildAdmin, async (req, res) => {
     try {
-      const { teamIdA, teamIdB, betAmount = 0, manualPaidDiscordIds = [], queueId = 'auto', matchMode = 'faceit' } = req.body;
+      const { teamIdA, teamIdB, betAmount = 0, manualPaidDiscordIds = [], queueId = 'auto', matchMode = 'faceit', chosenMap = null } = req.body;
       if (!teamIdA || !teamIdB) {
         return res.status(400).json({ error: 'Debes seleccionar dos equipos.' });
       }
@@ -1661,6 +2030,9 @@ export function createLobbyRouter(client, db, config, wss) {
       if (!teamA.captain || teamA.players.length !== 4 || !teamB.captain || teamB.players.length !== 4) {
         return res.status(400).json({ error: 'Ambos equipos deben estar completos (5 jugadores c/u).' });
       }
+
+      const finalChosenMap = chosenMap || state.mapVeto?.chosenMap || null;
+      const mapDisplayName = finalChosenMap?.name || 'Elección de Capitanes';
 
       const rosterA = [teamA.captain, ...teamA.players];
       const rosterB = [teamB.captain, ...teamB.players];
@@ -1957,7 +2329,7 @@ export function createLobbyRouter(client, db, config, wss) {
 
         const embedFields = [
           { name: '🌐 Modo de Juego', value: matchMode === 'steam' ? 'Mixton privado por Steam' : 'Mixton competitivo por FACEIT', inline: true },
-          { name: '🗺️ Mapa', value: '`Elección de Capitanes`', inline: true },
+          { name: '🗺️ Mapa', value: `\`${mapDisplayName}\``, inline: true },
           { name: '📍 Canales de Voz', value: `🔊 <#${vc1.id}>\n🔊 <#${vc2.id}>`, inline: true }
         ];
 
@@ -1985,10 +2357,14 @@ export function createLobbyRouter(client, db, config, wss) {
           .setColor(parsedBetAmount > 0 ? 0x15C253 : 0xFF5500)
           .setDescription(matchMode === 'steam'
             ? `Lanzada por el Administrador **${req.user.username}** desde el panel web.\n🎮 Los capitanes recibirán instrucciones para repartir sus lobbies de CS2.`
-            : `Lanzada por el Administrador **${req.user.username}** desde el panel web.\n🎯 **Sala asignada en FACEIT:** **${assignedQueue.name}**`)
+            : `Lanzada por el Administrador **${req.user.username}** desde el panel web.\n🎯 **Sala asignada en FACEIT:** **${assignedQueue.name}**\n🗺️ **Mapa:** **${mapDisplayName}**`)
           .addFields(embedFields)
           .setFooter({ text: 'Usa los botones para reportar el resultado de la partida' })
           .setTimestamp();
+
+        if (finalChosenMap?.icon || finalChosenMap?.image) {
+          startedEmbed.setThumbnail(finalChosenMap.icon || finalChosenMap.image);
+        }
 
         const winA = new ButtonBuilder()
           .setCustomId(`manual_match_win_a_${matchId}`)
@@ -2166,7 +2542,8 @@ export function createLobbyRouter(client, db, config, wss) {
       const matchData = {
         entity_custom_name: parsedBetAmount > 0 ? `Mixton Apuesta (S/ ${parsedBetAmount.toFixed(2)})` : 'Mixton / Web',
         game: 'cs2',
-        voting: { map: { pick: ['Mixton'] }, location: { pick: ['Mixton'] } },
+        voting: { map: { pick: [mapDisplayName] }, location: { pick: ['Mixton'] } },
+        chosen_map: finalChosenMap,
         teams: { faction1: { name: teamA.name }, faction2: { name: teamB.name } },
         creator_id: req.user.userId,
         bet_amount_per_player: parsedBetAmount,
@@ -2244,6 +2621,8 @@ export function createLobbyRouter(client, db, config, wss) {
       state.draftStarted = false;
       state.draftFinished = false;
       state.pickOrder = state.teams.filter(t => t.captain !== null).map(t => t.id);
+      state.pickSequence = [];
+      state.mapVeto = null;
 
       await db.saveMixtonLobbyState(state, guildIdToUse);
       mixtonEvents.emit('update', guildIdToUse);

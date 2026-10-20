@@ -2629,7 +2629,7 @@ function getDefaultSettings() {
     discordSupportChannelId: '',
     discordMusicChannelId: '',
     discordSanctionsChannelId: '',
-    // Feature flags
+    // Feature flags (Módulos y Automatizaciones)
     autoWelcomeDm: true,
     autoRoleSync: true,
     autoNickSync: true,
@@ -2640,6 +2640,29 @@ function getDefaultSettings() {
     liveMatchPanel: true,
     webhookValidation: false,
     adminCallNotifications: true,
+    hubBansNotifications: true,
+    musicBot: true,
+    rechargeWalletSystem: true,
+    mixtonReadyPanel: true,
+    // Feature flags (Comandos Slash)
+    command_verificar: true,
+    command_desvincular: true,
+    command_leaderboard: true,
+    command_stats: true,
+    command_info: true,
+    command_sincronizar: true,
+    command_partidas: true,
+    command_crear_sala: true,
+    command_mixton_listo: true,
+    command_mixton_no_listo: true,
+    command_cs2_play: true,
+    command_sancionar: true,
+    command_desancionar: true,
+    command_say: true,
+    command_recargar: true,
+    command_setup_recargas: true,
+    command_setup_soporte: true,
+    command_llamar_admin: true,
     // Hub
     faceitHubId: '',
     // Roles
