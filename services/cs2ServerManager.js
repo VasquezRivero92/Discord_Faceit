@@ -352,13 +352,30 @@ class Cs2ServerManager {
 
     const mapIdToPlay = (chosenMap?.id || 'de_mirage').toLowerCase().trim();
 
+    // Guardar current_map.txt para que run_server_headless.ps1 arranque directamente con este mapa
+    try {
+      fs.writeFileSync(path.join(this.serverDir, 'current_map.txt'), mapIdToPlay, 'utf8');
+    } catch {}
+
+    let numericMatchId = String(matchId).replace(/\D/g, '');
+    if (!numericMatchId || numericMatchId.length > 9) {
+      numericMatchId = String(Date.now()).slice(-8);
+    }
+
+    if (Object.keys(team1Players).length === 0) {
+      team1Players['76561198675781576'] = teamA.name || 'Equipo 1';
+    }
+    if (Object.keys(team2Players).length === 0) {
+      team2Players['76561198042296985'] = teamB.name || 'Equipo 2';
+    }
+
     const matchConfig = {
-      matchid: matchId,
+      matchid: numericMatchId,
       num_maps: 1,
       maplist: [mapIdToPlay],
       skip_veto: true,
       players_per_team: 5,
-      min_players_to_ready: 10,
+      min_players_to_ready: 0,
       min_spectators_to_ready: 0,
       team1: {
         name: teamA.name || 'Equipo 1',
@@ -372,11 +389,6 @@ class Cs2ServerManager {
       },
       spectators: {
         players: spectators
-      },
-      cvars: {
-        mp_spectators_max: '10',
-        sv_hibernate_when_empty: '0',
-        matchzy_kick_when_no_match_loaded: '0'
       }
     };
 
