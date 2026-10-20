@@ -541,136 +541,28 @@ export async function onInteractionCreate(interaction, db, commandMap) {
           return interaction.editReply('❌ No tienes permisos para definir el resultado de esta sala. Solo el creador de la sala o un administrador pueden hacerlo.');
         }
 
-        // 3. Devolver jugadores a su canal original y eliminar canales temporales
-        let waitingRoomId = null;
-        if (config.discordWaitingRoomChannelId) {
-          const ids = config.discordWaitingRoomChannelId.split(',').map(id => id.trim());
-          for (const id of ids) {
-            const ch = await interaction.guild.channels.fetch(id).catch(() => null);
-            if (ch && ch.guild.id === interaction.guild.id) {
-              waitingRoomId = id;
-              break;
-            }
-          }
-        }
-        const originalStates = activeMatch.original_voice_states || {};
+        // 3. Delegar resolución completa de la partida (premios, CS2/MCSManager kick y stop, canales de voz e historial)
+        const { resolveMixtonMatchEnd } = await import('../services/cs2ServerManager.js');
+        const result = await resolveMixtonMatchEnd({
+          matchId,
+          action,
+          scoreA: action === 'win_a' ? 13 : (action === 'win_b' ? 0 : 0),
+          scoreB: action === 'win_b' ? 13 : (action === 'win_a' ? 0 : 0),
+          client: interaction.client,
+          db,
+          reason: `Partida ${action === 'cancel' ? 'cancelada' : 'finalizada'} por ${interaction.user.tag}`
+        });
 
-        // Eliminar la partida activa ANTES de la limpieza de voz para evitar rebotes de voiceStateUpdate
-        await db.removeActiveMatch(matchId);
-        
-        const { cleanupVoiceChannel } = await import('../services/voice.js');
-        const isCancel = action === 'cancel';
-        const reason = isCancel ? 'Partida manual cancelada' : 'Partida manual finalizada';
-        if (activeMatch.faction1_vc_id) {
-          await cleanupVoiceChannel(interaction.guild, activeMatch.faction1_vc_id, waitingRoomId, originalStates, reason, isCancel);
-        }
-        if (activeMatch.faction2_vc_id) {
-          await cleanupVoiceChannel(interaction.guild, activeMatch.faction2_vc_id, waitingRoomId, originalStates, reason, isCancel);
+        if (!result.ok) {
+          return interaction.editReply(`⚠️ ${result.error || 'No se pudo resolver la partida.'}`);
         }
 
-        // 4. Registrar en historial si hubo ganador
-        let statusText = '';
-        let embedColor = 0x8C8C8C;
-
-        if (action === 'win_a') {
-          statusText = '🏆 **Ganador: Equipo A**';
-          embedColor = 0x15C253; // Verde
-          
-          await db.addMatchToHistory(
-            matchId,
-            {
-              entity_custom_name: activeMatch.entity_custom_name || 'Manual',
-              game: activeMatch.game || 'cs2',
-              voting: { map: { pick: [activeMatch.map || 'Manual'] }, location: { pick: [activeMatch.location || 'Manual'] } },
-              teams: { faction1: { name: activeMatch.faction1_name || 'Equipo A' }, faction2: { name: activeMatch.faction2_name || 'Equipo B' } }
-            },
-            'faction1',
-            16,
-            0,
-            activeMatch.faction1_roster || [],
-            activeMatch.faction2_roster || [],
-            activeMatch.guild_id || null
-          );
-        } else if (action === 'win_b') {
-          statusText = '🏆 **Ganador: Equipo B**';
-          embedColor = 0xFF3E3E; // Rojo
-          
-          await db.addMatchToHistory(
-            matchId,
-            {
-              entity_custom_name: activeMatch.entity_custom_name || 'Manual',
-              game: activeMatch.game || 'cs2',
-              voting: { map: { pick: [activeMatch.map || 'Manual'] }, location: { pick: [activeMatch.location || 'Manual'] } },
-              teams: { faction1: { name: activeMatch.faction1_name || 'Equipo A' }, faction2: { name: activeMatch.faction2_name || 'Equipo B' } }
-            },
-            'faction2',
-            0,
-            16,
-            activeMatch.faction1_roster || [],
-            activeMatch.faction2_roster || [],
-            activeMatch.guild_id || null
-          );
-        } else {
-          statusText = '❌ **Partida Cancelada**';
-          embedColor = 0xEF4444; // Rojo claro
-        }
-
-        // Resolver canal de anuncios de la guild
-        let resolvedMatchesChannelId = null;
-        if (config.discordMatchesChannelId) {
-          const ids = config.discordMatchesChannelId.split(',').map(id => id.trim());
-          for (const id of ids) {
-            const ch = await interaction.guild.channels.fetch(id).catch(() => null);
-            if (ch && ch.guild.id === interaction.guild.id) {
-              resolvedMatchesChannelId = id;
-              break;
-            }
-          }
-        }
-
-        // 6. Editar mensaje de anuncio para quitar botones y mostrar resultado
-        if (activeMatch.message_id && resolvedMatchesChannelId) {
-          const channel = await interaction.guild.channels.fetch(resolvedMatchesChannelId).catch(() => null);
-          if (channel) {
-            const msg = await channel.messages.fetch(activeMatch.message_id).catch(() => null);
-            if (msg && msg.embeds.length > 0) {
-              const oldEmbed = msg.embeds[0];
-              const updatedEmbed = EmbedBuilder.from(oldEmbed)
-                .setColor(embedColor)
-                .addFields({ name: '🏁 Resultado Final', value: statusText, inline: false });
-              
-              await msg.edit({ embeds: [updatedEmbed], components: [] }).catch(err => logger.error('Error al editar mensaje de anuncio final:', err));
-            }
-          }
-        }
-
-        // 7. Actualizar el panel en vivo
-        let resolvedMixtonChannelId = null;
-        const mixtonConfigId = config.discordMixtonChannelId || config.discordMatchesChannelId;
-        if (mixtonConfigId) {
-          const ids = mixtonConfigId.split(',').map(id => id.trim());
-          for (const id of ids) {
-            const ch = await interaction.guild.channels.fetch(id).catch(() => null);
-            if (ch && ch.guild.id === interaction.guild.id) {
-              resolvedMixtonChannelId = id;
-              break;
-            }
-          }
-        }
-        if (resolvedMixtonChannelId && !resolvedMixtonChannelId.startsWith('ID_')) {
-          await updateLivePanel(interaction.client, resolvedMixtonChannelId, db);
-        }
+        const statusText = action === 'win_a' ? '🏆 **Ganador: Equipo A**'
+          : action === 'win_b' ? '🏆 **Ganador: Equipo B**'
+          : '❌ **Partida Cancelada**';
 
         await db.addLogEntry('info', `Partida manual ${matchId} finalizada (${action}) por ${interaction.user.tag}`, 'bot');
-        await interaction.editReply(`✅ Partida finalizada con éxito. Resultado registrado: ${statusText}`);
-
-        try {
-          const { mixtonEvents } = await import('../routes/lobby.js');
-          mixtonEvents.emit('update', activeMatch.guild_id || null);
-        } catch (e) {
-          logger.error('Error al notificar actualización de mixton:', e);
-        }
-
+        return interaction.editReply(`✅ Partida finalizada con éxito. Resultado registrado: ${statusText}. Servidor CS2 apagado.`);
       } catch (err) {
         logger.error('Error al procesar botón de partida manual:', err);
         return interaction.editReply('❌ Ocurrió un error al procesar el resultado de la partida.');

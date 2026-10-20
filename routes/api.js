@@ -917,6 +917,15 @@ export function createApiRouter(client, db, config) {
 
       if (match) {
         await db.removeActiveMatch(matchId);
+
+        // Expulsar jugadores y detener servidor CS2 en MCSManager si correspondía a esta partida
+        try {
+          const { cs2ServerManager } = await import('../services/cs2ServerManager.js');
+          await cs2ServerManager.stopServer('Cleanup forzado desde Admin Panel');
+        } catch (cs2Err) {
+          logger.warn('No se pudo apagar CS2 Server en cleanup forzado:', cs2Err.message);
+        }
+
         const effectiveConfig = await getEffectiveConfigForGuild(guildIdToUse);
         const waitingRoomId = effectiveConfig.discordWaitingRoomChannelId;
         const originalStates = match.original_voice_states || {};

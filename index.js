@@ -324,6 +324,39 @@ app.get('/api/matchmaking/status', requireSteamApiKey, (req, res) => {
 app.post('/api/matchmaking/launch', requireSteamApiKey, (req, res) => {
   handleMatchmakingLaunch(req, res, logger);
 });
+
+// ---------------------------------------------------------
+// WEBHOOK OFICIAL MATCHZY (CS2 SERVER EVENT LISTENER)
+// ---------------------------------------------------------
+app.post('/api/matchzy/event', async (req, res) => {
+  try {
+    const { event, matchid, winner, team1_series_score, team2_series_score } = req.body || {};
+    logger.info(`[MatchZy Webhook] Evento recibido: "${event}" para match: "${matchid || 'N/A'}"`);
+
+    if (event === 'series_end' || event === 'map_end') {
+      const { resolveMixtonMatchEnd } = await import('./services/cs2ServerManager.js');
+      const action = (winner?.team === 'team1' || winner === 'team1') ? 'win_a'
+        : (winner?.team === 'team2' || winner === 'team2') ? 'win_b'
+        : 'win_a';
+
+      logger.info(`[MatchZy Webhook] Serie finalizada. Ganador: ${action}. Resolviendo match ${matchid}...`);
+      await resolveMixtonMatchEnd({
+        matchId: matchid,
+        action,
+        scoreA: team1_series_score ?? null,
+        scoreB: team2_series_score ?? null,
+        client,
+        db,
+        reason: 'Partida CS2 finalizada oficialmente por MatchZy'
+      });
+    }
+
+    return res.status(200).json({ success: true, event });
+  } catch (err) {
+    logger.error('Error procesando webhook de MatchZy:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
 // Web Admin
 const BASE_URL = env.BASE_URL;
 app.use('/auth', createAuthRouter(client, db, {

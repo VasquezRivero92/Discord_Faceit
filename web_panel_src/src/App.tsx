@@ -1940,7 +1940,10 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al lanzar el encuentro.');
 
-      showToast(`¡Encuentro creado! ${effectiveBetAmount > 0 ? `Pozo Total: S/ ${(effectiveBetAmount * 10).toFixed(2)}` : 'Modo Gratis'}. Canales de voz creados.`, 'success');
+      const launchMsg = matchMode === 'steam'
+        ? `¡Encuentro creado en CS2! Servidor encendido en MCSManager y partido 5v5 cargado.${effectiveBetAmount > 0 ? ` Pozo: S/ ${(effectiveBetAmount * 10).toFixed(2)}` : ''}`
+        : `¡Encuentro creado! ${effectiveBetAmount > 0 ? `Pozo Total: S/ ${(effectiveBetAmount * 10).toFixed(2)}` : 'Modo Gratis'}. Canales de voz creados.`;
+      showToast(launchMsg, 'success');
       if (matchMode === 'faceit' && data.faceitHubUrl) {
         window.open(data.faceitHubUrl, '_blank');
       }
@@ -3883,14 +3886,19 @@ export default function App() {
                         : 'bg-[#1F1F1F] border-[#333] hover:border-neutral-500 text-neutral-300'
                     }`}
                   >
-                    <span className="block text-xs font-black uppercase">🔵 STEAM</span>
-                    <span className="block mt-1 text-[10px] leading-relaxed text-neutral-400">Cada capitán invita al bot a su party de CS2; el bot envía el enlace privado a los cuatro compañeros.</span>
+                    <span className="block text-xs font-black uppercase">🔵 SERVIDOR PROPIO (STEAM / MCSMANAGER)</span>
+                    <span className="block mt-1 text-[10px] leading-relaxed text-neutral-400">Enciende el servidor CS2 en MCSManager, configura el 5v5 con el mapa elegido y envía las invitaciones por Steam.</span>
                   </button>
                 </div>
                 {matchMode === 'steam' && (
-                  <p className="text-[10px] text-sky-200 bg-sky-950/30 border border-sky-800/60 px-3 py-2">
-                    Los dos capitanes deben tener Steam vinculado y agregar al bot. Este modo no comparte IP ni puerto y no usa una cola de FACEIT.
-                  </p>
+                  <div className="text-[10px] text-sky-200 bg-sky-950/30 border border-sky-800/60 p-3 space-y-1">
+                    <p className="font-bold flex items-center gap-1.5 text-sky-300">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> Servidor Dedicado CS2 gestionado por MCSManager
+                    </p>
+                    <p className="text-neutral-300 leading-relaxed">
+                      Al lanzar el encuentro, el servidor se encenderá en MCSManager, se aplicará el mapa baneado y se enviará la orden de conexión por Steam a los 10 jugadores. Al acabar la partida, todos serán kickeados y el servidor se apagará automáticamente.
+                    </p>
+                  </div>
                 )}
               </div>
 
