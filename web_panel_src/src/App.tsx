@@ -3886,17 +3886,17 @@ export default function App() {
                         : 'bg-[#1F1F1F] border-[#333] hover:border-neutral-500 text-neutral-300'
                     }`}
                   >
-                    <span className="block text-xs font-black uppercase">🔵 STEAM / SERVIDOR DEDICADO</span>
-                    <span className="block mt-1 text-[10px] leading-relaxed text-neutral-400">Enciende el servidor dedicado de CS2, configura el 5v5 con el mapa elegido y envía las invitaciones por Steam.</span>
+                    <span className="block text-xs font-black uppercase">🔵 SERVIDOR CS2 (IP POR DISCORD)</span>
+                    <span className="block mt-1 text-[10px] leading-relaxed text-neutral-400">Enciende el servidor dedicado de CS2, configura el 5v5 con el mapa elegido y envía la IP de conexión (38.25.72.56:27015) por Discord.</span>
                   </button>
                 </div>
                 {matchMode === 'steam' && (
                   <div className="text-[10px] text-sky-200 bg-sky-950/30 border border-sky-800/60 p-3 space-y-1">
                     <p className="font-bold flex items-center gap-1.5 text-sky-300">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> Servidor Dedicado CS2 Oficial
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> Servidor Dedicado CS2 (IP por Discord)
                     </p>
                     <p className="text-neutral-300 leading-relaxed">
-                      Al lanzar el encuentro, el servidor se encenderá automáticamente, se aplicará el mapa baneado y se enviará la orden de conexión por Steam a los 10 jugadores. Al acabar la partida, todos serán kickeados y el servidor se apagará automáticamente.
+                      Al lanzar el encuentro, el servidor se encenderá automáticamente con el mapa elegido. La IP de conexión (<code className="text-white font-mono bg-black/40 px-1 py-0.5 rounded">connect 38.25.72.56:27015</code>) se enviará por Discord mediante el canal oficial y por mensaje directo (DM) a los 10 jugadores. Al acabar la partida, todos serán kickeados y el servidor se apagará automáticamente.
                     </p>
                   </div>
                 )}

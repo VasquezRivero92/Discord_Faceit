@@ -11,8 +11,6 @@ import { invalidateSettingsCache, isFeatureEnabled } from '../utils/featureFlags
 import { EventEmitter } from 'events';
 import { fetchFaceitPlayer, fetchFaceitPlayerById, fetchFaceitPlayerBySteamId, fetchFaceitHubQueues, fetchCurrentHubSeason } from '../services/faceitApi.js';
 import { syncMemberLevelRole, syncMemberNickname, getPlayerSkillLevel } from '../services/roles.js';
-import { registerCs2LobbyInvite, steamClient } from '../steamBot.js';
-import SteamUser from 'steam-user';
 import { cs2ServerManager } from '../services/cs2ServerManager.js';
 import { playTTSCountdown } from '../utils/voiceAnnouncer.js';
 import { yapeTransactionService } from '../services/yapeTransactionService.js';
@@ -2491,7 +2489,7 @@ export function createLobbyRouter(client, db, config, wss) {
         }).join('\n');
 
         const embedFields = [
-          { name: '🌐 Modo de Juego', value: matchMode === 'steam' ? 'Mixton privado por Steam' : 'Mixton competitivo por FACEIT', inline: true },
+          { name: '🌐 Modo de Juego', value: matchMode === 'steam' ? 'Servidor CS2 Dedicado' : 'Mixton competitivo por FACEIT', inline: true },
           { name: '🗺️ Mapa', value: `\`${mapDisplayName}\``, inline: true },
           { name: '📍 Canales de Voz', value: `🔊 <#${vc1.id}>\n🔊 <#${vc2.id}>`, inline: true }
         ];
@@ -2508,7 +2506,7 @@ export function createLobbyRouter(client, db, config, wss) {
           embedFields.push({ name: '🎯 Sala FACEIT asignada', value: `🟢 **${assignedQueue.name}**\n[Entrar a la cola de ${assignedQueue.name}](${faceitHubUrl})`, inline: false });
         } else {
           embedFields.push({
-            name: '🖥️ Servidor CS2 Dedicado (Steam)',
+            name: '🖥️ Servidor CS2 Dedicado',
             value: `⚡ **Comando de Conexión:**\n\`\`\`connect ${cs2ServerManager.serverIp}\`\`\`\n👉 Abre tu consola en CS2 (\`~\`) y ejecuta el comando anterior.\n🗺️ **Mapa Oficial:** \`${mapDisplayName}\``,
             inline: false
           });
@@ -2562,7 +2560,7 @@ export function createLobbyRouter(client, db, config, wss) {
 
         const playerPings = [...rosterA, ...rosterB].map(p => `<@${p.discordId}>`).join(' ');
         const msg = await matchesChannel.send({ 
-          content: `📢 **¡Partida Mixtón Iniciada!** (${matchMode === 'steam' ? 'Modo: **STEAM / SERVIDOR DEDICADO**' : `Sala: **${assignedQueue.name}**`})\nJugadores: ${playerPings}`,
+          content: `📢 **¡Partida Mixtón Iniciada!** (${matchMode === 'steam' ? 'Modo: **SERVIDOR CS2 DEDICADO**' : `Sala: **${assignedQueue.name}**`})\nJugadores: ${playerPings}${matchMode === 'steam' ? `\n⚡ **Conexión CS2:** \`connect ${cs2ServerManager.serverIp}\` (Abre consola en CS2 con \`~\`)` : ''}`,
           embeds: [startedEmbed], 
           components: [row] 
         }).catch(err => logger.error('Error enviando anuncio mixton:', err));
@@ -2781,27 +2779,7 @@ export function createLobbyRouter(client, db, config, wss) {
           logger.info('[Lobby] Inicio local directo no requerido (esperando agente local):', err.message);
         });
 
-        // 3. Enviar invitaciones por Steam a todos los jugadores que tengan SteamID64 vinculado
-        if (steamClient && steamClient.steamID) {
-          const serverIp = cs2ServerManager.serverIp;
-          const mapName = mapDisplayName;
-          for (const player of [...rosterA, ...rosterB]) {
-            const s64 = String(player.steam_id_64 || '').trim();
-            if (/^\d{17}$/.test(s64)) {
-              try {
-                const steamID = new SteamUser.SteamID(s64);
-                const inviteMsg = `🎮 ¡Tu partida de CS2 en MachuPeek está lista!\n🗺️ Mapa: ${mapName}\n⚔️ ${teamA.name} vs ${teamB.name}\n⚡ Conéctate abriendo tu consola de CS2 y ejecutando:\nconnect ${serverIp}`;
-                steamClient.chat.sendFriendMessage(steamID, inviteMsg).then(() => {
-                  logger.info(`Invitación de Steam enviada a ${s64} (${player.faceit_nickname || player.discordId})`);
-                }).catch(err => {
-                  logger.warn(`No se pudo enviar mensaje de Steam a ${s64}: ${err.message}`);
-                });
-              } catch (steamSendErr) {
-                logger.warn(`Error al preparar envío Steam a ${s64}: ${steamSendErr.message}`);
-              }
-            }
-          }
-        }
+        logger.info(`[Lobby] Partida CS2 ${matchId} lista y anunciada. IP del servidor (${cs2ServerManager.serverIp}) enviada a los 10 jugadores por Discord.`);
       }
       await updateLivePanel(client, matchesChannelId, db);
 
