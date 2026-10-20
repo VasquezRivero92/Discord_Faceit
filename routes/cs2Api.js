@@ -4,23 +4,28 @@ import { cs2ServerManager, resolveMixtonMatchEnd } from '../services/cs2ServerMa
 
 export function createCs2ApiRouter(client, db) {
   const router = Router();
+  let hasCheckedDbOnInit = false;
 
   /**
    * GET /api/cs2/current-match
-   * El agente del servidor CS2 local consulta este endpoint periódicamente.
+   * El agente del servidor CS2 local consulta este endpoint periódicamente (en memoria RAM, 0 consultas a Firebase).
    * Si hay un match activo pendiente, devuelve el JSON con el matchId, los 10 jugadores y el mapa.
    * Si ya finalizó o no hay partida, devuelve { active: false, match: null }.
    */
   router.get('/current-match', async (req, res) => {
     try {
       let current = cs2ServerManager.getCurrentMatch();
-      if (!current.active && db && typeof db.getCs2PendingMatch === 'function') {
-        const pending = await db.getCs2PendingMatch();
+
+      // Solo consultar Firestore una única vez al arrancar el bot (cold start) si la RAM estaba vacía
+      if (!hasCheckedDbOnInit && !current.active && db && typeof db.getCs2PendingMatch === 'function') {
+        hasCheckedDbOnInit = true;
+        const pending = await db.getCs2PendingMatch().catch(() => null);
         if (pending && pending.matchId) {
           await cs2ServerManager.publishMatch(pending);
           current = { active: true, match: pending };
         }
       }
+
       return res.status(200).json(current);
     } catch (err) {
       logger.error('Error al obtener current-match para CS2:', err);
