@@ -18,22 +18,25 @@ export async function createMatchVoiceChannels(guild, waitingRoomId, faction1, f
 
     const botId = guild.members?.me?.id || guild.client?.user?.id || 'bot-id';
     const permissionOverwrites1 = [
-      { id: guild.id, deny: ['Connect'] },
-      { id: botId, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
+      { id: guild.id, type: 0, deny: ['Connect'] },
+      { id: botId, type: 1, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
     ];
     const permissionOverwrites2 = [
-      { id: guild.id, deny: ['Connect'] },
-      { id: botId, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
+      { id: guild.id, type: 0, deny: ['Connect'] },
+      { id: botId, type: 1, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
     ];
 
     const config = await getEffectiveConfigForGuild(guild.id).catch(() => ({}));
-    if (config.discordMatchAccessRoleId) {
+    if (config?.discordMatchAccessRoleId && typeof config.discordMatchAccessRoleId === 'string' && config.discordMatchAccessRoleId.trim()) {
+      const roleId = config.discordMatchAccessRoleId.trim();
       permissionOverwrites1.push({
-        id: config.discordMatchAccessRoleId,
+        id: roleId,
+        type: 0,
         allow: ['ViewChannel', 'Connect', 'Speak']
       });
       permissionOverwrites2.push({
-        id: config.discordMatchAccessRoleId,
+        id: roleId,
+        type: 0,
         allow: ['ViewChannel', 'Connect', 'Speak']
       });
     }
@@ -43,9 +46,10 @@ export async function createMatchVoiceChannels(guild, waitingRoomId, faction1, f
       for (const p of faction1.roster || []) {
         const playerId = p.player_id || p.id;
         const discordId = (await db.getDiscordIdByFaceitId(playerId, guild.id)) || (await db.getDiscordIdByNickname(p.nickname, guild.id));
-        if (discordId) {
+        if (discordId && typeof discordId === 'string' && discordId.trim()) {
           permissionOverwrites1.push({
-            id: discordId,
+            id: discordId.trim(),
+            type: 1,
             allow: ['Connect', 'Speak']
           });
         }
@@ -54,9 +58,10 @@ export async function createMatchVoiceChannels(guild, waitingRoomId, faction1, f
       for (const p of faction2.roster || []) {
         const playerId = p.player_id || p.id;
         const discordId = (await db.getDiscordIdByFaceitId(playerId, guild.id)) || (await db.getDiscordIdByNickname(p.nickname, guild.id));
-        if (discordId) {
+        if (discordId && typeof discordId === 'string' && discordId.trim()) {
           permissionOverwrites2.push({
-            id: discordId,
+            id: discordId.trim(),
+            type: 1,
             allow: ['Connect', 'Speak']
           });
         }
@@ -104,25 +109,47 @@ export async function createMatchVoiceChannels(guild, waitingRoomId, faction1, f
       cap2Name = `Team ${nameB}`;
     }
 
-    const vc1 = await guild.channels.create({
-      name: `🔊 ${cap1Name}`,
-      type: 2,
-      parent: parentId,
-      permissionOverwrites: permissionOverwrites1,
-      reason: `Partida iniciada - Faceit`,
-    });
-    vcIds.vc1Id = vc1.id;
+    let vc1 = null;
+    try {
+      vc1 = await guild.channels.create({
+        name: `🔊 ${cap1Name}`,
+        type: 2,
+        parent: parentId,
+        permissionOverwrites: permissionOverwrites1,
+        reason: `Partida iniciada - Faceit`,
+      });
+    } catch (vc1Err) {
+      logger.warn(`Error creando VC1 con permisos específicos (${vc1Err.message}). Reintentando con permisos estándar...`);
+      vc1 = await guild.channels.create({
+        name: `🔊 ${cap1Name}`,
+        type: 2,
+        parent: parentId,
+        reason: `Partida iniciada - Faceit`,
+      });
+    }
+    vcIds.vc1Id = vc1?.id || null;
 
-    const vc2 = await guild.channels.create({
-      name: `🔊 ${cap2Name}`,
-      type: 2,
-      parent: parentId,
-      permissionOverwrites: permissionOverwrites2,
-      reason: `Partida iniciada - Faceit`,
-    });
-    vcIds.vc2Id = vc2.id;
+    let vc2 = null;
+    try {
+      vc2 = await guild.channels.create({
+        name: `🔊 ${cap2Name}`,
+        type: 2,
+        parent: parentId,
+        permissionOverwrites: permissionOverwrites2,
+        reason: `Partida iniciada - Faceit`,
+      });
+    } catch (vc2Err) {
+      logger.warn(`Error creando VC2 con permisos específicos (${vc2Err.message}). Reintentando con permisos estándar...`);
+      vc2 = await guild.channels.create({
+        name: `🔊 ${cap2Name}`,
+        type: 2,
+        parent: parentId,
+        reason: `Partida iniciada - Faceit`,
+      });
+    }
+    vcIds.vc2Id = vc2?.id || null;
 
-    logger.success(`Canales de voz creados: ${vc1.name} y ${vc2.name}`);
+    logger.success(`Canales de voz creados: ${vc1?.name || 'VC1'} y ${vc2?.name || 'VC2'}`);
   } catch (err) {
     logger.error('Error al crear canales de voz temporales:', err.message);
   }

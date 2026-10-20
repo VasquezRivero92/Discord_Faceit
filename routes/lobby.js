@@ -977,41 +977,71 @@ export function createLobbyRouter(client, db, config, wss) {
 
       const botId = client.user.id;
       const permissionOverwrites1 = [
-        { id: guild.id, deny: ['Connect'] },
-        { id: botId, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
+        { id: guild.id, type: 0, deny: ['Connect'] },
+        { id: botId, type: 1, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
       ];
       const permissionOverwrites2 = [
-        { id: guild.id, deny: ['Connect'] },
-        { id: botId, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
+        { id: guild.id, type: 0, deny: ['Connect'] },
+        { id: botId, type: 1, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
       ];
 
-      if (effectiveConfig?.discordMatchAccessRoleId) {
-        permissionOverwrites1.push({ id: effectiveConfig.discordMatchAccessRoleId, allow: ['ViewChannel', 'Connect', 'Speak'] });
-        permissionOverwrites2.push({ id: effectiveConfig.discordMatchAccessRoleId, allow: ['ViewChannel', 'Connect', 'Speak'] });
+      if (effectiveConfig?.discordMatchAccessRoleId && typeof effectiveConfig.discordMatchAccessRoleId === 'string' && effectiveConfig.discordMatchAccessRoleId.trim()) {
+        const roleId = effectiveConfig.discordMatchAccessRoleId.trim();
+        permissionOverwrites1.push({ id: roleId, type: 0, allow: ['ViewChannel', 'Connect', 'Speak'] });
+        permissionOverwrites2.push({ id: roleId, type: 0, allow: ['ViewChannel', 'Connect', 'Speak'] });
       }
 
-      for (const id of teamA) {
-        permissionOverwrites1.push({ id, allow: ['Connect', 'Speak'] });
+      const allManualPlayerIds = [...(teamA || []), ...(teamB || [])].filter(id => id && typeof id === 'string');
+      await Promise.all(allManualPlayerIds.map(id => guild.members.fetch(id).catch(() => null)));
+
+      for (const id of teamA || []) {
+        if (id && typeof id === 'string' && id.trim()) {
+          permissionOverwrites1.push({ id: id.trim(), type: 1, allow: ['Connect', 'Speak', 'ViewChannel'] });
+        }
       }
-      for (const id of teamB) {
-        permissionOverwrites2.push({ id, allow: ['Connect', 'Speak'] });
+      for (const id of teamB || []) {
+        if (id && typeof id === 'string' && id.trim()) {
+          permissionOverwrites2.push({ id: id.trim(), type: 1, allow: ['Connect', 'Speak', 'ViewChannel'] });
+        }
       }
 
-      const vc1 = await guild.channels.create({
-        name: `🔊 Equipo A (Web)`,
-        type: 2,
-        parent: parentId,
-        permissionOverwrites: permissionOverwrites1,
-        reason: 'Partida manual iniciada desde el Panel Web'
-      });
+      let vc1 = null;
+      try {
+        vc1 = await guild.channels.create({
+          name: `🔊 Equipo A (Web)`,
+          type: 2,
+          parent: parentId,
+          permissionOverwrites: permissionOverwrites1,
+          reason: 'Partida manual iniciada desde el Panel Web'
+        });
+      } catch (vc1Err) {
+        logger.warn(`Error creando VC1 manual con permisos específicos (${vc1Err.message}). Creando con permisos estándar...`);
+        vc1 = await guild.channels.create({
+          name: `🔊 Equipo A (Web)`,
+          type: 2,
+          parent: parentId,
+          reason: 'Partida manual iniciada desde el Panel Web'
+        });
+      }
 
-      const vc2 = await guild.channels.create({
-        name: `🔊 Equipo B (Web)`,
-        type: 2,
-        parent: parentId,
-        permissionOverwrites: permissionOverwrites2,
-        reason: 'Partida manual iniciada desde el Panel Web'
-      });
+      let vc2 = null;
+      try {
+        vc2 = await guild.channels.create({
+          name: `🔊 Equipo B (Web)`,
+          type: 2,
+          parent: parentId,
+          permissionOverwrites: permissionOverwrites2,
+          reason: 'Partida manual iniciada desde el Panel Web'
+        });
+      } catch (vc2Err) {
+        logger.warn(`Error creando VC2 manual con permisos específicos (${vc2Err.message}). Creando con permisos estándar...`);
+        vc2 = await guild.channels.create({
+          name: `🔊 Equipo B (Web)`,
+          type: 2,
+          parent: parentId,
+          reason: 'Partida manual iniciada desde el Panel Web'
+        });
+      }
 
       // A. Reproducir anuncio por voz con IA antes de mover a los jugadores
       if (waitingRoomId) {
@@ -2389,44 +2419,75 @@ export function createLobbyRouter(client, db, config, wss) {
 
       const botId = client.user.id;
       const permissionOverwrites1 = [
-        { id: guild.id, deny: ['Connect'] },
-        { id: botId, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
+        { id: guild.id, type: 0, deny: ['Connect'] },
+        { id: botId, type: 1, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
       ];
       const permissionOverwrites2 = [
-        { id: guild.id, deny: ['Connect'] },
-        { id: botId, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
+        { id: guild.id, type: 0, deny: ['Connect'] },
+        { id: botId, type: 1, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
       ];
 
-      if (effectiveConfig?.discordMatchAccessRoleId) {
-        permissionOverwrites1.push({ id: effectiveConfig.discordMatchAccessRoleId, allow: ['ViewChannel', 'Connect', 'Speak'] });
-        permissionOverwrites2.push({ id: effectiveConfig.discordMatchAccessRoleId, allow: ['ViewChannel', 'Connect', 'Speak'] });
+      if (effectiveConfig?.discordMatchAccessRoleId && typeof effectiveConfig.discordMatchAccessRoleId === 'string' && effectiveConfig.discordMatchAccessRoleId.trim()) {
+        const roleId = effectiveConfig.discordMatchAccessRoleId.trim();
+        permissionOverwrites1.push({ id: roleId, type: 0, allow: ['ViewChannel', 'Connect', 'Speak'] });
+        permissionOverwrites2.push({ id: roleId, type: 0, allow: ['ViewChannel', 'Connect', 'Speak'] });
       }
 
+      // Pre-cargar miembros en caché para evitar errores de Discord.js
+      const allPlayerIds = [...rosterA, ...rosterB].map(p => p.discordId).filter(id => id && typeof id === 'string');
+      await Promise.all(allPlayerIds.map(id => guild.members.fetch(id).catch(() => null)));
+
       for (const p of rosterA) {
-        permissionOverwrites1.push({ id: p.discordId, allow: ['Connect', 'Speak'] });
+        if (p?.discordId && typeof p.discordId === 'string' && p.discordId.trim()) {
+          permissionOverwrites1.push({ id: p.discordId.trim(), type: 1, allow: ['Connect', 'Speak', 'ViewChannel'] });
+        }
       }
       for (const p of rosterB) {
-        permissionOverwrites2.push({ id: p.discordId, allow: ['Connect', 'Speak'] });
+        if (p?.discordId && typeof p.discordId === 'string' && p.discordId.trim()) {
+          permissionOverwrites2.push({ id: p.discordId.trim(), type: 1, allow: ['Connect', 'Speak', 'ViewChannel'] });
+        }
       }
 
       const capAName = teamA.captain?.discordUser?.displayName || teamA.captain?.faceit_nickname || 'A';
       const capBName = teamB.captain?.discordUser?.displayName || teamB.captain?.faceit_nickname || 'B';
 
-      const vc1 = await guild.channels.create({
-        name: `🔊 Team ${capAName}`,
-        type: 2,
-        parent: parentId,
-        permissionOverwrites: permissionOverwrites1,
-        reason: 'Partida Mixton iniciada desde la web'
-      });
+      let vc1 = null;
+      try {
+        vc1 = await guild.channels.create({
+          name: `🔊 Team ${capAName}`,
+          type: 2,
+          parent: parentId,
+          permissionOverwrites: permissionOverwrites1,
+          reason: 'Partida Mixton iniciada desde la web'
+        });
+      } catch (vc1Err) {
+        logger.warn(`Error al crear VC1 con permisos específicos (${vc1Err.message}). Creando con permisos estándar...`);
+        vc1 = await guild.channels.create({
+          name: `🔊 Team ${capAName}`,
+          type: 2,
+          parent: parentId,
+          reason: 'Partida Mixton iniciada desde la web'
+        });
+      }
 
-      const vc2 = await guild.channels.create({
-        name: `🔊 Team ${capBName}`,
-        type: 2,
-        parent: parentId,
-        permissionOverwrites: permissionOverwrites2,
-        reason: 'Partida Mixton iniciada desde la web'
-      });
+      let vc2 = null;
+      try {
+        vc2 = await guild.channels.create({
+          name: `🔊 Team ${capBName}`,
+          type: 2,
+          parent: parentId,
+          permissionOverwrites: permissionOverwrites2,
+          reason: 'Partida Mixton iniciada desde la web'
+        });
+      } catch (vc2Err) {
+        logger.warn(`Error al crear VC2 con permisos específicos (${vc2Err.message}). Creando con permisos estándar...`);
+        vc2 = await guild.channels.create({
+          name: `🔊 Team ${capBName}`,
+          type: 2,
+          parent: parentId,
+          reason: 'Partida Mixton iniciada desde la web'
+        });
+      }
 
       // A. Reproducir anuncio por voz con IA antes de mover a los jugadores
       if (waitingRoomId) {

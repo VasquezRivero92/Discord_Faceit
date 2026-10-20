@@ -80,41 +80,68 @@ export async function execute(interaction, db) {
     const parentId = targetChannel.parentId;
 
     const permissionOverwrites1 = [
-      { id: guild.id, deny: ['Connect'] },
-      { id: botId, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
+      { id: guild.id, type: 0, deny: ['Connect'] },
+      { id: botId, type: 1, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
     ];
     const permissionOverwrites2 = [
-      { id: guild.id, deny: ['Connect'] },
-      { id: botId, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
+      { id: guild.id, type: 0, deny: ['Connect'] },
+      { id: botId, type: 1, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels', 'MoveMembers'] }
     ];
 
-    if (config.discordMatchAccessRoleId) {
-      permissionOverwrites1.push({ id: config.discordMatchAccessRoleId, allow: ['ViewChannel', 'Connect', 'Speak'] });
-      permissionOverwrites2.push({ id: config.discordMatchAccessRoleId, allow: ['ViewChannel', 'Connect', 'Speak'] });
+    if (config?.discordMatchAccessRoleId && typeof config.discordMatchAccessRoleId === 'string' && config.discordMatchAccessRoleId.trim()) {
+      const roleId = config.discordMatchAccessRoleId.trim();
+      permissionOverwrites1.push({ id: roleId, type: 0, allow: ['ViewChannel', 'Connect', 'Speak'] });
+      permissionOverwrites2.push({ id: roleId, type: 0, allow: ['ViewChannel', 'Connect', 'Speak'] });
     }
 
     for (const p of teamA) {
-      permissionOverwrites1.push({ id: p.member.id, allow: ['Connect', 'Speak'] });
+      if (p?.member?.id) {
+        permissionOverwrites1.push({ id: p.member.id, type: 1, allow: ['Connect', 'Speak'] });
+      }
     }
     for (const p of teamB) {
-      permissionOverwrites2.push({ id: p.member.id, allow: ['Connect', 'Speak'] });
+      if (p?.member?.id) {
+        permissionOverwrites2.push({ id: p.member.id, type: 1, allow: ['Connect', 'Speak'] });
+      }
     }
 
-    const vc1 = await guild.channels.create({
-      name: `🔊 Equipo A (Manual)`,
-      type: ChannelType.GuildVoice,
-      parent: parentId,
-      permissionOverwrites: permissionOverwrites1,
-      reason: 'Partida manual iniciada desde Discord'
-    });
+    let vc1 = null;
+    try {
+      vc1 = await guild.channels.create({
+        name: `🔊 Equipo A (Manual)`,
+        type: ChannelType.GuildVoice,
+        parent: parentId,
+        permissionOverwrites: permissionOverwrites1,
+        reason: 'Partida manual iniciada desde Discord'
+      });
+    } catch (vc1Err) {
+      logger.warn(`Error al crear VC1 con permisos específicos (${vc1Err.message}). Reintentando...`);
+      vc1 = await guild.channels.create({
+        name: `🔊 Equipo A (Manual)`,
+        type: ChannelType.GuildVoice,
+        parent: parentId,
+        reason: 'Partida manual iniciada desde Discord'
+      });
+    }
 
-    const vc2 = await guild.channels.create({
-      name: `🔊 Equipo B (Manual)`,
-      type: ChannelType.GuildVoice,
-      parent: parentId,
-      permissionOverwrites: permissionOverwrites2,
-      reason: 'Partida manual iniciada desde Discord'
-    });
+    let vc2 = null;
+    try {
+      vc2 = await guild.channels.create({
+        name: `🔊 Equipo B (Manual)`,
+        type: ChannelType.GuildVoice,
+        parent: parentId,
+        permissionOverwrites: permissionOverwrites2,
+        reason: 'Partida manual iniciada desde Discord'
+      });
+    } catch (vc2Err) {
+      logger.warn(`Error al crear VC2 con permisos específicos (${vc2Err.message}). Reintentando...`);
+      vc2 = await guild.channels.create({
+        name: `🔊 Equipo B (Manual)`,
+        type: ChannelType.GuildVoice,
+        parent: parentId,
+        reason: 'Partida manual iniciada desde Discord'
+      });
+    }
 
     // 6. Mover jugadores a los nuevos VCs
     const originalVoiceStates = {};
