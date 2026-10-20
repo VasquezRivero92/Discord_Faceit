@@ -2563,12 +2563,14 @@ export function createLobbyRouter(client, db, config, wss) {
           });
         }
 
+        const officialCs2ServerIp = (cs2ServerManager.serverIp && !cs2ServerManager.serverIp.includes('ply.gg')) ? cs2ServerManager.serverIp : '38.25.72.56:27015';
+
         if (matchMode === 'faceit') {
           embedFields.push({ name: '🎯 Sala FACEIT asignada', value: `🟢 **${assignedQueue.name}**\n[Entrar a la cola de ${assignedQueue.name}](${faceitHubUrl})`, inline: false });
         } else {
           embedFields.push({
             name: '🖥️ Servidor CS2 Dedicado',
-            value: `⚡ **Comando de Conexión:**\n\`\`\`connect ${cs2ServerManager.serverIp}\`\`\`\n👉 Abre tu consola en CS2 (\`~\`) y ejecuta el comando anterior.\n🗺️ **Mapa Oficial:** \`${mapDisplayName}\``,
+            value: `⚡ **Comando de Conexión:**\n\`\`\`connect ${officialCs2ServerIp}\`\`\`\n👉 Abre tu consola en CS2 (\`~\`) y ejecuta el comando anterior.\n🗺️ **Mapa Oficial:** \`${mapDisplayName}\``,
             inline: false
           });
         }
@@ -2582,7 +2584,7 @@ export function createLobbyRouter(client, db, config, wss) {
           .setTitle(parsedBetAmount > 0 ? `🎮 ¡Partida Mixton con Apuesta (S/ ${parsedBetAmount.toFixed(2)})!` : '🎮 ¡Partida Mixton Competitiva!')
           .setColor(parsedBetAmount > 0 ? 0x15C253 : 0xFF5500)
           .setDescription(matchMode === 'steam'
-            ? `Lanzada por el Administrador **${req.user.username}** desde el panel web.\n🖥️ **Servidor CS2:** \`connect ${cs2ServerManager.serverIp}\`\n🗺️ **Mapa:** **${mapDisplayName}**\n⚡ Servidor dedicado iniciado y configurado 5v5.`
+            ? `Lanzada por el Administrador **${req.user.username}** desde el panel web.\n🖥️ **Servidor CS2:** \`connect ${officialCs2ServerIp}\`\n🗺️ **Mapa:** **${mapDisplayName}**\n⚡ Servidor dedicado iniciado y configurado 5v5.`
             : `Lanzada por el Administrador **${req.user.username}** desde el panel web.\n🎯 **Sala asignada en FACEIT:** **${assignedQueue.name}**\n🗺️ **Mapa:** **${mapDisplayName}**`)
           .addFields(embedFields)
           .setFooter({ text: 'Usa los botones para reportar el resultado de la partida' })
@@ -2621,7 +2623,7 @@ export function createLobbyRouter(client, db, config, wss) {
 
         const playerPings = [...rosterA, ...rosterB].map(p => `<@${p.discordId}>`).join(' ');
         const msg = await matchesChannel.send({ 
-          content: `📢 **¡Partida Mixtón Iniciada!** (${matchMode === 'steam' ? 'Modo: **SERVIDOR CS2 DEDICADO**' : `Sala: **${assignedQueue.name}**`})\nJugadores: ${playerPings}${matchMode === 'steam' ? `\n⚡ **Conexión CS2:** \`connect ${cs2ServerManager.serverIp}\` (Abre consola en CS2 con \`~\`)` : ''}`,
+          content: `📢 **¡Partida Mixtón Iniciada!** (${matchMode === 'steam' ? 'Modo: **SERVIDOR CS2 DEDICADO**' : `Sala: **${assignedQueue.name}**`})\nJugadores: ${playerPings}${matchMode === 'steam' ? `\n⚡ **Conexión CS2:** \`connect ${officialCs2ServerIp}\` (Abre consola en CS2 con \`~\`)` : ''}`,
           embeds: [startedEmbed], 
           components: [row] 
         }).catch(err => logger.error('Error enviando anuncio mixton:', err));
@@ -2632,7 +2634,7 @@ export function createLobbyRouter(client, db, config, wss) {
         const messageUrl = `https://discord.com/channels/${guild.id}/${matchesChannelId}/${messageId}`;
 
         if (matchMode === 'steam') {
-          const serverIp = cs2ServerManager.serverIp;
+          const officialCs2ServerIp = (cs2ServerManager.serverIp && !cs2ServerManager.serverIp.includes('ply.gg')) ? cs2ServerManager.serverIp : '38.25.72.56:27015';
           const sendSteamTeamInstructions = async (team, roster, voiceChannel) => {
             const captain = team.captain;
             const captainName = captain.faceit_nickname || captain.discordUser?.displayName || 'Capitán';
@@ -2643,7 +2645,7 @@ export function createLobbyRouter(client, db, config, wss) {
               const isCap = (player.discordId === captain.discordId);
               const playerEmbed = new EmbedBuilder()
                 .setTitle(`🎮 ¡Partida CS2 Lista — ${team.name}!`)
-                .setDescription(`${isCap ? '👑 Eres el **Capitán** de tu equipo.' : `👑 Tu capitán es **${captainName}**.`}\n\nEl servidor dedicado CS2 se encuentra encendido y configurado 5v5 para este encuentro.\n\n🗺️ **Mapa Oficial:** \`${mapDisplayName}\`\n\n⚡ **Conexión al Servidor:**\nAbre la consola de CS2 (\`~\`) y ejecuta:\n\`\`\`connect ${serverIp}\`\`\``)
+                .setDescription(`${isCap ? '👑 Eres el **Capitán** de tu equipo.' : `👑 Tu capitán es **${captainName}**.`}\n\nEl servidor dedicado CS2 se encuentra encendido y configurado 5v5 para este encuentro.\n\n🗺️ **Mapa Oficial:** \`${mapDisplayName}\`\n\n⚡ **Conexión al Servidor:**\nAbre la consola de CS2 (\`~\`) y ejecuta:\n\`\`\`connect ${officialCs2ServerIp}\`\`\``)
                 .setColor(0x15C253)
                 .addFields(
                   { name: '🔊 Tu Canal de Voz', value: `<#${voiceChannel.id}>`, inline: true },
@@ -2651,7 +2653,7 @@ export function createLobbyRouter(client, db, config, wss) {
                 )
                 .setFooter({ text: 'Al finalizar la partida, los jugadores serán kickeados y el servidor se apagará automáticamente.' })
                 .setTimestamp();
-              await member.send({ content: `connect ${serverIp}`, embeds: [playerEmbed] }).catch(() => {});
+              await member.send({ content: `connect ${officialCs2ServerIp}`, embeds: [playerEmbed] }).catch(() => {});
             }
           };
 
@@ -2816,7 +2818,7 @@ export function createLobbyRouter(client, db, config, wss) {
             '76561198675781576',
             '76561198042296985'
           ],
-          serverIp: cs2ServerManager.serverIp || '38.25.72.56:27015',
+          serverIp: officialCs2ServerIp,
           bet_amount_per_player: parsedBetAmount,
           total_pot: parseFloat((parsedBetAmount * 10).toFixed(2)),
           createdAt: Date.now()
@@ -2840,7 +2842,7 @@ export function createLobbyRouter(client, db, config, wss) {
           logger.info('[Lobby] Inicio local directo no requerido (esperando agente local):', err.message);
         });
 
-        logger.info(`[Lobby] Partida CS2 ${matchId} lista y anunciada. IP del servidor (${cs2ServerManager.serverIp}) enviada a los 10 jugadores por Discord.`);
+        logger.info(`[Lobby] Partida CS2 ${matchId} lista y anunciada. IP del servidor (${officialCs2ServerIp}) enviada a los 10 jugadores por Discord.`);
       }
       await updateLivePanel(client, matchesChannelId, db);
 

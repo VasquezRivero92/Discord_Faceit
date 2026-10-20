@@ -13,7 +13,11 @@ const MCSM_DAEMON_URL = process.env.MCSM_DAEMON_URL || 'ws://127.0.0.1:24444';
 const MCSM_API_KEY = process.env.MCSM_API_KEY || 'e48580b2636b4464fc5467e669146699181471a341a7bc0';
 const MCSM_INSTANCE_UUID = process.env.MCSM_INSTANCE_UUID || 'ccdc655afc4146958f67a96853386537';
 const CS2_SERVER_DIR = process.env.CS2_SERVER_DIR || 'D:\\ServerCS2';
-const MIXTON_SERVER_IP = process.env.MIXTON_SERVER_IP || '38.25.72.56:27015';
+let rawServerIp = (process.env.MIXTON_SERVER_IP || '').trim();
+if (!rawServerIp || rawServerIp.includes('ply.gg') || rawServerIp.includes('bid-thorn')) {
+  rawServerIp = '38.25.72.56:27015';
+}
+const MIXTON_SERVER_IP = rawServerIp;
 
 class Cs2ServerManager {
   constructor() {
@@ -21,10 +25,25 @@ class Cs2ServerManager {
     this.apiKey = MCSM_API_KEY;
     this.instanceUuid = MCSM_INSTANCE_UUID;
     this.serverDir = CS2_SERVER_DIR;
-    this.serverIp = MIXTON_SERVER_IP;
+    this._serverIp = MIXTON_SERVER_IP;
     this.currentMatchId = null;
     this.currentMatchData = null;
     this.isStopping = false;
+  }
+
+  get serverIp() {
+    if (!this._serverIp || this._serverIp.includes('ply.gg') || this._serverIp.includes('bid-thorn')) {
+      return '38.25.72.56:27015';
+    }
+    return this._serverIp;
+  }
+
+  set serverIp(val) {
+    if (val && typeof val === 'string' && !val.includes('ply.gg') && !val.includes('bid-thorn')) {
+      this._serverIp = val.trim();
+    } else {
+      this._serverIp = '38.25.72.56:27015';
+    }
   }
 
   /**
