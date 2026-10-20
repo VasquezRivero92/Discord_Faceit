@@ -2508,7 +2508,7 @@ export function createLobbyRouter(client, db, config, wss) {
           embedFields.push({ name: '🎯 Sala FACEIT asignada', value: `🟢 **${assignedQueue.name}**\n[Entrar a la cola de ${assignedQueue.name}](${faceitHubUrl})`, inline: false });
         } else {
           embedFields.push({
-            name: '🖥️ Servidor CS2 Dedicado (Steam / MCSManager)',
+            name: '🖥️ Servidor CS2 Dedicado (Steam)',
             value: `⚡ **Comando de Conexión:**\n\`\`\`connect ${cs2ServerManager.serverIp}\`\`\`\n👉 Abre tu consola en CS2 (\`~\`) y ejecuta el comando anterior.\n🗺️ **Mapa Oficial:** \`${mapDisplayName}\``,
             inline: false
           });
@@ -2523,7 +2523,7 @@ export function createLobbyRouter(client, db, config, wss) {
           .setTitle(parsedBetAmount > 0 ? `🎮 ¡Partida Mixton con Apuesta (S/ ${parsedBetAmount.toFixed(2)})!` : '🎮 ¡Partida Mixton Competitiva!')
           .setColor(parsedBetAmount > 0 ? 0x15C253 : 0xFF5500)
           .setDescription(matchMode === 'steam'
-            ? `Lanzada por el Administrador **${req.user.username}** desde el panel web.\n🖥️ **Servidor CS2:** \`connect ${cs2ServerManager.serverIp}\`\n🗺️ **Mapa:** **${mapDisplayName}**\n⚡ Servidor iniciado en MCSManager y configurado 5v5.`
+            ? `Lanzada por el Administrador **${req.user.username}** desde el panel web.\n🖥️ **Servidor CS2:** \`connect ${cs2ServerManager.serverIp}\`\n🗺️ **Mapa:** **${mapDisplayName}**\n⚡ Servidor dedicado iniciado y configurado 5v5.`
             : `Lanzada por el Administrador **${req.user.username}** desde el panel web.\n🎯 **Sala asignada en FACEIT:** **${assignedQueue.name}**\n🗺️ **Mapa:** **${mapDisplayName}**`)
           .addFields(embedFields)
           .setFooter({ text: 'Usa los botones para reportar el resultado de la partida' })
@@ -2584,7 +2584,7 @@ export function createLobbyRouter(client, db, config, wss) {
               const isCap = (player.discordId === captain.discordId);
               const playerEmbed = new EmbedBuilder()
                 .setTitle(`🎮 ¡Partida CS2 Lista — ${team.name}!`)
-                .setDescription(`${isCap ? '👑 Eres el **Capitán** de tu equipo.' : `👑 Tu capitán es **${captainName}**.`}\n\nEl servidor dedicado CS2 se encuentra encendido en MCSManager y configurado 5v5 para este encuentro.\n\n🗺️ **Mapa Oficial:** \`${mapDisplayName}\`\n\n⚡ **Conexión al Servidor:**\nAbre la consola de CS2 (\`~\`) y ejecuta:\n\`\`\`connect ${serverIp}\`\`\``)
+                .setDescription(`${isCap ? '👑 Eres el **Capitán** de tu equipo.' : `👑 Tu capitán es **${captainName}**.`}\n\nEl servidor dedicado CS2 se encuentra encendido y configurado 5v5 para este encuentro.\n\n🗺️ **Mapa Oficial:** \`${mapDisplayName}\`\n\n⚡ **Conexión al Servidor:**\nAbre la consola de CS2 (\`~\`) y ejecuta:\n\`\`\`connect ${serverIp}\`\`\``)
                 .setColor(0x15C253)
                 .addFields(
                   { name: '🔊 Tu Canal de Voz', value: `<#${voiceChannel.id}>`, inline: true },
