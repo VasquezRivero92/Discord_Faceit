@@ -2469,6 +2469,150 @@ export const db = {
       const orderId = `ORD-${Date.now()}`;
       return { success: true, orderId, order: { orderId, ...orderData } };
     }
+  },
+
+  async getClaims(limit = 100, status = null) {
+    try {
+      let query = firestore.collection('claims');
+      if (status) {
+        query = query.where('status', '==', status);
+      }
+      const snapshot = await query.get();
+      const claims = [];
+      snapshot.forEach(doc => {
+        claims.push({ id: doc.id, ...doc.data() });
+      });
+      claims.sort((a, b) => {
+        const timeA = a.createdAtIso ? new Date(a.createdAtIso).getTime() : (a.createdAt?._seconds ? a.createdAt._seconds * 1000 : 0);
+        const timeB = b.createdAtIso ? new Date(b.createdAtIso).getTime() : (b.createdAt?._seconds ? b.createdAt._seconds * 1000 : 0);
+        return timeB - timeA;
+      });
+      return claims.slice(0, limit);
+    } catch (err) {
+      logger.error('Error al listar reclamos:', err);
+      return [];
+    }
+  },
+
+  async updateClaim(claimCode, updates) {
+    try {
+      const claimRef = firestore.collection('claims').doc(claimCode);
+      await claimRef.set({
+        ...updates,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAtIso: new Date().toISOString()
+      }, { merge: true });
+      return true;
+    } catch (err) {
+      logger.error(`Error al actualizar reclamo ${claimCode}:`, err);
+      return false;
+    }
+  },
+
+  async deleteClaim(claimCode) {
+    try {
+      await firestore.collection('claims').doc(claimCode).delete();
+      return true;
+    } catch (err) {
+      logger.error(`Error al eliminar reclamo ${claimCode}:`, err);
+      return false;
+    }
+  },
+
+  async getOrders(limit = 100, status = null) {
+    try {
+      let query = firestore.collection('orders');
+      if (status) {
+        query = query.where('status', '==', status);
+      }
+      const snapshot = await query.get();
+      const orders = [];
+      snapshot.forEach(doc => {
+        orders.push({ id: doc.id, ...doc.data() });
+      });
+      orders.sort((a, b) => {
+        const timeA = a.createdAtIso ? new Date(a.createdAtIso).getTime() : (a.createdAt?._seconds ? a.createdAt._seconds * 1000 : 0);
+        const timeB = b.createdAtIso ? new Date(b.createdAtIso).getTime() : (b.createdAt?._seconds ? b.createdAt._seconds * 1000 : 0);
+        return timeB - timeA;
+      });
+      return orders.slice(0, limit);
+    } catch (err) {
+      logger.error('Error al listar órdenes:', err);
+      return [];
+    }
+  },
+
+  async updateOrderStatus(orderId, status, note = '') {
+    try {
+      const orderRef = firestore.collection('orders').doc(orderId);
+      await orderRef.set({
+        status,
+        adminNote: note || '',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAtIso: new Date().toISOString()
+      }, { merge: true });
+      return true;
+    } catch (err) {
+      logger.error(`Error al actualizar orden ${orderId}:`, err);
+      return false;
+    }
+  },
+
+  async getYapeTransactions(limit = 50) {
+    try {
+      const snapshot = await firestore.collection('yape_transacciones').get();
+      const list = [];
+      snapshot.forEach(doc => {
+        list.push({ id: doc.id, ...doc.data() });
+      });
+      list.sort((a, b) => {
+        const timeA = a.detectedAt ? new Date(a.detectedAt).getTime() : (a.createdAt || 0);
+        const timeB = b.detectedAt ? new Date(b.detectedAt).getTime() : (b.createdAt || 0);
+        return timeB - timeA;
+      });
+      return list.slice(0, limit);
+    } catch (err) {
+      logger.error('Error al listar transacciones Yape:', err);
+      return [];
+    }
+  },
+
+  async getYapeOperations(limit = 50) {
+    try {
+      const snapshot = await firestore.collection('yape_operations').get();
+      const list = [];
+      snapshot.forEach(doc => {
+        list.push({ id: doc.id, ...doc.data() });
+      });
+      list.sort((a, b) => {
+        const timeA = a.createdAt ? (a.createdAt._seconds ? a.createdAt._seconds * 1000 : new Date(a.createdAt).getTime()) : 0;
+        const timeB = b.createdAt ? (b.createdAt._seconds ? b.createdAt._seconds * 1000 : new Date(b.createdAt).getTime()) : 0;
+        return timeB - timeA;
+      });
+      return list.slice(0, limit);
+    } catch (err) {
+      logger.error('Error al listar operaciones Yape:', err);
+      return [];
+    }
+  },
+
+  async getYapeAuditLogs(limit = 50) {
+    try {
+      const snapshot = await firestore.collection('yape_audit_logs').get();
+      const list = [];
+      snapshot.forEach(doc => {
+        list.push({ id: doc.id, ...doc.data() });
+      });
+      list.sort((a, b) => {
+        const timeA = a.timestamp || 0;
+        const timeB = b.timestamp || 0;
+        return timeB - timeA;
+      });
+      return list.slice(0, limit);
+    } catch (err) {
+      logger.error('Error al listar logs de auditoría Yape:', err);
+      return [];
+    }
   }
 };
 

@@ -655,6 +655,46 @@ export function createApiRouter(client, db, config) {
     }
   });
 
+  // --- Modificar saldo de billetera de usuario ---
+  router.post('/users/:id/balance', requireAuth, async (req, res) => {
+    try {
+      const discordId = req.params.id;
+      const { amount, delta, type = 'delta', reason = 'Ajuste manual desde panel admin' } = req.body;
+      const targetGuildId = resolveTargetGuildId(req);
+
+      if (req.user?.role === 'admin') {
+        const u = await db.getFullUser(discordId);
+        const userGuild = u?.guild_id || u?.servidor || u?.mixton_guild_id;
+        if (userGuild && userGuild !== req.user.servidor) {
+          return res.status(403).json({ error: 'No autorizado para modificar saldos de usuarios de otros servidores.' });
+        }
+      }
+
+      let newBalance = 0;
+      const auditReason = `[Admin: ${req.user?.username || 'Panel'}] ${reason}`;
+
+      if (type === 'set') {
+        const targetAmount = parseFloat(amount);
+        if (isNaN(targetAmount) || targetAmount < 0) {
+          return res.status(400).json({ error: 'Monto inválido para establecer saldo.' });
+        }
+        newBalance = await db.setUserBalance(discordId, targetAmount, targetGuildId, auditReason);
+      } else {
+        const diff = parseFloat(delta !== undefined ? delta : amount);
+        if (isNaN(diff)) {
+          return res.status(400).json({ error: 'Monto de diferencia inválido.' });
+        }
+        newBalance = await db.updateUserBalance(discordId, diff, targetGuildId, auditReason);
+      }
+
+      await db.addLogEntry('info', `Saldo de <@${discordId}> modificado a S/ ${newBalance.toFixed(2)} por ${req.user?.username}. Motivo: ${reason}`, 'wallet', targetGuildId);
+      res.json({ success: true, newBalance, message: `Saldo actualizado exitosamente a S/ ${newBalance.toFixed(2)}` });
+    } catch (err) {
+      logger.error('Error en POST /users/:id/balance:', err);
+      res.status(500).json({ error: 'Error interno al actualizar saldo de usuario.' });
+    }
+  });
+
   // --- Listar roles del servidor de Discord ---
   router.get('/discord/roles', requireAuth, async (req, res) => {
     try {
@@ -924,7 +964,7 @@ export function createApiRouter(client, db, config) {
     }
   });
 
-  router.all(['/points', '/club/points'], async (req, res) => {
+  router.all(['/points', '/club/points'], requireAuth, async (req, res) => {
     try {
       const targetGuildId = resolveTargetGuildId(req);
       const effectiveConfig = targetGuildId
@@ -1488,17 +1528,190 @@ export function createApiRouter(client, db, config) {
   // --- Servidores (Guilds) ---
   router.get('/guilds', requireAuth, async (req, res) => {
     try {
-      let guilds = [{
-        id: (DISCORD_GUILD_ID && DISCORD_GUILD_ID !== '1472731390675255410') ? DISCORD_GUILD_ID : '1274598531759345674',
-        name: 'MachuPeek',
-        icon: null,
-        memberCount: 0
-      }];
+      let guilds = [];
+      if (client?.guilds?.cache && client.guilds.cache.size > 0) {
+        guilds = Array.from(client.guilds.cache.values()).map(g => ({
+          id: g.id,
+          name: g.name,
+          icon: typeof g.iconURL === 'function' ? g.iconURL() : null,
+          memberCount: g.memberCount || 0
+        }));
+      }
+
+      if (guilds.length === 0) {
+        guilds = [{
+          id: (DISCORD_GUILD_ID && DISCORD_GUILD_ID !== '1472731390675255410') ? DISCORD_GUILD_ID : (env.DISCORD_GUILD_ID || '1274598531759345674'),
+          name: 'MachuPeek',
+          icon: null,
+          memberCount: 0
+        }];
+      }
 
       res.json({ guilds });
     } catch (err) {
       logger.error('Error en GET /guilds:', err);
       res.status(500).json({ error: 'Error al obtener servidores' });
+    }
+  });
+
+  // --- Libro de Reclamaciones (Claims INDECOPI) ---
+  router.get('/claims', requireAuth, async (req, res) => {
+    try {
+      const status = req.query.status || null;
+      const limit = parseInt(req.query.limit, 10) || 100;
+      const claims = await db.getClaims(limit, status);
+      res.json({ claims });
+    } catch (err) {
+      logger.error('Error en GET /claims:', err);
+      res.status(500).json({ error: 'Error al obtener reclamaciones' });
+    }
+  });
+
+  router.get('/claims/:code', requireAuth, async (req, res) => {
+    try {
+      const claim = await db.getClaim(req.params.code);
+      if (!claim) {
+        return res.status(404).json({ error: 'Reclamación no encontrada' });
+      }
+      res.json({ claim });
+    } catch (err) {
+      logger.error('Error en GET /claims/:code:', err);
+      res.status(500).json({ error: 'Error al obtener detalle de reclamación' });
+    }
+  });
+
+  router.post('/claims/:code/respond', requireAuth, async (req, res) => {
+    try {
+      const claimCode = req.params.code;
+      const { status = 'ATENDIDO', response } = req.body;
+      if (!response || !response.trim()) {
+        return res.status(400).json({ error: 'La respuesta formal es requerida.' });
+      }
+
+      const claim = await db.getClaim(claimCode);
+      if (!claim) {
+        return res.status(404).json({ error: 'Reclamación no encontrada.' });
+      }
+
+      const adminName = req.user?.username || 'Administrador';
+      const success = await db.updateClaim(claimCode, {
+        status: status.toUpperCase(),
+        response: response.trim(),
+        respondedBy: adminName,
+        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+        respondedAtIso: new Date().toISOString()
+      });
+
+      if (!success) {
+        return res.status(500).json({ error: 'No se pudo guardar la respuesta.' });
+      }
+
+      await db.addLogEntry('info', `Respuesta registrada para reclamo ${claimCode} por ${adminName}.`, 'system');
+      res.json({ success: true, message: 'Respuesta guardada con éxito.' });
+    } catch (err) {
+      logger.error('Error en POST /claims/:code/respond:', err);
+      res.status(500).json({ error: 'Error al registrar respuesta al reclamo' });
+    }
+  });
+
+  router.delete('/claims/:code', requireAuth, async (req, res) => {
+    if (req.user?.role !== 'global_admin') {
+      return res.status(403).json({ error: 'Solo el administrador global puede eliminar reclamaciones.' });
+    }
+    try {
+      const success = await db.deleteClaim(req.params.code);
+      if (success) {
+        return res.json({ success: true });
+      }
+      return res.status(500).json({ error: 'No se pudo eliminar la reclamación.' });
+    } catch (err) {
+      logger.error('Error en DELETE /claims/:code:', err);
+      res.status(500).json({ error: 'Error al eliminar reclamación' });
+    }
+  });
+
+  // --- Órdenes de la Tienda (Store Orders) ---
+  router.get('/orders', requireAuth, async (req, res) => {
+    try {
+      const status = req.query.status || null;
+      const limit = parseInt(req.query.limit, 10) || 100;
+      const orders = await db.getOrders(limit, status);
+      res.json({ orders });
+    } catch (err) {
+      logger.error('Error en GET /orders:', err);
+      res.status(500).json({ error: 'Error al obtener órdenes' });
+    }
+  });
+
+  router.post('/orders/:id/status', requireAuth, async (req, res) => {
+    try {
+      const orderId = req.params.id;
+      const { status, note = '' } = req.body;
+      if (!status) {
+        return res.status(400).json({ error: 'El estado es requerido.' });
+      }
+
+      const success = await db.updateOrderStatus(orderId, status.toUpperCase(), note);
+      if (success) {
+        await db.addLogEntry('info', `Estado de la orden ${orderId} actualizado a ${status} por ${req.user?.username}.`, 'shop');
+        return res.json({ success: true, message: `Orden actualizada a ${status}.` });
+      }
+      return res.status(500).json({ error: 'No se pudo actualizar la orden.' });
+    } catch (err) {
+      logger.error('Error en POST /orders/:id/status:', err);
+      res.status(500).json({ error: 'Error al actualizar estado de la orden' });
+    }
+  });
+
+  // --- Transacciones y Auditoría Yape ---
+  router.get('/yape/transactions', requireAuth, async (req, res) => {
+    try {
+      const [transactions, operations, auditLogs] = await Promise.all([
+        db.getYapeTransactions(50),
+        db.getYapeOperations(50),
+        db.getYapeAuditLogs(50)
+      ]);
+      res.json({ transactions, operations, auditLogs });
+    } catch (err) {
+      logger.error('Error en GET /yape/transactions:', err);
+      res.status(500).json({ error: 'Error al obtener transacciones Yape' });
+    }
+  });
+
+  router.post('/yape/manual-approve', requireAuth, async (req, res) => {
+    if (req.user?.role !== 'global_admin' && req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'No autorizado.' });
+    }
+    const { operationNumber, discordId, amount, reason = 'Aprobación manual por Administrador' } = req.body;
+    if (!discordId || !amount || isNaN(parseFloat(amount))) {
+      return res.status(400).json({ error: 'Debes proporcionar discordId y un monto válido.' });
+    }
+
+    try {
+      const parsedAmount = parseFloat(parseFloat(amount).toFixed(2));
+      const targetGuildId = resolveTargetGuildId(req);
+      const auditReason = `[Manual Yape Approval by ${req.user?.username}] ${reason} (Op: ${operationNumber || 'N/A'})`;
+      
+      const newBalance = await db.updateUserBalance(discordId, parsedAmount, targetGuildId, auditReason);
+      
+      if (operationNumber) {
+        try {
+          const normalized = String(operationNumber).trim().toUpperCase();
+          await db._firestore.collection('yape_operations').doc(encodeURIComponent(normalized)).set({
+            status: 'credited',
+            manualApprovalBy: req.user?.username,
+            manualApprovalAt: Date.now(),
+            creditedDiscordId: discordId,
+            creditedAmount: parsedAmount
+          }, { merge: true });
+        } catch (_) {}
+      }
+
+      await db.addLogEntry('success', `Recarga Yape manual aprobada: S/ ${parsedAmount} para <@${discordId}> por ${req.user?.username}.`, 'wallet', targetGuildId);
+      return res.json({ success: true, newBalance, message: `Acreditado exitosamente S/ ${parsedAmount} a <@${discordId}>.` });
+    } catch (err) {
+      logger.error('Error en POST /yape/manual-approve:', err);
+      return res.status(500).json({ error: 'Error al procesar acreditación manual.' });
     }
   });
 

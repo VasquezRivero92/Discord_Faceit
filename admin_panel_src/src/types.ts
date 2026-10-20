@@ -8,6 +8,105 @@ export interface LinkedUser {
   roleValue?: string;
   faceit_level?: number;
   faceit_level_season?: number;
+  wallet_balance?: number;
+  steam_id_64?: string;
+  steam_nickname?: string;
+  rol?: string;
+  servidor?: string;
+  clubRole?: string;
+}
+
+export interface ClaimItem {
+  id: string;
+  claimCode: string;
+  consumer: {
+    name: string;
+    docType: string;
+    docNumber: string;
+    email: string;
+    phone?: string;
+    address?: string;
+    isMinor?: boolean;
+    parent?: { name: string; docNumber: string } | null;
+  };
+  goods: {
+    type: 'PRODUCTO' | 'SERVICIO';
+    amount: number;
+    currency: string;
+    description: string;
+  };
+  claim: {
+    type: 'RECLAMO' | 'QUEJA';
+    detail: string;
+    request: string;
+  };
+  status: 'PENDIENTE' | 'EN_PROCESO' | 'ATENDIDO' | 'RECHAZADO';
+  createdAt?: any;
+  createdAtIso?: string;
+  response?: string;
+  respondedBy?: string;
+  respondedAt?: any;
+  respondedAtIso?: string;
+}
+
+export interface OrderItem {
+  id: string;
+  orderId: string;
+  customer: {
+    name: string;
+    email: string;
+    phone?: string;
+    discordId?: string;
+  };
+  items: Array<{
+    id: string;
+    name: string;
+    unitPrice: number;
+    quantity: number;
+    itemTotal: number;
+  }>;
+  totalAmount: number;
+  currency: string;
+  paymentMethod: string;
+  chargeId?: string;
+  referenceCode?: string;
+  status: 'PENDIENTE' | 'PAGADO' | 'COMPLETADA' | 'ENTREGADO' | 'CANCELADO';
+  adminNote?: string;
+  createdAt?: any;
+  createdAtIso?: string;
+}
+
+export interface YapeTransactionItem {
+  id: string;
+  operationNumber?: string;
+  numero_operacion?: string;
+  amount?: number;
+  monto?: number;
+  sender?: string;
+  detectedAt?: string;
+  status?: string;
+  createdAt?: number;
+}
+
+export interface YapeOperationItem {
+  id: string;
+  operationNumber?: string;
+  discordId?: string;
+  amount?: number;
+  status?: string;
+  createdAt?: any;
+  manualApprovalBy?: string;
+  manualApprovalAt?: number;
+}
+
+export interface YapeAuditLogItem {
+  id: string;
+  action?: string;
+  discordId?: string;
+  amount?: number;
+  timestamp?: number;
+  reason?: string;
+  source?: string;
 }
 
 export interface LiveMatch {

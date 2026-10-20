@@ -33,17 +33,32 @@ import {
   Download,
   Eye,
   ExternalLink,
-  X
+  X,
+  ShoppingBag,
+  Wallet,
+  DollarSign,
+  Scale,
+  CheckCircle
 } from 'lucide-react';
-import { LinkedUser, LiveMatch, SystemLog, BotConfig, FeatureFlag, PlayerStats } from './types';
+import {
+  LinkedUser,
+  LiveMatch,
+  SystemLog,
+  BotConfig,
+  FeatureFlag,
+  PlayerStats,
+  ClaimItem,
+  OrderItem,
+  YapeTransactionItem,
+  YapeOperationItem,
+  YapeAuditLogItem
+} from './types';
 import {
   initialUsers,
   initialMatches,
   initialFeatureFlags,
   initialConfig,
-  initialLogs,
-  proPlayers,
-  generateMockPlayer
+  initialLogs
 } from './data';
 
 // Helper para todas las peticiones a la API — siempre envía cookies de sesión
@@ -144,6 +159,49 @@ export default function App() {
   const [availableDiscordRoles, setAvailableDiscordRoles] = useState<{ id: string; name: string; color: string }[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [supportCalls, setSupportCalls] = useState<any[]>([]);
+  // Nuevos estados para Módulos de Comercio, Finanzas y Legal
+  const [claims, setClaims] = useState<ClaimItem[]>([]);
+  const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [yapeData, setYapeData] = useState<{
+    transactions: YapeTransactionItem[];
+    operations: YapeOperationItem[];
+    auditLogs: YapeAuditLogItem[];
+  }>({ transactions: [], operations: [], auditLogs: [] });
+
+  // Claims Filter & Pagination States
+  const [claimsSearch, setClaimsSearch] = useState<string>('');
+  const [claimsFilter, setClaimsFilter] = useState<string>('all');
+  const [claimsPage, setClaimsPage] = useState<number>(1);
+  const [selectedClaimModal, setSelectedClaimModal] = useState<ClaimItem | null>(null);
+  const [claimResponseText, setClaimResponseText] = useState<string>('');
+  const [claimResponseStatus, setClaimResponseStatus] = useState<'ATENDIDO' | 'EN_PROCESO' | 'RECHAZADO'>('ATENDIDO');
+  const [respondingClaim, setRespondingClaim] = useState<boolean>(false);
+
+  // Orders Filter & Pagination States
+  const [ordersSearch, setOrdersSearch] = useState<string>('');
+  const [ordersFilter, setOrdersFilter] = useState<string>('all');
+  const [ordersPage, setOrdersPage] = useState<number>(1);
+  const [selectedOrderModal, setSelectedOrderModal] = useState<OrderItem | null>(null);
+  const [updatingOrderStatus, setUpdatingOrderStatus] = useState<boolean>(false);
+
+  // Yape / Finances States
+  const [yapeActiveSubtab, setYapeActiveSubtab] = useState<'operations' | 'transactions' | 'audit'>('operations');
+  const [yapeSearch, setYapeSearch] = useState<string>('');
+  const [manualApproveModalOpen, setManualApproveModalOpen] = useState<boolean>(false);
+  const [manualApproveOp, setManualApproveOp] = useState<string>('');
+  const [manualApproveDiscordId, setManualApproveDiscordId] = useState<string>('');
+  const [manualApproveAmount, setManualApproveAmount] = useState<string>('');
+  const [manualApproveReason, setManualApproveReason] = useState<string>('');
+  const [approvingYape, setApprovingYape] = useState<boolean>(false);
+
+  // Balance Management Modal
+  const [balanceModalOpen, setBalanceModalOpen] = useState<boolean>(false);
+  const [balanceTargetUser, setBalanceTargetUser] = useState<LinkedUser | null>(null);
+  const [balanceActionType, setBalanceActionType] = useState<'add' | 'subtract' | 'set'>('add');
+  const [balanceAmount, setBalanceAmount] = useState<string>('');
+  const [balanceReason, setBalanceReason] = useState<string>('');
+  const [savingBalance, setSavingBalance] = useState<boolean>(false);
+
   const [messageTemplates, setMessageTemplates] = useState<{
     welcomeTitle: string;
     welcomeDescription: string;
@@ -184,7 +242,7 @@ export default function App() {
 
     try {
       const guildQuery = selectedGuildId ? `?guildId=${selectedGuildId}` : '';
-      const [usersRes, matchesRes, logsRes, settingsRes, leaderboardRes, systemRes, supportRes, messagesRes, historyRes, rolesRes] = await Promise.all([
+      const [usersRes, matchesRes, logsRes, settingsRes, leaderboardRes, systemRes, supportRes, messagesRes, historyRes, rolesRes, claimsRes, ordersRes, yapeRes] = await Promise.all([
         safeFetch(`/api/admin/users${guildQuery}`),
         safeFetch(`/api/admin/matches${guildQuery}`),
         safeFetch(`/api/admin/logs${guildQuery}`),
@@ -194,7 +252,10 @@ export default function App() {
         safeFetch(`/api/admin/support-calls${guildQuery}`),
         safeFetch(`/api/admin/messages${guildQuery}`),
         safeFetch(`/api/admin/matches/history${guildQuery}`),
-        safeFetch(`/api/admin/discord/roles${guildQuery}`)
+        safeFetch(`/api/admin/discord/roles${guildQuery}`),
+        safeFetch('/api/admin/claims'),
+        safeFetch('/api/admin/orders'),
+        safeFetch('/api/admin/yape/transactions')
       ]);
 
       if (!usersRes && !matchesRes && !logsRes && !settingsRes && !leaderboardRes && !systemRes) {
@@ -225,7 +286,9 @@ export default function App() {
               roleType: u.roleType || u.role_type,
               roleValue: u.roleValue || u.role_value,
               faceit_level: u.faceit_level || u.level,
-              faceit_level_season: u.faceit_level_season
+              faceit_level_season: u.faceit_level_season,
+              wallet_balance: u.wallet_balance || u.balance || 0,
+              steam_id_64: u.steam_id_64 || u.steamId || ''
             };
           }));
         } catch (err) {
@@ -348,6 +411,37 @@ export default function App() {
           console.error('Error parsing discord roles:', err);
         }
       }
+
+      if (claimsRes) {
+        try {
+          const cData = (await claimsRes.json()).claims || [];
+          setClaims(cData);
+        } catch (err) {
+          console.error('Error parsing claims data:', err);
+        }
+      }
+
+      if (ordersRes) {
+        try {
+          const oData = (await ordersRes.json()).orders || [];
+          setOrders(oData);
+        } catch (err) {
+          console.error('Error parsing orders data:', err);
+        }
+      }
+
+      if (yapeRes) {
+        try {
+          const yData = await yapeRes.json();
+          setYapeData({
+            transactions: yData.transactions || [],
+            operations: yData.operations || [],
+            auditLogs: yData.auditLogs || []
+          });
+        } catch (err) {
+          console.error('Error parsing yape data:', err);
+        }
+      }
     } catch (err) {
       console.error('Error loading data:', err);
     }
@@ -440,6 +534,29 @@ export default function App() {
   }, [usersSearch, usersFilter]);
 
   useEffect(() => {
+    setClaimsPage(1);
+  }, [claimsSearch, claimsFilter]);
+
+  useEffect(() => {
+    setOrdersPage(1);
+  }, [ordersSearch, ordersFilter]);
+
+  const formatDateDisplay = (dateVal: any) => {
+    if (!dateVal) return 'N/A';
+    try {
+      if (typeof dateVal === 'number') {
+        return new Date(dateVal).toLocaleString('es-ES');
+      }
+      if (dateVal._seconds) {
+        return new Date(dateVal._seconds * 1000).toLocaleString('es-ES');
+      }
+      return new Date(dateVal).toLocaleString('es-ES');
+    } catch {
+      return String(dateVal);
+    }
+  };
+
+  useEffect(() => {
     if (!isLoggedIn || activeTab !== 'logs') return;
     const fetchLogs = async () => {
       try {
@@ -455,6 +572,185 @@ export default function App() {
     fetchLogs();
   }, [isLoggedIn, activeTab, selectedGuildId]);
 
+
+  // --- Handlers para Gestión de Saldo / Billetera ---
+  const handleOpenBalanceModal = (user: LinkedUser) => {
+    setBalanceTargetUser(user);
+    setBalanceActionType('add');
+    setBalanceAmount('');
+    setBalanceReason('Ajuste administrativo desde panel');
+    setBalanceModalOpen(true);
+  };
+
+  const handleSaveBalanceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!balanceTargetUser) return;
+    const amountVal = parseFloat(balanceAmount);
+    if (isNaN(amountVal) || amountVal < 0) {
+      showToast('Ingresa un monto numérico válido.', 'error');
+      return;
+    }
+
+    setSavingBalance(true);
+    try {
+      const res = await apiFetch(`/api/admin/users/${balanceTargetUser.discordId}/balance`, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: balanceActionType,
+          amount: amountVal,
+          reason: balanceReason.trim() || 'Ajuste administrativo'
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        showToast(data.message || 'Saldo actualizado correctamente.', 'success');
+        setBalanceModalOpen(false);
+        await loadData();
+      } else {
+        showToast(data.error || 'Error al actualizar saldo.', 'error');
+      }
+    } catch {
+      showToast('Error de red al actualizar saldo.', 'error');
+    } finally {
+      setSavingBalance(false);
+    }
+  };
+
+  // --- Handlers para Reclamaciones INDECOPI ---
+  const handleOpenClaimModal = (claim: ClaimItem) => {
+    setSelectedClaimModal(claim);
+    setClaimResponseText(claim.response || '');
+    setClaimResponseStatus((claim.status === 'PENDIENTE' ? 'ATENDIDO' : claim.status) as any);
+  };
+
+  const handleRespondClaimSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedClaimModal) return;
+    if (!claimResponseText.trim()) {
+      showToast('Ingresa el texto formal de la respuesta.', 'error');
+      return;
+    }
+
+    setRespondingClaim(true);
+    try {
+      const claimCode = selectedClaimModal.claimCode || selectedClaimModal.id;
+      const res = await apiFetch(`/api/admin/claims/${claimCode}/respond`, {
+        method: 'POST',
+        body: JSON.stringify({
+          status: claimResponseStatus,
+          response: claimResponseText.trim()
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        showToast('Respuesta oficial registrada correctamente.', 'success');
+        setSelectedClaimModal(null);
+        await loadData();
+      } else {
+        showToast(data.error || 'Error al guardar respuesta.', 'error');
+      }
+    } catch {
+      showToast('Error de red al responder reclamación.', 'error');
+    } finally {
+      setRespondingClaim(false);
+    }
+  };
+
+  const handleDeleteClaim = async (claimCode: string) => {
+    if (!confirm(`¿Eliminar la reclamación ${claimCode}? Esta acción es irreversible.`)) return;
+    try {
+      const res = await apiFetch(`/api/admin/claims/${claimCode}`, { method: 'DELETE' });
+      if (res.ok) {
+        showToast('Reclamación eliminada.', 'success');
+        if (selectedClaimModal?.claimCode === claimCode) setSelectedClaimModal(null);
+        await loadData();
+      } else {
+        showToast('Error al eliminar reclamación.', 'error');
+      }
+    } catch {
+      showToast('Error de red al eliminar.', 'error');
+    }
+  };
+
+  // --- Handlers para Órdenes de Tienda ---
+  const handleOpenOrderModal = (order: OrderItem) => {
+    setSelectedOrderModal(order);
+  };
+
+  const handleUpdateOrderStatus = async (orderId: string, status: string, note = '') => {
+    setUpdatingOrderStatus(true);
+    try {
+      const res = await apiFetch(`/api/admin/orders/${orderId}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status, note })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        showToast(data.message || `Orden actualizada a ${status}.`, 'success');
+        if (selectedOrderModal && selectedOrderModal.orderId === orderId) {
+          setSelectedOrderModal({ ...selectedOrderModal, status: status as any, adminNote: note });
+        }
+        await loadData();
+      } else {
+        showToast(data.error || 'Error al actualizar orden.', 'error');
+      }
+    } catch {
+      showToast('Error de red al actualizar estado de la orden.', 'error');
+    } finally {
+      setUpdatingOrderStatus(false);
+    }
+  };
+
+  // --- Handlers para Validación Manual de Yape ---
+  const handleOpenManualApproveYape = (item?: { op?: string; discordId?: string; amount?: number }) => {
+    setManualApproveOp(item?.op || '');
+    setManualApproveDiscordId(item?.discordId || '');
+    setManualApproveAmount(item?.amount ? String(item.amount) : '');
+    setManualApproveReason('Aprobación manual por verificación de comprobante');
+    setManualApproveModalOpen(true);
+  };
+
+  const handleManualApproveSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const val = parseFloat(manualApproveAmount);
+    if (!manualApproveDiscordId.trim()) {
+      showToast('El Discord ID es requerido.', 'error');
+      return;
+    }
+    if (isNaN(val) || val <= 0) {
+      showToast('Ingresa un monto válido mayor a 0.', 'error');
+      return;
+    }
+    if (!manualApproveOp.trim()) {
+      showToast('El número de operación es requerido.', 'error');
+      return;
+    }
+
+    setApprovingYape(true);
+    try {
+      const res = await apiFetch('/api/admin/yape/manual-approve', {
+        method: 'POST',
+        body: JSON.stringify({
+          discordId: manualApproveDiscordId.trim(),
+          amount: val,
+          operationNumber: manualApproveOp.trim(),
+          reason: manualApproveReason.trim() || 'Aprobación manual de comprobante'
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        showToast(data.message || 'Depósito Yape aprobado y saldo acreditado.', 'success');
+        setManualApproveModalOpen(false);
+        await loadData();
+      } else {
+        showToast(data.error || 'Error al aprobar depósito.', 'error');
+      }
+    } catch {
+      showToast('Error de red al aprobar depósito.', 'error');
+    } finally {
+      setApprovingYape(false);
+    }
+  };
 
   // Handle Login Flow
   const handleLogin = () => {
@@ -1210,6 +1506,48 @@ export default function App() {
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / 15));
 
+  // Filter Claims
+  const filteredClaims = useMemo(() => {
+    return claims.filter(c => {
+      const q = claimsSearch.toLowerCase();
+      const code = String(c.claimCode || c.id || '').toLowerCase();
+      const name = String(c.consumer?.name || '').toLowerCase();
+      const email = String(c.consumer?.email || '').toLowerCase();
+      const doc = String(c.consumer?.docNumber || '').toLowerCase();
+      const matchesSearch = code.includes(q) || name.includes(q) || email.includes(q) || doc.includes(q);
+      if (claimsFilter === 'all') return matchesSearch;
+      return matchesSearch && (c.status || '').toUpperCase() === claimsFilter.toUpperCase();
+    });
+  }, [claims, claimsSearch, claimsFilter]);
+
+  const paginatedClaims = useMemo(() => {
+    const start = (claimsPage - 1) * 10;
+    return filteredClaims.slice(start, start + 10);
+  }, [filteredClaims, claimsPage]);
+
+  const totalClaimsPages = Math.max(1, Math.ceil(filteredClaims.length / 10));
+
+  // Filter Orders
+  const filteredOrders = useMemo(() => {
+    return orders.filter(o => {
+      const q = ordersSearch.toLowerCase();
+      const id = String(o.orderId || o.id || '').toLowerCase();
+      const name = String(o.customer?.name || '').toLowerCase();
+      const email = String(o.customer?.email || '').toLowerCase();
+      const ref = String(o.referenceCode || o.chargeId || '').toLowerCase();
+      const matchesSearch = id.includes(q) || name.includes(q) || email.includes(q) || ref.includes(q);
+      if (ordersFilter === 'all') return matchesSearch;
+      return matchesSearch && (o.status || '').toUpperCase() === ordersFilter.toUpperCase();
+    });
+  }, [orders, ordersSearch, ordersFilter]);
+
+  const paginatedOrders = useMemo(() => {
+    const start = (ordersPage - 1) * 10;
+    return filteredOrders.slice(start, start + 10);
+  }, [filteredOrders, ordersPage]);
+
+  const totalOrdersPages = Math.max(1, Math.ceil(filteredOrders.length / 10));
+
   // Enviar mensaje masivo
   const handleBroadcast = async () => {
     if (!broadcastMessage.trim()) return;
@@ -1317,6 +1655,9 @@ export default function App() {
                 {[
                   { id: 'dashboard', label: 'PANEL_CONTROL' },
                   { id: 'users', label: 'USUARIOS' },
+                  { id: 'orders', label: 'ORDENES_TIENDA' },
+                  { id: 'finanzas', label: 'FINANZAS_YAPE' },
+                  { id: 'reclamaciones', label: 'RECLAMACIONES' },
                   { id: 'matches', label: 'PARTIDAS_VIVO' },
                   { id: 'match-history', label: 'HISTORIAL_PARTIDAS' },
                   { id: 'leaderboard', label: 'CLASIFICACION' },
@@ -1394,6 +1735,9 @@ export default function App() {
                 <h2 className="text-sm font-black text-white tracking-widest uppercase font-mono">
                   {activeTab === 'dashboard' ? 'PANEL DE CONTROL' :
                    activeTab === 'users' ? 'LISTA DE USUARIOS' :
+                   activeTab === 'orders' ? 'ÓRDENES DE TIENDA' :
+                   activeTab === 'finanzas' ? 'FINANZAS YAPE' :
+                   activeTab === 'reclamaciones' ? 'LIBRO DE RECLAMACIONES INDECOPI' :
                    activeTab === 'matches' ? 'PARTIDAS EN VIVO' :
                    activeTab === 'match-history' ? 'HISTORIAL DE PARTIDAS' :
                    activeTab === 'leaderboard' ? 'CLASIFICACIÓN DE JUGADORES' :
@@ -1477,6 +1821,9 @@ export default function App() {
                   <h2 className="text-6xl md:text-8xl font-black leading-[0.85] tracking-tighter uppercase pointer-events-none italic text-white">
                     {activeTab === 'dashboard' && <>APP<br/>FACEIT-DISCORD</>}
                     {activeTab === 'users' && <>CUENTAS<br/>VINCULADAS</>}
+                    {activeTab === 'orders' && <>ÓRDENES<br/>DE TIENDA</>}
+                    {activeTab === 'finanzas' && <>FINANZAS<br/>YAPE PAGOS</>}
+                    {activeTab === 'reclamaciones' && <>LIBRO DE<br/>RECLAMOS</>}
                     {activeTab === 'matches' && <>PARTIDAS<br/>EN VIVO</>}
                     {activeTab === 'match-history' && <>HISTORIAL<br/>PARTIDAS</>}
                     {activeTab === 'leaderboard' && <>LIGA<br/>GLOBAL</>}
@@ -1705,6 +2052,7 @@ export default function App() {
                             <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Faceit ID</th>
                             <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Estado</th>
                             <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Rol Asignado</th>
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Saldo</th>
                             <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Permisos Web</th>
                             <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Vinculado</th>
                             <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400 text-right">Acción</th>
@@ -1713,7 +2061,7 @@ export default function App() {
                         <tbody className="divide-y divide-white/5 text-xs font-mono">
                           {filteredUsers.length === 0 ? (
                             <tr>
-                              <td colSpan={8} className="py-8 text-center text-[#8f8fa0] font-sans">
+                              <td colSpan={9} className="py-8 text-center text-[#8f8fa0] font-sans">
                                 No se encontraron usuarios enlazados que coincidan.
                               </td>
                             </tr>
@@ -1760,6 +2108,9 @@ export default function App() {
                                     <span className="text-neutral-600 italic">-</span>
                                   )}
                                 </td>
+                                <td className="py-4 px-6 font-mono font-bold text-emerald-400 text-xs">
+                                  S/ {(user.wallet_balance || 0).toFixed(2)}
+                                </td>
                                 <td className="py-4 px-6 font-mono text-neutral-400">
                                   {user.rol === 'global_admin' ? (
                                     <span className="bg-red-950/40 text-red-400 border border-red-500/20 px-2.5 py-1 rounded-none uppercase text-[9px] font-black tracking-wider">
@@ -1793,6 +2144,22 @@ export default function App() {
                                       title="Sincronizar apodo de este usuario en Discord"
                                     >
                                       Sync Nick
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleOpenBalanceModal(user)}
+                                      className="px-3 py-1.5 text-[9px] font-mono font-black uppercase tracking-wider bg-emerald-900/30 text-emerald-300 hover:bg-emerald-600 hover:text-white rounded-none border border-emerald-500/30 transition-colors cursor-pointer"
+                                      title="Gestionar Saldo de Billetera"
+                                    >
+                                      Saldo
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleOpenRoleModal(user.discordId)}
+                                      className="px-3 py-1.5 text-[9px] font-mono font-black uppercase tracking-wider bg-amber-950/20 text-amber-400 hover:bg-amber-600 hover:text-white rounded-none border border-amber-500/20 transition-colors cursor-pointer"
+                                      title="Asignar Rol Personalizado en Discord"
+                                    >
+                                      Rol Discord
                                     </button>
 
                                     {(currentUser?.role === 'global_admin' || currentUser?.role === 'admin') && (
@@ -1848,6 +2215,658 @@ export default function App() {
                     </div>
                   </div>
 
+                </div>
+              )}
+
+              {/* VIEW: STORE ORDERS */}
+              {activeTab === 'orders' && (
+                <div className="space-y-6 animate-fade-in">
+                  {/* Top Stats Banner */}
+                  <div className="bg-[#111] border-2 border-white/10 p-8 flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-none">
+                    <div>
+                      <h3 className="text-xl font-black text-white uppercase tracking-tighter italic mb-1 flex items-center gap-2">
+                        <ShoppingBag className="w-5 h-5 text-white" />
+                        <span>ÓRDENES DE TIENDA Y COMPRAS</span>
+                      </h3>
+                      <p className="text-xs text-neutral-400 uppercase tracking-tight font-mono">Control de entregas de skins, pedidos de usuarios y transacciones comerciales.</p>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        showToast('Actualizando órdenes...', 'info');
+                        loadData();
+                      }}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-white text-black hover:bg-neutral-200 text-xs font-black uppercase tracking-tighter rounded-none cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Actualizar Datos</span>
+                    </button>
+                  </div>
+
+                  {/* Summary Metric Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="bg-[#111] border-2 border-white/10 p-6">
+                      <p className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest font-bold mb-1">TOTAL ÓRDENES</p>
+                      <p className="text-3xl font-black text-white font-mono">{orders.length}</p>
+                    </div>
+                    <div className="bg-[#111] border-2 border-white/10 p-6">
+                      <p className="text-[10px] font-mono text-yellow-400 uppercase tracking-widest font-bold mb-1">PENDIENTES / PROCESO</p>
+                      <p className="text-3xl font-black text-yellow-400 font-mono">
+                        {orders.filter(o => ['PENDIENTE', 'PENDING', 'PROCESANDO'].includes((o.status || '').toUpperCase())).length}
+                      </p>
+                    </div>
+                    <div className="bg-[#111] border-2 border-white/10 p-6">
+                      <p className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest font-bold mb-1">COMPLETADAS / ENTREGADAS</p>
+                      <p className="text-3xl font-black text-emerald-400 font-mono">
+                        {orders.filter(o => ['COMPLETADA', 'ENTREGADO', 'PAGADO', 'COMPLETED'].includes((o.status || '').toUpperCase())).length}
+                      </p>
+                    </div>
+                    <div className="bg-[#111] border-2 border-white/10 p-6">
+                      <p className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest font-bold mb-1">VOLUMEN TOTAL</p>
+                      <p className="text-3xl font-black text-emerald-400 font-mono">
+                        S/ {orders.reduce((acc, o) => acc + (o.totalAmount || (o as any).total || 0), 0).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Filters Bar */}
+                  <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                    <div className="relative flex-1 w-full">
+                      <Search className="w-4 h-4 text-neutral-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="BUSCAR POR ID, CLIENTE, EMAIL, REFERENCIA..."
+                        value={ordersSearch}
+                        onChange={(e) => setOrdersSearch(e.target.value)}
+                        className="w-full bg-[#111] border-2 border-white/10 text-xs font-mono font-bold text-white placeholder-neutral-500 rounded-none pl-12 pr-4 py-4 outline-none focus:border-white transition-all uppercase tracking-wider"
+                      />
+                    </div>
+                    <select
+                      value={ordersFilter}
+                      onChange={(e) => setOrdersFilter(e.target.value)}
+                      className="bg-[#111] border-2 border-white/10 text-xs font-mono font-bold text-white rounded-none px-4 py-4 outline-none focus:border-white transition-all uppercase cursor-pointer"
+                    >
+                      <option value="all">TODOS LOS ESTADOS</option>
+                      <option value="PENDIENTE">PENDIENTE</option>
+                      <option value="PAGADO">PAGADO</option>
+                      <option value="ENTREGADO">ENTREGADO</option>
+                      <option value="COMPLETADA">COMPLETADA</option>
+                      <option value="CANCELADO">CANCELADO</option>
+                    </select>
+                  </div>
+
+                  {/* Orders Table */}
+                  <div className="bg-[#111] border-2 border-white/10 overflow-hidden shadow-[10px_10px_0px_rgba(0,0,0,0.5)] rounded-none">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-neutral-900 border-b border-white/10">
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">ID Órden</th>
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Cliente</th>
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Productos</th>
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Total (S/.)</th>
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Método / Ref</th>
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Estado</th>
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Fecha</th>
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400 text-right">Acción</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5 text-xs font-mono">
+                          {filteredOrders.length === 0 ? (
+                            <tr>
+                              <td colSpan={8} className="py-8 text-center text-[#8f8fa0] font-sans">
+                                No se encontraron órdenes registradas.
+                              </td>
+                            </tr>
+                          ) : (
+                            paginatedOrders.map(order => {
+                              const orderCode = order.orderId || order.id;
+                              const statusUpper = (order.status || '').toUpperCase();
+                              return (
+                                <tr key={order.id || order.orderId} className="hover:bg-white/[0.02] border-b border-white/5 transition-colors group">
+                                  <td className="py-4 px-6 font-mono text-xs font-black text-white">{orderCode}</td>
+                                  <td className="py-4 px-6">
+                                    <div className="font-black text-white uppercase">{order.customer?.name || 'Cliente'}</div>
+                                    {order.customer?.discordId && (
+                                      <div className="text-[10px] text-neutral-400 font-mono">ID: {order.customer.discordId}</div>
+                                    )}
+                                    {order.customer?.email && (
+                                      <div className="text-[10px] text-neutral-500 font-mono">{order.customer.email}</div>
+                                    )}
+                                  </td>
+                                  <td className="py-4 px-6">
+                                    <div className="max-w-xs space-y-1">
+                                      {(order.items || []).map((it, idx) => (
+                                        <div key={idx} className="text-[11px] text-neutral-300 font-mono truncate" title={it.name}>
+                                          <span className="text-white font-bold">{it.quantity}x</span> {it.name}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td className="py-4 px-6 font-mono font-bold text-emerald-400 text-xs">
+                                    S/ {(order.totalAmount || (order as any).total || 0).toFixed(2)}
+                                  </td>
+                                  <td className="py-4 px-6 font-mono text-neutral-400 text-[11px]">
+                                    <span className="bg-neutral-800 text-neutral-200 px-2 py-0.5 border border-white/10 uppercase text-[9px] font-bold">
+                                      {order.paymentMethod || 'YAPE'}
+                                    </span>
+                                    <div className="text-[9px] text-neutral-500 mt-1 truncate max-w-[120px]">
+                                      {order.referenceCode || order.chargeId || '-'}
+                                    </div>
+                                  </td>
+                                  <td className="py-4 px-6">
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-mono font-black uppercase border ${
+                                      statusUpper === 'ENTREGADO' || statusUpper === 'COMPLETADA' || statusUpper === 'COMPLETED' ? 'bg-emerald-950/20 text-emerald-400 border-emerald-500/30' :
+                                      statusUpper === 'PAGADO' ? 'bg-blue-950/20 text-blue-400 border-blue-500/30' :
+                                      statusUpper === 'CANCELADO' ? 'bg-red-950/20 text-red-400 border-red-500/30' :
+                                      'bg-yellow-950/20 text-yellow-400 border-yellow-500/30'
+                                    }`}>
+                                      {order.status || 'PENDIENTE'}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-6 text-neutral-400 font-mono text-[11px]">
+                                    {formatDateDisplay(order.createdAtIso || order.createdAt)}
+                                  </td>
+                                  <td className="py-4 px-6 text-right">
+                                    <button
+                                      onClick={() => handleOpenOrderModal(order)}
+                                      className="px-3 py-1.5 text-[9px] font-mono font-black uppercase tracking-wider bg-white/10 text-white hover:bg-white hover:text-black rounded-none border border-white/20 transition-colors cursor-pointer"
+                                    >
+                                      Detalles / Estado
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Table Pagination Footer */}
+                    <div className="bg-neutral-900 p-6 border-t border-white/10 flex items-center justify-between">
+                      <span className="text-xs text-neutral-400 font-mono uppercase tracking-wider font-bold">
+                        Mostrando {filteredOrders.length > 0 ? (ordersPage - 1) * 10 + 1 : 0} a {Math.min(filteredOrders.length, ordersPage * 10)} de {filteredOrders.length} órdenes (Total: {orders.length})
+                      </span>
+                      <div className="flex items-center gap-4">
+                        <span className="text-xs font-mono text-neutral-400">PÁGINA {ordersPage} DE {totalOrdersPages}</span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => setOrdersPage(p => Math.max(1, p - 1))}
+                            disabled={ordersPage === 1}
+                            className="p-2 text-neutral-500 hover:text-white disabled:opacity-20 cursor-pointer border border-white/5 hover:border-white/20 transition-colors"
+                          >
+                            <ChevronLeft className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => setOrdersPage(p => Math.min(totalOrdersPages, p + 1))}
+                            disabled={ordersPage === totalOrdersPages}
+                            className="p-2 text-neutral-500 hover:text-white disabled:opacity-20 cursor-pointer border border-white/5 hover:border-white/20 transition-colors"
+                          >
+                            <ChevronRight className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW: FINANCES & YAPE */}
+              {activeTab === 'finanzas' && (
+                <div className="space-y-6 animate-fade-in">
+                  {/* Top Stats Banner */}
+                  <div className="bg-[#111] border-2 border-white/10 p-8 flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-none">
+                    <div>
+                      <h3 className="text-xl font-black text-white uppercase tracking-tighter italic mb-1 flex items-center gap-2">
+                        <Wallet className="w-5 h-5 text-emerald-400" />
+                        <span>FINANZAS, DEPOSITOS Y AUDITORÍA YAPE</span>
+                      </h3>
+                      <p className="text-xs text-neutral-400 uppercase tracking-tight font-mono">Conciliación de pagos automáticos por OCR/notificaciones y acreditación manual.</p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {currentUser?.role === 'global_admin' && (
+                        <button
+                          onClick={() => handleOpenManualApproveYape()}
+                          className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500 text-black hover:bg-emerald-400 text-xs font-black uppercase tracking-tighter rounded-none cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Aprobación Manual</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          showToast('Actualizando finanzas...', 'info');
+                          loadData();
+                        }}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-white text-black hover:bg-neutral-200 text-xs font-black uppercase tracking-tighter rounded-none cursor-pointer"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Actualizar Datos</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Summary Metric Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="bg-[#111] border-2 border-white/10 p-6">
+                      <p className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest font-bold mb-1">INTENCIONES / RESERVAS</p>
+                      <p className="text-3xl font-black text-white font-mono">{yapeData.operations.length}</p>
+                    </div>
+                    <div className="bg-[#111] border-2 border-white/10 p-6">
+                      <p className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest font-bold mb-1">CONFIRMADAS</p>
+                      <p className="text-3xl font-black text-emerald-400 font-mono">
+                        {yapeData.operations.filter(op => (op.status || '').toUpperCase() === 'CONFIRMED' || (op.status || '').toUpperCase() === 'CONFIRMADO').length}
+                      </p>
+                    </div>
+                    <div className="bg-[#111] border-2 border-white/10 p-6">
+                      <p className="text-[10px] font-mono text-purple-400 uppercase tracking-widest font-bold mb-1">PAGOS DETECTADOS (ESCÁNER)</p>
+                      <p className="text-3xl font-black text-purple-400 font-mono">{yapeData.transactions.length}</p>
+                    </div>
+                    <div className="bg-[#111] border-2 border-white/10 p-6">
+                      <p className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest font-bold mb-1">LOGS DE AUDITORÍA</p>
+                      <p className="text-3xl font-black text-neutral-300 font-mono">{yapeData.auditLogs.length}</p>
+                    </div>
+                  </div>
+
+                  {/* Subtabs Switcher */}
+                  <div className="flex border-b-2 border-white/10 gap-2">
+                    <button
+                      onClick={() => setYapeActiveSubtab('operations')}
+                      className={`px-6 py-3 text-xs font-mono font-black uppercase tracking-wider transition-colors cursor-pointer ${
+                        yapeActiveSubtab === 'operations' ? 'bg-white text-black border-t-2 border-white' : 'text-neutral-400 hover:text-white bg-[#111]'
+                      }`}
+                    >
+                      Reservas de Depósito ({yapeData.operations.length})
+                    </button>
+                    <button
+                      onClick={() => setYapeActiveSubtab('transactions')}
+                      className={`px-6 py-3 text-xs font-mono font-black uppercase tracking-wider transition-colors cursor-pointer ${
+                        yapeActiveSubtab === 'transactions' ? 'bg-white text-black border-t-2 border-white' : 'text-neutral-400 hover:text-white bg-[#111]'
+                      }`}
+                    >
+                      Notificaciones Escáner ({yapeData.transactions.length})
+                    </button>
+                    <button
+                      onClick={() => setYapeActiveSubtab('audit')}
+                      className={`px-6 py-3 text-xs font-mono font-black uppercase tracking-wider transition-colors cursor-pointer ${
+                        yapeActiveSubtab === 'audit' ? 'bg-white text-black border-t-2 border-white' : 'text-neutral-400 hover:text-white bg-[#111]'
+                      }`}
+                    >
+                      Auditoría de Saldos ({yapeData.auditLogs.length})
+                    </button>
+                  </div>
+
+                  {/* SUBTAB 1: OPERACIONES / RESERVAS */}
+                  {yapeActiveSubtab === 'operations' && (
+                    <div className="bg-[#111] border-2 border-white/10 overflow-hidden shadow-[10px_10px_0px_rgba(0,0,0,0.5)] rounded-none">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-neutral-900 border-b border-white/10">
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">ID Reserva</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Discord ID</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Monto</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">N° Operación</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Estado</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Fecha Creación</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400 text-right">Acción</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5 text-xs font-mono">
+                            {yapeData.operations.length === 0 ? (
+                              <tr>
+                                <td colSpan={7} className="py-8 text-center text-[#8f8fa0] font-sans">
+                                  No hay reservas de depósito registradas.
+                                </td>
+                              </tr>
+                            ) : (
+                              yapeData.operations.map(op => {
+                                const isPending = (op.status || '').toUpperCase() === 'PENDING' || (op.status || '').toUpperCase() === 'PENDIENTE';
+                                return (
+                                  <tr key={op.id} className="hover:bg-white/[0.02] border-b border-white/5 transition-colors">
+                                    <td className="py-4 px-6 font-mono text-white font-bold">{op.id}</td>
+                                    <td className="py-4 px-6 font-mono text-neutral-300">{op.discordId || 'N/A'}</td>
+                                    <td className="py-4 px-6 font-mono text-emerald-400 font-black">
+                                      S/ {(op.amount || 0).toFixed(2)}
+                                    </td>
+                                    <td className="py-4 px-6 font-mono text-neutral-300 font-bold">
+                                      {op.operationNumber || '-'}
+                                    </td>
+                                    <td className="py-4 px-6">
+                                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-mono font-black uppercase border ${
+                                        (op.status || '').toUpperCase() === 'CONFIRMED' ? 'bg-emerald-950/20 text-emerald-400 border-emerald-500/30' :
+                                        (op.status || '').toUpperCase() === 'EXPIRED' ? 'bg-neutral-900 text-neutral-500 border-white/10' :
+                                        'bg-yellow-950/20 text-yellow-400 border-yellow-500/30'
+                                      }`}>
+                                        {op.status || 'PENDING'}
+                                      </span>
+                                    </td>
+                                    <td className="py-4 px-6 text-neutral-400 font-mono text-[11px]">
+                                      {formatDateDisplay(op.createdAt)}
+                                    </td>
+                                    <td className="py-4 px-6 text-right">
+                                      {isPending && currentUser?.role === 'global_admin' && (
+                                        <button
+                                          onClick={() => handleOpenManualApproveYape({
+                                            op: op.operationNumber || op.id,
+                                            discordId: op.discordId,
+                                            amount: op.amount
+                                          })}
+                                          className="px-3 py-1.5 text-[9px] font-mono font-black uppercase tracking-wider bg-emerald-950/20 text-emerald-400 hover:bg-emerald-600 hover:text-white rounded-none border border-emerald-500/30 transition-colors cursor-pointer"
+                                        >
+                                          Validar
+                                        </button>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SUBTAB 2: TRANSACCIONES ESCÁNER */}
+                  {yapeActiveSubtab === 'transactions' && (
+                    <div className="bg-[#111] border-2 border-white/10 overflow-hidden shadow-[10px_10px_0px_rgba(0,0,0,0.5)] rounded-none">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-neutral-900 border-b border-white/10">
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">ID / Hash</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Remitente</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Monto</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">N° Operación</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Estado</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Detectado</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5 text-xs font-mono">
+                            {yapeData.transactions.length === 0 ? (
+                              <tr>
+                                <td colSpan={6} className="py-8 text-center text-[#8f8fa0] font-sans">
+                                  No hay notificaciones de pagos capturadas por el escáner.
+                                </td>
+                              </tr>
+                            ) : (
+                              yapeData.transactions.map(tx => (
+                                <tr key={tx.id} className="hover:bg-white/[0.02] border-b border-white/5 transition-colors">
+                                  <td className="py-4 px-6 font-mono text-white text-[11px] font-bold">{tx.id}</td>
+                                  <td className="py-4 px-6 font-mono text-white uppercase">{tx.sender || 'YAPERO ANÓNIMO'}</td>
+                                  <td className="py-4 px-6 font-mono text-emerald-400 font-black">
+                                    S/ {(tx.amount || tx.monto || 0).toFixed(2)}
+                                  </td>
+                                  <td className="py-4 px-6 font-mono text-purple-400 font-bold">
+                                    {tx.operationNumber || tx.numero_operacion || '-'}
+                                  </td>
+                                  <td className="py-4 px-6">
+                                    <span className="bg-neutral-800 text-neutral-200 px-2 py-0.5 border border-white/10 uppercase text-[9px] font-bold">
+                                      {tx.status || 'DETECTADO'}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-6 text-neutral-400 font-mono text-[11px]">
+                                    {formatDateDisplay(tx.detectedAt || tx.createdAt)}
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SUBTAB 3: AUDITORÍA DE SALDOS */}
+                  {yapeActiveSubtab === 'audit' && (
+                    <div className="bg-[#111] border-2 border-white/10 overflow-hidden shadow-[10px_10px_0px_rgba(0,0,0,0.5)] rounded-none">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-neutral-900 border-b border-white/10">
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Timestamp</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Acción</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Discord ID</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Monto (S/.)</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Motivo / Razón</th>
+                              <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Origen / Admin</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5 text-xs font-mono">
+                            {yapeData.auditLogs.length === 0 ? (
+                              <tr>
+                                <td colSpan={6} className="py-8 text-center text-[#8f8fa0] font-sans">
+                                  No hay registros de auditoría de saldo.
+                                </td>
+                              </tr>
+                            ) : (
+                              yapeData.auditLogs.map(log => (
+                                <tr key={log.id} className="hover:bg-white/[0.02] border-b border-white/5 transition-colors">
+                                  <td className="py-4 px-6 text-neutral-400 font-mono text-[11px]">
+                                    {formatDateDisplay(log.timestamp)}
+                                  </td>
+                                  <td className="py-4 px-6">
+                                    <span className="bg-blue-950/30 text-blue-300 border border-blue-500/20 px-2 py-0.5 text-[9px] font-mono font-black uppercase">
+                                      {log.action || 'AJUSTE'}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-6 font-mono text-white font-bold">{log.discordId || 'N/A'}</td>
+                                  <td className="py-4 px-6 font-mono text-emerald-400 font-black">
+                                    S/ {(log.amount || 0).toFixed(2)}
+                                  </td>
+                                  <td className="py-4 px-6 text-neutral-300 font-mono text-xs">{log.reason || '-'}</td>
+                                  <td className="py-4 px-6 text-neutral-400 font-mono text-[11px]">{log.source || 'ADMIN'}</td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* VIEW: INDECOPI CLAIMS */}
+              {activeTab === 'reclamaciones' && (
+                <div className="space-y-6 animate-fade-in">
+                  {/* Top Stats Banner */}
+                  <div className="bg-[#111] border-2 border-white/10 p-8 flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-none">
+                    <div>
+                      <h3 className="text-xl font-black text-white uppercase tracking-tighter italic mb-1 flex items-center gap-2">
+                        <Scale className="w-5 h-5 text-amber-400" />
+                        <span>LIBRO DE RECLAMACIONES VIRTUAL (INDECOPI - LEY Nº 29571)</span>
+                      </h3>
+                      <p className="text-xs text-neutral-400 uppercase tracking-tight font-mono">Gestión obligatoria de quejas y reclamos de consumidores con plazo legal improrrogable de 15 días hábiles.</p>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        showToast('Actualizando reclamaciones...', 'info');
+                        loadData();
+                      }}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-white text-black hover:bg-neutral-200 text-xs font-black uppercase tracking-tighter rounded-none cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Actualizar Datos</span>
+                    </button>
+                  </div>
+
+                  {/* Summary Metric Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="bg-[#111] border-2 border-white/10 p-6">
+                      <p className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest font-bold mb-1">TOTAL RECLAMOS</p>
+                      <p className="text-3xl font-black text-white font-mono">{claims.length}</p>
+                    </div>
+                    <div className="bg-[#111] border-2 border-white/10 p-6">
+                      <p className="text-[10px] font-mono text-yellow-400 uppercase tracking-widest font-bold mb-1">PENDIENTES</p>
+                      <p className="text-3xl font-black text-yellow-400 font-mono">
+                        {claims.filter(c => (c.status || '').toUpperCase() === 'PENDIENTE').length}
+                      </p>
+                    </div>
+                    <div className="bg-[#111] border-2 border-white/10 p-6">
+                      <p className="text-[10px] font-mono text-blue-400 uppercase tracking-widest font-bold mb-1">EN PROCESO</p>
+                      <p className="text-3xl font-black text-blue-400 font-mono">
+                        {claims.filter(c => (c.status || '').toUpperCase() === 'EN_PROCESO').length}
+                      </p>
+                    </div>
+                    <div className="bg-[#111] border-2 border-white/10 p-6">
+                      <p className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest font-bold mb-1">ATENDIDOS / RESUELTOS</p>
+                      <p className="text-3xl font-black text-emerald-400 font-mono">
+                        {claims.filter(c => (c.status || '').toUpperCase() === 'ATENDIDO').length}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Filters Bar */}
+                  <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                    <div className="relative flex-1 w-full">
+                      <Search className="w-4 h-4 text-neutral-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="BUSCAR POR CÓDIGO, NOMBRE, DNI O EMAIL..."
+                        value={claimsSearch}
+                        onChange={(e) => setClaimsSearch(e.target.value)}
+                        className="w-full bg-[#111] border-2 border-white/10 text-xs font-mono font-bold text-white placeholder-neutral-500 rounded-none pl-12 pr-4 py-4 outline-none focus:border-white transition-all uppercase tracking-wider"
+                      />
+                    </div>
+                    <select
+                      value={claimsFilter}
+                      onChange={(e) => setClaimsFilter(e.target.value)}
+                      className="bg-[#111] border-2 border-white/10 text-xs font-mono font-bold text-white rounded-none px-4 py-4 outline-none focus:border-white transition-all uppercase cursor-pointer"
+                    >
+                      <option value="all">TODOS LOS ESTADOS</option>
+                      <option value="PENDIENTE">PENDIENTE</option>
+                      <option value="EN_PROCESO">EN PROCESO</option>
+                      <option value="ATENDIDO">ATENDIDO</option>
+                      <option value="RECHAZADO">RECHAZADO</option>
+                    </select>
+                  </div>
+
+                  {/* Claims Table */}
+                  <div className="bg-[#111] border-2 border-white/10 overflow-hidden shadow-[10px_10px_0px_rgba(0,0,0,0.5)] rounded-none">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-neutral-900 border-b border-white/10">
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Código</th>
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Consumidor</th>
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Tipo</th>
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Bien Reclamado</th>
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Monto</th>
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Estado</th>
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Fecha Registro</th>
+                            <th className="py-4 px-6 text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400 text-right">Acción</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5 text-xs font-mono">
+                          {filteredClaims.length === 0 ? (
+                            <tr>
+                              <td colSpan={8} className="py-8 text-center text-[#8f8fa0] font-sans">
+                                No se encontraron reclamaciones registradas.
+                              </td>
+                            </tr>
+                          ) : (
+                            paginatedClaims.map(claim => {
+                              const code = claim.claimCode || claim.id;
+                              const statusUpper = (claim.status || '').toUpperCase();
+                              return (
+                                <tr key={code} className="hover:bg-white/[0.02] border-b border-white/5 transition-colors group">
+                                  <td className="py-4 px-6 font-mono text-xs font-black text-white">{code}</td>
+                                  <td className="py-4 px-6">
+                                    <div className="font-black text-white uppercase">{claim.consumer?.name || 'Consumidor'}</div>
+                                    <div className="text-[10px] text-neutral-400 font-mono">
+                                      {claim.consumer?.docType || 'DNI'}: {claim.consumer?.docNumber || '-'}
+                                    </div>
+                                    <div className="text-[10px] text-neutral-500 font-mono">
+                                      {claim.consumer?.email || '-'} {claim.consumer?.phone ? `| ${claim.consumer.phone}` : ''}
+                                    </div>
+                                  </td>
+                                  <td className="py-4 px-6">
+                                    <span className={`px-2 py-0.5 text-[9px] font-mono font-black uppercase border ${
+                                      claim.claim?.type === 'QUEJA' ? 'bg-purple-950/30 text-purple-300 border-purple-500/30' : 'bg-amber-950/30 text-amber-300 border-amber-500/30'
+                                    }`}>
+                                      {claim.claim?.type || 'RECLAMO'}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-6 font-mono text-neutral-300">
+                                    <span className="text-white font-bold">{claim.goods?.type || 'PRODUCTO'}</span>
+                                    <div className="text-[10px] text-neutral-400 truncate max-w-[180px]" title={claim.goods?.description}>
+                                      {claim.goods?.description || '-'}
+                                    </div>
+                                  </td>
+                                  <td className="py-4 px-6 font-mono font-bold text-emerald-400 text-xs">
+                                    S/ {(claim.goods?.amount || 0).toFixed(2)}
+                                  </td>
+                                  <td className="py-4 px-6">
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-mono font-black uppercase border ${
+                                      statusUpper === 'ATENDIDO' ? 'bg-emerald-950/20 text-emerald-400 border-emerald-500/30' :
+                                      statusUpper === 'EN_PROCESO' ? 'bg-blue-950/20 text-blue-400 border-blue-500/30' :
+                                      statusUpper === 'RECHAZADO' ? 'bg-red-950/20 text-red-400 border-red-500/30' :
+                                      'bg-yellow-950/20 text-yellow-400 border-yellow-500/30'
+                                    }`}>
+                                      {claim.status || 'PENDIENTE'}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-6 text-neutral-400 font-mono text-[11px]">
+                                    {formatDateDisplay(claim.createdAtIso || claim.createdAt)}
+                                  </td>
+                                  <td className="py-4 px-6 text-right">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <button
+                                        onClick={() => handleOpenClaimModal(claim)}
+                                        className="px-3 py-1.5 text-[9px] font-mono font-black uppercase tracking-wider bg-white/10 text-white hover:bg-white hover:text-black rounded-none border border-white/20 transition-colors cursor-pointer"
+                                      >
+                                        Ver / Responder
+                                      </button>
+                                      {currentUser?.role === 'global_admin' && (
+                                        <button
+                                          onClick={() => handleDeleteClaim(code)}
+                                          className="px-2.5 py-1.5 text-[9px] font-mono font-black uppercase tracking-wider bg-red-950/20 text-red-400 hover:bg-red-600 hover:text-white rounded-none border border-red-500/20 transition-colors cursor-pointer"
+                                          title="Eliminar Reclamación"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Table Pagination Footer */}
+                    <div className="bg-neutral-900 p-6 border-t border-white/10 flex items-center justify-between">
+                      <span className="text-xs text-neutral-400 font-mono uppercase tracking-wider font-bold">
+                        Mostrando {filteredClaims.length > 0 ? (claimsPage - 1) * 10 + 1 : 0} a {Math.min(filteredClaims.length, claimsPage * 10)} de {filteredClaims.length} reclamaciones (Total: {claims.length})
+                      </span>
+                      <div className="flex items-center gap-4">
+                        <span className="text-xs font-mono text-neutral-400">PÁGINA {claimsPage} DE {totalClaimsPages}</span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => setClaimsPage(p => Math.max(1, p - 1))}
+                            disabled={claimsPage === 1}
+                            className="p-2 text-neutral-500 hover:text-white disabled:opacity-20 cursor-pointer border border-white/5 hover:border-white/20 transition-colors"
+                          >
+                            <ChevronLeft className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => setClaimsPage(p => Math.min(totalClaimsPages, p + 1))}
+                            disabled={claimsPage === totalClaimsPages}
+                            className="p-2 text-neutral-500 hover:text-white disabled:opacity-20 cursor-pointer border border-white/5 hover:border-white/20 transition-colors"
+                          >
+                            <ChevronRight className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -3900,6 +4919,404 @@ export default function App() {
                     {deletingMatchId ? 'Eliminando...' : 'Eliminar Partida'}
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal 6: GESTIONAR SALDO DE BILLETERA */}
+          {balanceModalOpen && balanceTargetUser && (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+              <div onClick={() => setBalanceModalOpen(false)} className="absolute inset-0 bg-black/90 backdrop-blur-sm" />
+              <div className="relative bg-[#111] border-2 border-emerald-500/50 w-full max-w-md p-6 text-white font-mono shadow-[15px_15px_0px_rgba(0,0,0,0.8)] z-10 animate-fade-in space-y-4">
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Wallet className="w-5 h-5 text-emerald-400" />
+                    <h3 className="text-sm font-black uppercase tracking-tight italic">
+                      GESTIÓN DE SALDO DE BILLETERA
+                    </h3>
+                  </div>
+                  <button onClick={() => setBalanceModalOpen(false)} className="text-neutral-400 hover:text-white cursor-pointer">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="bg-[#181818] p-3 border border-white/10 space-y-1 text-xs">
+                  <div><span className="text-neutral-400">Usuario:</span> <strong className="text-white">{balanceTargetUser.faceitNickname}</strong></div>
+                  <div><span className="text-neutral-400">Discord ID:</span> <span className="text-neutral-300">{balanceTargetUser.discordId}</span></div>
+                  <div><span className="text-neutral-400">Saldo Actual:</span> <strong className="text-emerald-400 text-sm">S/ {(balanceTargetUser.wallet_balance || 0).toFixed(2)}</strong></div>
+                </div>
+
+                <form onSubmit={handleSaveBalanceSubmit} className="space-y-4 pt-1">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Tipo de Acción</label>
+                    <select
+                      value={balanceActionType}
+                      onChange={(e) => setBalanceActionType(e.target.value as any)}
+                      className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3 outline-none focus:border-white transition-colors cursor-pointer uppercase"
+                    >
+                      <option value="add">➕ Añadir Fondos (+ S/.)</option>
+                      <option value="subtract">➖ Descontar Fondos (- S/.)</option>
+                      <option value="set">🎯 Establecer Saldo Exacto (= S/.)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Monto en Soles (S/.)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      value={balanceAmount}
+                      onChange={(e) => setBalanceAmount(e.target.value)}
+                      className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3 outline-none focus:border-white transition-colors"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Motivo / Razón de Auditoría</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: Recarga por depósito manual / Corrección de saldo"
+                      value={balanceReason}
+                      onChange={(e) => setBalanceReason(e.target.value)}
+                      className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono text-white rounded-none px-4 py-3 outline-none focus:border-white transition-colors"
+                      required
+                    />
+                  </div>
+
+                  <div className="pt-2 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setBalanceModalOpen(false)}
+                      className="flex-1 py-3 px-4 text-xs font-black bg-[#1A1A1A] hover:bg-neutral-800 text-white transition-colors cursor-pointer rounded-none border border-white/10 uppercase"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingBalance}
+                      className="flex-1 py-3 px-4 text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-black transition-colors cursor-pointer rounded-none border border-emerald-400 uppercase font-bold"
+                    >
+                      {savingBalance ? 'Guardando...' : 'Aplicar Saldo'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Modal 7: DETALLE Y RESPUESTA DE RECLAMACIÓN INDECOPI */}
+          {selectedClaimModal && (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+              <div onClick={() => setSelectedClaimModal(null)} className="absolute inset-0 bg-black/90 backdrop-blur-sm" />
+              <div className="relative bg-[#111] border-2 border-amber-500/50 w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 text-white font-mono shadow-[15px_15px_0px_rgba(0,0,0,0.8)] z-10 animate-fade-in space-y-4">
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Scale className="w-5 h-5 text-amber-400" />
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-tight italic">
+                        HOJA DE RECLAMACIÓN: {selectedClaimModal.claimCode || selectedClaimModal.id}
+                      </h3>
+                      <span className="text-[10px] text-neutral-400">Ley Nº 29571 - Código de Protección al Consumidor</span>
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedClaimModal(null)} className="text-neutral-400 hover:text-white cursor-pointer">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Consumer Details */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-[#161616] p-4 border border-white/10 text-xs">
+                  <div>
+                    <span className="text-[10px] text-neutral-500 font-bold uppercase block">1. IDENTIFICACIÓN DEL CONSUMIDOR</span>
+                    <div className="text-white font-bold mt-1">{selectedClaimModal.consumer?.name || 'N/A'}</div>
+                    <div className="text-neutral-400">{selectedClaimModal.consumer?.docType || 'DNI'}: {selectedClaimModal.consumer?.docNumber || '-'}</div>
+                    <div className="text-neutral-400">Email: {selectedClaimModal.consumer?.email || '-'}</div>
+                    <div className="text-neutral-400">Teléfono: {selectedClaimModal.consumer?.phone || '-'}</div>
+                    <div className="text-neutral-500 text-[11px] mt-0.5">Dir: {selectedClaimModal.consumer?.address || '-'}</div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-neutral-500 font-bold uppercase block">2. BIEN CONTRATADO</span>
+                    <div className="text-white font-bold mt-1">{selectedClaimModal.goods?.type || 'PRODUCTO'} - S/ {(selectedClaimModal.goods?.amount || 0).toFixed(2)}</div>
+                    <div className="text-neutral-400 text-[11px] mt-1">{selectedClaimModal.goods?.description || 'Sin descripción'}</div>
+                    <div className="mt-2 text-[10px] text-neutral-500">
+                      Fecha: {formatDateDisplay(selectedClaimModal.createdAtIso || selectedClaimModal.createdAt)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Claim Body */}
+                <div className="bg-[#181818] p-4 border border-white/10 space-y-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-neutral-400 uppercase">TIPO:</span>
+                    <span className={`px-2 py-0.5 text-[9px] font-bold uppercase border ${
+                      selectedClaimModal.claim?.type === 'QUEJA' ? 'bg-purple-950/40 text-purple-300 border-purple-500/30' : 'bg-amber-950/40 text-amber-300 border-amber-500/30'
+                    }`}>
+                      {selectedClaimModal.claim?.type || 'RECLAMO'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] text-neutral-500 font-bold uppercase block">DETALLE DEL RECLAMO:</span>
+                    <p className="text-neutral-200 mt-1 whitespace-pre-wrap bg-[#111] p-3 border border-white/5 text-[11px] leading-relaxed">
+                      {selectedClaimModal.claim?.detail || 'Sin detalle provisto.'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] text-neutral-500 font-bold uppercase block">PEDIDO CONCRETO DEL CONSUMIDOR:</span>
+                    <p className="text-neutral-200 mt-1 whitespace-pre-wrap bg-[#111] p-3 border border-white/5 text-[11px] leading-relaxed">
+                      {selectedClaimModal.claim?.request || 'Sin pedido específico.'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Current Response or Form */}
+                {selectedClaimModal.response && (
+                  <div className="bg-emerald-950/20 border border-emerald-500/30 p-4 space-y-1">
+                    <span className="text-[10px] font-bold text-emerald-400 uppercase block">RESPUESTA REGISTRADA PREVIAMENTE:</span>
+                    <p className="text-xs text-neutral-200 whitespace-pre-wrap">{selectedClaimModal.response}</p>
+                    <div className="text-[10px] text-neutral-500 mt-2">
+                      Por: {selectedClaimModal.respondedBy || 'Admin'} | Fecha: {formatDateDisplay(selectedClaimModal.respondedAtIso || selectedClaimModal.respondedAt)}
+                    </div>
+                  </div>
+                )}
+
+                <form onSubmit={handleRespondClaimSubmit} className="space-y-3 pt-2 border-t border-white/10">
+                  <span className="text-xs font-black uppercase text-white block">RESPONDER O ACTUALIZAR ESTADO</span>
+                  
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Estado de la Reclamación</label>
+                    <select
+                      value={claimResponseStatus}
+                      onChange={(e) => setClaimResponseStatus(e.target.value as any)}
+                      className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-black text-white rounded-none px-4 py-3 outline-none focus:border-white transition-colors cursor-pointer uppercase"
+                    >
+                      <option value="ATENDIDO">ATENDIDO (Conforme o Solución Emitida)</option>
+                      <option value="EN_PROCESO">EN PROCESO (Investigación en curso)</option>
+                      <option value="RECHAZADO">RECHAZADO (Improcedente)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Texto de Respuesta Oficial Formal</label>
+                    <textarea
+                      rows={4}
+                      placeholder="Escriba aquí la respuesta formal y fundamentada que se notificará al consumidor..."
+                      value={claimResponseText}
+                      onChange={(e) => setClaimResponseText(e.target.value)}
+                      className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono text-white rounded-none p-3 outline-none focus:border-white transition-colors"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedClaimModal(null)}
+                      className="px-4 py-2.5 bg-[#222] hover:bg-neutral-800 text-xs font-bold uppercase transition-colors cursor-pointer"
+                    >
+                      Cerrar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={respondingClaim}
+                      className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black uppercase tracking-wider transition-colors cursor-pointer"
+                    >
+                      {respondingClaim ? 'Guardando...' : 'Enviar Respuesta Oficial'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Modal 8: DETALLE DE ÓRDEN DE COMPRA */}
+          {selectedOrderModal && (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+              <div onClick={() => setSelectedOrderModal(null)} className="absolute inset-0 bg-black/90 backdrop-blur-sm" />
+              <div className="relative bg-[#111] border-2 border-white/20 w-full max-w-xl max-h-[90vh] overflow-y-auto p-6 text-white font-mono shadow-[15px_15px_0px_rgba(0,0,0,0.8)] z-10 animate-fade-in space-y-4">
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2">
+                    <ShoppingBag className="w-5 h-5 text-white" />
+                    <h3 className="text-sm font-black uppercase tracking-tight italic">
+                      DETALLE DE ÓRDEN: {selectedOrderModal.orderId || selectedOrderModal.id}
+                    </h3>
+                  </div>
+                  <button onClick={() => setSelectedOrderModal(null)} className="text-neutral-400 hover:text-white cursor-pointer">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="bg-[#181818] p-4 border border-white/10 space-y-2 text-xs">
+                  <div><span className="text-neutral-400">Cliente:</span> <strong className="text-white uppercase">{selectedOrderModal.customer?.name || 'Cliente'}</strong></div>
+                  <div><span className="text-neutral-400">Discord ID:</span> <span className="text-neutral-200">{selectedOrderModal.customer?.discordId || 'N/A'}</span></div>
+                  <div><span className="text-neutral-400">Email:</span> <span className="text-neutral-200">{selectedOrderModal.customer?.email || 'N/A'}</span></div>
+                  <div><span className="text-neutral-400">Teléfono:</span> <span className="text-neutral-200">{selectedOrderModal.customer?.phone || 'N/A'}</span></div>
+                  <div><span className="text-neutral-400">Total:</span> <strong className="text-emerald-400 text-sm">S/ {(selectedOrderModal.totalAmount || (selectedOrderModal as any).total || 0).toFixed(2)}</strong></div>
+                  <div><span className="text-neutral-400">Referencia:</span> <span className="text-purple-400">{selectedOrderModal.referenceCode || selectedOrderModal.chargeId || '-'}</span></div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase block">PRODUCTOS ADQUIRIDOS:</span>
+                  <div className="bg-[#141414] border border-white/10 p-3 space-y-2 max-h-40 overflow-y-auto">
+                    {(selectedOrderModal.items || []).map((it, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-xs border-b border-white/5 pb-1">
+                        <div>
+                          <span className="text-white font-bold">{it.quantity}x</span> <span className="text-neutral-300">{it.name}</span>
+                        </div>
+                        <div className="text-emerald-400 font-mono">
+                          S/ {(it.itemTotal || (it.unitPrice * it.quantity) || 0).toFixed(2)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {selectedOrderModal.adminNote && (
+                  <div className="bg-neutral-900 p-3 border border-white/10 text-xs">
+                    <span className="text-[10px] text-neutral-400 uppercase font-bold block">NOTA ADMINISTRATIVA:</span>
+                    <p className="text-neutral-300 mt-0.5">{selectedOrderModal.adminNote}</p>
+                  </div>
+                )}
+
+                <div className="border-t border-white/10 pt-4 space-y-3">
+                  <span className="text-xs font-black uppercase text-white block">CAMBIAR ESTADO DE LA ORDEN</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleUpdateOrderStatus(selectedOrderModal.orderId || selectedOrderModal.id, 'PENDIENTE', 'Pendiente de entrega')}
+                      disabled={updatingOrderStatus}
+                      className="py-2.5 px-3 bg-yellow-950/20 text-yellow-400 hover:bg-yellow-600 hover:text-white border border-yellow-500/30 text-xs font-black uppercase transition-colors cursor-pointer"
+                    >
+                      Pendiente
+                    </button>
+                    <button
+                      onClick={() => handleUpdateOrderStatus(selectedOrderModal.orderId || selectedOrderModal.id, 'PAGADO', 'Pago acreditado')}
+                      disabled={updatingOrderStatus}
+                      className="py-2.5 px-3 bg-blue-950/20 text-blue-400 hover:bg-blue-600 hover:text-white border border-blue-500/30 text-xs font-black uppercase transition-colors cursor-pointer"
+                    >
+                      Pagado
+                    </button>
+                    <button
+                      onClick={() => handleUpdateOrderStatus(selectedOrderModal.orderId || selectedOrderModal.id, 'ENTREGADO', 'Item enviado/entregado al usuario')}
+                      disabled={updatingOrderStatus}
+                      className="py-2.5 px-3 bg-emerald-950/20 text-emerald-400 hover:bg-emerald-600 hover:text-white border border-emerald-500/30 text-xs font-black uppercase transition-colors cursor-pointer"
+                    >
+                      Entregado
+                    </button>
+                    <button
+                      onClick={() => handleUpdateOrderStatus(selectedOrderModal.orderId || selectedOrderModal.id, 'CANCELADO', 'Orden cancelada')}
+                      disabled={updatingOrderStatus}
+                      className="py-2.5 px-3 bg-red-950/20 text-red-400 hover:bg-red-600 hover:text-white border border-red-500/30 text-xs font-black uppercase transition-colors cursor-pointer"
+                    >
+                      Cancelado
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => setSelectedOrderModal(null)}
+                    className="px-5 py-2.5 bg-[#222] hover:bg-white hover:text-black text-xs font-bold uppercase transition-colors cursor-pointer"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal 9: APROBACIÓN MANUAL DE DEPÓSITO YAPE */}
+          {manualApproveModalOpen && (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+              <div onClick={() => setManualApproveModalOpen(false)} className="absolute inset-0 bg-black/90 backdrop-blur-sm" />
+              <div className="relative bg-[#111] border-2 border-emerald-500/50 w-full max-w-md p-6 text-white font-mono shadow-[15px_15px_0px_rgba(0,0,0,0.8)] z-10 animate-fade-in space-y-4">
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                    <h3 className="text-sm font-black uppercase tracking-tight italic">
+                      APROBACIÓN MANUAL DE DEPÓSITO
+                    </h3>
+                  </div>
+                  <button onClick={() => setManualApproveModalOpen(false)} className="text-neutral-400 hover:text-white cursor-pointer">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <p className="text-xs text-neutral-300">
+                  Acredita directamente saldo a la billetera de un usuario validando un comprobante o constancia de Yape.
+                </p>
+
+                <form onSubmit={handleManualApproveSubmit} className="space-y-4 pt-1">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Discord ID del Usuario</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: 1982736451829384"
+                      value={manualApproveDiscordId}
+                      onChange={(e) => setManualApproveDiscordId(e.target.value)}
+                      className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-bold text-white rounded-none px-4 py-3 outline-none focus:border-white transition-colors"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">N° de Operación Yape / Token</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: 1234567 o RES-ABC-123"
+                      value={manualApproveOp}
+                      onChange={(e) => setManualApproveOp(e.target.value)}
+                      className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-bold text-white rounded-none px-4 py-3 outline-none focus:border-white transition-colors"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Monto Acreditado (S/.)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.10"
+                      placeholder="10.00"
+                      value={manualApproveAmount}
+                      onChange={(e) => setManualApproveAmount(e.target.value)}
+                      className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono font-bold text-white rounded-none px-4 py-3 outline-none focus:border-white transition-colors"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono font-black uppercase tracking-widest text-neutral-400">Motivo / Comprobante</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: Constancia verificada en banca móvil"
+                      value={manualApproveReason}
+                      onChange={(e) => setManualApproveReason(e.target.value)}
+                      className="bg-[#0A0A0A] border-2 border-white/10 text-xs font-mono text-white rounded-none px-4 py-3 outline-none focus:border-white transition-colors"
+                      required
+                    />
+                  </div>
+
+                  <div className="pt-2 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setManualApproveModalOpen(false)}
+                      className="flex-1 py-3 px-4 text-xs font-black bg-[#1A1A1A] hover:bg-neutral-800 text-white transition-colors cursor-pointer rounded-none border border-white/10 uppercase"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={approvingYape}
+                      className="flex-1 py-3 px-4 text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-black transition-colors cursor-pointer rounded-none border border-emerald-400 uppercase font-bold"
+                    >
+                      {approvingYape ? 'Aprobando...' : 'Aprobar y Acreditar'}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}
