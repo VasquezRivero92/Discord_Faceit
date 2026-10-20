@@ -27,8 +27,23 @@ export function createCs2ApiRouter(client, db) {
         }
       }
 
-      // Garantizar que todos los jugadores tengan steam_id_64 en el JSON
+      // Garantizar que todos los jugadores tengan steam_id_64 y que los equipos lleven el nombre del capitán
       if (current.active && current.match) {
+        if (current.match.team1) {
+          const cap1 = current.match.team1.captain?.faceit_nickname || current.match.team1.captain?.discordUser?.displayName || current.match.team1.players?.[0]?.nickname;
+          if (cap1 && (!current.match.team1.name || current.match.team1.name === 'Equipo 1' || current.match.team1.name === 'Equipo A')) {
+            current.match.team1.name = `Equipo ${cap1}`;
+            current.match.team1.tag = cap1.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'EQ1';
+          }
+        }
+        if (current.match.team2) {
+          const cap2 = current.match.team2.captain?.faceit_nickname || current.match.team2.captain?.discordUser?.displayName || current.match.team2.players?.[0]?.nickname;
+          if (cap2 && (!current.match.team2.name || current.match.team2.name === 'Equipo 2' || current.match.team2.name === 'Equipo B')) {
+            current.match.team2.name = `Equipo ${cap2}`;
+            current.match.team2.tag = cap2.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'EQ2';
+          }
+        }
+
         const teams = [current.match.team1, current.match.team2].filter(Boolean);
         for (const team of teams) {
           if (Array.isArray(team.players)) {

@@ -2322,6 +2322,15 @@ export function createLobbyRouter(client, db, config, wss) {
         return res.status(400).json({ error: 'Ambos equipos deben estar completos (5 jugadores c/u).' });
       }
 
+      // Nombre oficial de equipos basado en su Capitán (ej. "Equipo Eloiky")
+      const capAName = teamA.captain?.faceit_nickname || teamA.captain?.discordUser?.displayName || teamA.captain?.nickname || 'Capitán A';
+      teamA.name = `Equipo ${capAName}`;
+      const teamATag = capAName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'EQ1';
+
+      const capBName = teamB.captain?.faceit_nickname || teamB.captain?.discordUser?.displayName || teamB.captain?.nickname || 'Capitán B';
+      teamB.name = `Equipo ${capBName}`;
+      const teamBTag = capBName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'EQ2';
+
       const finalChosenMap = chosenMap || state.mapVeto?.chosenMap || null;
       const mapDisplayName = finalChosenMap?.name || 'Elección de Capitanes';
 
@@ -2565,9 +2574,6 @@ export function createLobbyRouter(client, db, config, wss) {
           permissionOverwrites2.push({ id: p.discordId.trim(), type: 1, allow: ['Connect', 'Speak', 'ViewChannel'] });
         }
       }
-
-      const capAName = teamA.captain?.discordUser?.displayName || teamA.captain?.faceit_nickname || 'A';
-      const capBName = teamB.captain?.discordUser?.displayName || teamB.captain?.faceit_nickname || 'B';
 
       let vc1 = null;
       try {
@@ -2913,8 +2919,8 @@ export function createLobbyRouter(client, db, config, wss) {
             cs2MapId: finalChosenMap?.cs2MapId || finalChosenMap?.id || 'de_mirage'
           },
           team1: {
-            name: teamA.name || 'Equipo 1',
-            tag: 'EQ1',
+            name: teamA.name,
+            tag: teamATag,
             captain: teamA.captain,
             players: rosterA.map((p, idx) => ({
               steam_id_64: String(p.steam_id_64 || '').trim(),
@@ -2924,8 +2930,8 @@ export function createLobbyRouter(client, db, config, wss) {
             }))
           },
           team2: {
-            name: teamB.name || 'Equipo 2',
-            tag: 'EQ2',
+            name: teamB.name,
+            tag: teamBTag,
             captain: teamB.captain,
             players: rosterB.map((p, idx) => ({
               steam_id_64: String(p.steam_id_64 || '').trim(),
