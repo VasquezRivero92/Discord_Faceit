@@ -3206,7 +3206,7 @@ export default function App() {
       {/* MAP VETO MODAL (CS2 Competitive Map Ban Phase) */}
       {lobbyState.mapVeto && (lobbyState.mapVeto.active || lobbyState.mapVeto.completed) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/90 backdrop-blur-md overflow-y-auto">
-          <div className="bg-[#121212] border-2 border-neutral-700 w-full max-w-6xl my-auto flex flex-col shadow-2xl rounded-none font-mono text-white animate-fade-in overflow-hidden">
+          <div className="bg-[#121212] border-2 border-neutral-700 w-full max-w-[96vw] 2xl:max-w-[1550px] max-h-[96vh] my-auto flex flex-col shadow-2xl rounded-none font-mono text-white animate-fade-in overflow-hidden">
             {/* Veto Header */}
             <div className="bg-[#181818] border-b border-neutral-700 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -3333,13 +3333,15 @@ export default function App() {
             })()}
 
             {/* Map Cards Grid */}
-            <div className="p-4 sm:p-6 overflow-y-auto max-h-[60vh]">
-              <div className={`grid gap-3 ${
-                (lobbyState.mapVeto?.pool?.length || 0) <= 4 
-                  ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 max-w-2xl mx-auto' 
-                  : (lobbyState.mapVeto?.pool?.length || 0) <= 6
-                    ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5 max-w-4xl mx-auto'
-                    : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7'
+            <div className="p-3 sm:p-5 md:p-6 overflow-y-auto max-h-[72vh]">
+              <div className={`grid gap-3 sm:gap-4 ${
+                (lobbyState.mapVeto?.pool?.length || 0) <= 3 
+                  ? 'grid-cols-1 sm:grid-cols-3 max-w-3xl mx-auto' 
+                  : (lobbyState.mapVeto?.pool?.length || 0) <= 5 
+                    ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5 max-w-5xl mx-auto' 
+                    : (lobbyState.mapVeto?.pool?.length || 0) <= 7
+                      ? 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-7'
+                      : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 xl:grid-cols-7'
               }`}>
                 {((lobbyState.mapVeto?.pool && lobbyState.mapVeto.pool.length > 0) ? lobbyState.mapVeto.pool : []).map(mapItem => {
                   const veto = lobbyState.mapVeto!;
@@ -3360,7 +3362,7 @@ export default function App() {
                           handleBanMap(mapItem.id);
                         }
                       }}
-                      className={`relative group rounded-none overflow-hidden h-72 sm:h-80 flex flex-col justify-between p-3 select-none transition-all duration-300 ${
+                      className={`relative group rounded-none overflow-hidden h-64 sm:h-72 md:h-80 lg:h-[350px] flex flex-col justify-between p-3 select-none transition-all duration-300 ${
                         isChosen
                           ? 'border-4 border-[#15C253] shadow-[0_0_25px_rgba(21,194,83,0.5)] scale-[1.02]'
                           : isBanned
@@ -3410,7 +3412,7 @@ export default function App() {
                         <img 
                           src={mapItem.icon} 
                           alt={mapItem.name} 
-                          className={`w-20 h-20 sm:w-24 sm:h-24 object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.8)] transition-transform duration-300 ${
+                          className={`w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.8)] transition-transform duration-300 ${
                             canBan ? 'group-hover:scale-110' : ''
                           } ${isBanned ? 'opacity-40 grayscale' : ''}`}
                         />
@@ -3461,8 +3463,8 @@ export default function App() {
 
       {/* Map Manager Modal (Admin Lobby) */}
       {isMapManagerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/90 backdrop-blur-md overflow-y-auto animate-fade-in font-mono">
-          <div className="bg-[#121212] border-2 border-[#FF5500]/50 w-full max-w-5xl my-auto flex flex-col shadow-2xl rounded-none text-white overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/90 backdrop-blur-md overflow-y-auto animate-fade-in font-mono">
+          <div className="bg-[#121212] border-2 border-[#FF5500]/50 w-full max-w-[96vw] 2xl:max-w-[1550px] max-h-[96vh] my-auto flex flex-col shadow-2xl rounded-none text-white overflow-hidden">
             {/* Header */}
             <div className="bg-[#181818] border-b border-neutral-800 p-4 sm:p-5 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -3533,15 +3535,15 @@ export default function App() {
             </div>
 
             {/* Grid of maps */}
-            <div className="p-4 sm:p-5 max-h-[55vh] overflow-y-auto">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+            <div className="p-4 sm:p-6 max-h-[72vh] overflow-y-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
                 {localMapCatalog.map((mapItem) => {
                   const isActive = mapItem.active;
                   return (
                     <div
                       key={mapItem.id}
                       onClick={() => handleToggleMapInLobby(mapItem.id)}
-                      className={`group relative flex flex-col justify-between h-44 border-2 transition-all cursor-pointer overflow-hidden select-none ${
+                      className={`group relative flex flex-col justify-between h-48 sm:h-52 md:h-56 border-2 transition-all cursor-pointer overflow-hidden select-none ${
                         isActive
                           ? 'border-emerald-500/70 shadow-[0_0_12px_rgba(16,185,129,0.25)] bg-[#161616]'
                           : 'border-white/10 opacity-35 hover:opacity-75 bg-[#0C0C0C]'

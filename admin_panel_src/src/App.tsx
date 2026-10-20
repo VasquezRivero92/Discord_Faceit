@@ -3668,7 +3668,7 @@ export default function App() {
 
                      {/* VIEW 6: CONFIG PORTAL */}
               {activeTab === 'config' && (
-                <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
+                <div className="space-y-6 animate-fade-in max-w-6xl xl:max-w-7xl 2xl:max-w-[1550px] mx-auto">
                   
                   <div className="bg-[#111] border-2 border-white/10 p-8 rounded-none flex items-center justify-between">
                     <div>
@@ -4085,14 +4085,14 @@ export default function App() {
                       </div>
 
                       {/* Grid de Mapas */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4 mb-6">
                         {mapCatalog.map((mapItem) => {
                           const isActive = mapItem.active;
                           return (
                             <div
                               key={mapItem.id}
                               onClick={() => handleToggleMap(mapItem.id)}
-                              className={`group relative flex flex-col justify-between h-48 border-2 transition-all cursor-pointer overflow-hidden select-none ${
+                              className={`group relative flex flex-col justify-between h-52 sm:h-56 border-2 transition-all cursor-pointer overflow-hidden select-none ${
                                 isActive
                                   ? 'border-emerald-500/70 shadow-[0_0_15px_rgba(16,185,129,0.2)] bg-[#141414]'
                                   : 'border-white/10 opacity-40 hover:opacity-75 bg-[#0A0A0A]'
@@ -4132,7 +4132,7 @@ export default function App() {
                                 <img
                                   src={mapItem.icon}
                                   alt={mapItem.name}
-                                  className={`w-12 h-12 object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] transition-transform group-hover:scale-110 ${
+                                  className={`w-14 h-14 sm:w-16 sm:h-16 object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] transition-transform group-hover:scale-110 ${
                                     !isActive ? 'grayscale' : ''
                                   }`}
                                   onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
