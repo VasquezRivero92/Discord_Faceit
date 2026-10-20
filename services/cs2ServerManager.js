@@ -13,7 +13,7 @@ const MCSM_DAEMON_URL = process.env.MCSM_DAEMON_URL || 'ws://127.0.0.1:24444';
 const MCSM_API_KEY = process.env.MCSM_API_KEY || 'e48580b2636b4464fc5467e669146699181471a341a7bc0';
 const MCSM_INSTANCE_UUID = process.env.MCSM_INSTANCE_UUID || 'ccdc655afc4146958f67a96853386537';
 const CS2_SERVER_DIR = process.env.CS2_SERVER_DIR || 'D:\\ServerCS2';
-const MIXTON_SERVER_IP = process.env.MIXTON_SERVER_IP || 'bid-thorn.gl.at.ply.gg:15459';
+const MIXTON_SERVER_IP = process.env.MIXTON_SERVER_IP || '38.25.72.56:27015';
 
 class Cs2ServerManager {
   constructor() {
@@ -23,7 +23,54 @@ class Cs2ServerManager {
     this.serverDir = CS2_SERVER_DIR;
     this.serverIp = MIXTON_SERVER_IP;
     this.currentMatchId = null;
+    this.currentMatchData = null;
     this.isStopping = false;
+  }
+
+  /**
+   * Publica una partida en memoria y en Firestore para que el agente local de CS2 la descargue vía API
+   */
+  async publishMatch(matchData, db = null) {
+    this.currentMatchData = {
+      ...matchData,
+      publishedAt: Date.now()
+    };
+    this.currentMatchId = matchData.matchId;
+    logger.info(`[CS2ServerManager] Partida ${matchData.matchId} publicada para consulta del servidor CS2 local.`);
+    if (db && typeof db.setCs2PendingMatch === 'function') {
+      await db.setCs2PendingMatch(this.currentMatchData).catch(e => {
+        logger.warn('[CS2ServerManager] No se pudo guardar match en Firestore cs2_pending_matches:', e.message);
+      });
+    }
+  }
+
+  /**
+   * Obtiene la partida activa actual para exponerla en la API JSON
+   */
+  getCurrentMatch() {
+    if (!this.currentMatchData) {
+      return { active: false, match: null };
+    }
+    return {
+      active: true,
+      match: this.currentMatchData
+    };
+  }
+
+  /**
+   * Limpia la información de la partida de la API tras recibir estadísticas o finalizarse
+   */
+  async clearCurrentMatch(matchId = null, db = null) {
+    if (!matchId || this.currentMatchData?.matchId === matchId) {
+      logger.info(`[CS2ServerManager] Limpiando partida activa de la API (matchId: ${this.currentMatchData?.matchId || matchId}).`);
+      this.currentMatchData = null;
+      this.currentMatchId = null;
+    }
+    if (db && typeof db.clearCs2PendingMatch === 'function') {
+      await db.clearCs2PendingMatch(matchId).catch(e => {
+        logger.warn('[CS2ServerManager] No se pudo borrar match en Firestore cs2_pending_matches:', e.message);
+      });
+    }
   }
 
   /**
@@ -387,6 +434,9 @@ export async function resolveMixtonMatchEnd({
 
   // 1. Eliminar de partidas activas ANTES de mover voz para evitar rebotes de eventos
   await db.removeActiveMatch(matchId);
+
+  // Limpiar inmediatamente el match expuesto en la API para que desaparezca
+  await cs2ServerManager.clearCurrentMatch(matchId, db);
 
   // 2. Apagar servidor CS2 (expulsa a todos los jugadores con kickall y detiene la instancia en MCSManager)
   try {

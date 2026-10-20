@@ -2704,8 +2704,8 @@ export function createLobbyRouter(client, db, config, wss) {
         queue_name: assignedQueue.name
       };
 
-      const dbRosterA = rosterA.map(p => ({ player_id: p.faceit_player_id, nickname: p.faceit_nickname, discord_id: p.discordId }));
-      const dbRosterB = rosterB.map(p => ({ player_id: p.faceit_player_id, nickname: p.faceit_nickname, discord_id: p.discordId }));
+      const dbRosterA = rosterA.map(p => ({ player_id: p.faceit_player_id, nickname: p.faceit_nickname, discord_id: p.discordId, steam_id_64: p.steam_id_64 || null }));
+      const dbRosterB = rosterB.map(p => ({ player_id: p.faceit_player_id, nickname: p.faceit_nickname, discord_id: p.discordId, steam_id_64: p.steam_id_64 || null }));
 
       await db.addActiveMatch(
         matchId, 
@@ -2724,7 +2724,48 @@ export function createLobbyRouter(client, db, config, wss) {
       );
 
       if (matchMode === 'steam') {
-        // 1. Configurar match.json y whitelist.cfg para MatchZy en D:\ServerCS2
+        // 0. Publicar el partido en memoria y Firestore para que el servidor local de CS2 consulte la API
+        const cs2Payload = {
+          matchId,
+          game: 'cs2',
+          map: {
+            id: finalChosenMap?.id || 'de_mirage',
+            name: finalChosenMap?.name || mapDisplayName || 'Mirage',
+            cs2MapId: finalChosenMap?.cs2MapId || finalChosenMap?.id || 'de_mirage'
+          },
+          team1: {
+            name: teamA.name || 'Equipo 1',
+            tag: 'EQ1',
+            captain: teamA.captain,
+            players: rosterA.map((p, idx) => ({
+              steam_id_64: String(p.steam_id_64 || '').trim(),
+              nickname: p.faceit_nickname || p.discordUser?.displayName || `Jugador A${idx + 1}`,
+              discordId: p.discordId
+            }))
+          },
+          team2: {
+            name: teamB.name || 'Equipo 2',
+            tag: 'EQ2',
+            captain: teamB.captain,
+            players: rosterB.map((p, idx) => ({
+              steam_id_64: String(p.steam_id_64 || '').trim(),
+              nickname: p.faceit_nickname || p.discordUser?.displayName || `Jugador B${idx + 1}`,
+              discordId: p.discordId
+            }))
+          },
+          spectators: [
+            '76561198675781576',
+            '76561198042296985'
+          ],
+          serverIp: cs2ServerManager.serverIp || '38.25.72.56:27015',
+          bet_amount_per_player: parsedBetAmount,
+          total_pot: parseFloat((parsedBetAmount * 10).toFixed(2)),
+          createdAt: Date.now()
+        };
+
+        await cs2ServerManager.publishMatch(cs2Payload, db);
+
+        // Fallback local directo (si el bot corre en la misma máquina que D:\ServerCS2)
         await cs2ServerManager.configureMatch({
           matchId,
           chosenMap: finalChosenMap,
@@ -2733,12 +2774,11 @@ export function createLobbyRouter(client, db, config, wss) {
           teamB,
           rosterB
         }).catch(err => {
-          logger.error('Error al configurar partido MatchZy:', err);
+          logger.info('[Lobby] Configuración local directa no requerida (esperando agente local):', err.message);
         });
 
-        // 2. Encender servidor CS2 en MCSManager (o fallback local)
         await cs2ServerManager.startServer().catch(err => {
-          logger.error('Error al iniciar servidor CS2 en MCSManager:', err);
+          logger.info('[Lobby] Inicio local directo no requerido (esperando agente local):', err.message);
         });
 
         // 3. Enviar invitaciones por Steam a todos los jugadores que tengan SteamID64 vinculado

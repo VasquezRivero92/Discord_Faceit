@@ -8,6 +8,7 @@ import { logger } from './utils/logger.js';
 import { createAuthRouter } from './routes/auth.js';
 import { createApiRouter } from './routes/api.js';
 import { createLobbyRouter } from './routes/lobby.js';
+import { createCs2ApiRouter } from './routes/cs2Api.js';
 import { createPublicApiRouter } from './routes/publicApi.js';
 import { WebSocketServer } from 'ws';
 import { loadCommands, onInteractionCreate } from './events/interactionCreate.js';
@@ -423,6 +424,7 @@ app.use('/api/lobby', createLobbyRouter(client, db, {
   ADMIN_JWT_SECRET: env.ADMIN_JWT_SECRET,
   DISCORD_GUILD_ID: env.DISCORD_GUILD_ID,
 }, wss));
+app.use('/api/cs2', createCs2ApiRouter(client, db));
 app.use('/api', createPublicApiRouter(db));
 
 app.get('/admin', (req, res) => {

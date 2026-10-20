@@ -348,6 +348,7 @@ const ACTIVE_MATCHES_COLLECTION = 'faceit_active_matches';
 const CONFIG_COLLECTION = 'faceit_config';
 const MATCHES_HISTORY_COLLECTION = 'faceit_matches_history';
 const MATCH_STATS_COLLECTION = 'faceit_match_stats';
+const CS2_PENDING_MATCH_COLLECTION = 'cs2_pending_matches';
 // --- In-Memory Caching ---
 // These caches are deliberately short-lived. Writes made through this module
 // update or invalidate them immediately, so Firestore is only the source of
@@ -1293,6 +1294,54 @@ export const db = {
     } catch (error) {
       logger.error(`Error al obtener estadísticas FACEIT de ${matchId}:`, error);
       return null;
+    }
+  },
+
+  async setCs2PendingMatch(matchData) {
+    if (!matchData?.matchId) return false;
+    try {
+      await firestore.collection(CS2_PENDING_MATCH_COLLECTION).doc('current').set({
+        ...matchData,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      return true;
+    } catch (error) {
+      logger.error('Error al guardar partida pendiente de CS2 en Firestore:', error);
+      return false;
+    }
+  },
+
+  async getCs2PendingMatch() {
+    try {
+      const doc = await firestore.collection(CS2_PENDING_MATCH_COLLECTION).doc('current').get();
+      if (!doc.exists) return null;
+      return doc.data();
+    } catch (error) {
+      logger.error('Error al obtener partida pendiente de CS2 en Firestore:', error);
+      return null;
+    }
+  },
+
+  async clearCs2PendingMatch(matchId = null) {
+    try {
+      const docRef = firestore.collection(CS2_PENDING_MATCH_COLLECTION).doc('current');
+      if (matchId) {
+        const doc = await docRef.get();
+        if (doc.exists) {
+          const data = doc.data();
+          if (data?.matchId === matchId) {
+            await docRef.delete();
+            logger.info(`Partida CS2 ${matchId} eliminada de pendientes en Firestore.`);
+          }
+        }
+      } else {
+        await docRef.delete();
+        logger.info('Partida CS2 pendiente eliminada de Firestore.');
+      }
+      return true;
+    } catch (error) {
+      logger.error('Error al limpiar partida pendiente de CS2 en Firestore:', error);
+      return false;
     }
   },
 
