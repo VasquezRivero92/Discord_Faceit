@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { logger } from '../utils/logger.js';
 import { cs2ServerManager, resolveMixtonMatchEnd } from '../services/cs2ServerManager.js';
+import { fetchFaceitPlayer, fetchFaceitPlayerById } from '../services/faceitApi.js';
 
 export function createCs2ApiRouter(client, db) {
   const router = Router();
@@ -23,6 +24,42 @@ export function createCs2ApiRouter(client, db) {
         if (pending && pending.matchId) {
           await cs2ServerManager.publishMatch(pending);
           current = { active: true, match: pending };
+        }
+      }
+
+      // Garantizar que todos los jugadores tengan steam_id_64 en el JSON
+      if (current.active && current.match) {
+        const teams = [current.match.team1, current.match.team2].filter(Boolean);
+        for (const team of teams) {
+          if (Array.isArray(team.players)) {
+            for (const p of team.players) {
+              if (!p.steam_id_64 || !/^\d{17}$/.test(String(p.steam_id_64).trim())) {
+                // 1. Intentar recuperar desde Firestore si hay discordId
+                if (p.discordId && db && typeof db.getFullUser === 'function') {
+                  const uData = await db.getFullUser(p.discordId).catch(() => null);
+                  if (uData?.steam_id_64 && /^\d{17}$/.test(String(uData.steam_id_64).trim())) {
+                    p.steam_id_64 = String(uData.steam_id_64).trim();
+                  }
+                }
+                // 2. Si aún falta, consultar FACEIT API
+                if (!p.steam_id_64 || !/^\d{17}$/.test(String(p.steam_id_64).trim())) {
+                  const pid = p.faceit_player_id || (team.captain && (team.captain.discordId === p.discordId || team.captain.faceit_nickname === p.nickname) ? team.captain.faceit_player_id : null);
+                  try {
+                    const fcPlayer = pid
+                      ? await fetchFaceitPlayerById(pid).catch(() => null)
+                      : (p.nickname ? await fetchFaceitPlayer(p.nickname).catch(() => null) : null);
+                    const s64 = fcPlayer?.games?.cs2?.game_player_id || fcPlayer?.games?.csgo?.game_player_id || fcPlayer?.steam_id_64;
+                    if (s64 && /^\d{17}$/.test(String(s64).trim())) {
+                      p.steam_id_64 = String(s64).trim();
+                      if (p.discordId && db && typeof db.saveUser === 'function') {
+                        await db.saveUser(p.discordId, { steam_id_64: p.steam_id_64 }).catch(() => {});
+                      }
+                    }
+                  } catch {}
+                }
+              }
+            }
+          }
         }
       }
 

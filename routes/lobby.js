@@ -2814,6 +2814,7 @@ export function createLobbyRouter(client, db, config, wss) {
             captain: teamA.captain,
             players: rosterA.map((p, idx) => ({
               steam_id_64: String(p.steam_id_64 || '').trim(),
+              faceit_player_id: p.faceit_player_id || null,
               nickname: p.faceit_nickname || p.discordUser?.displayName || `Jugador A${idx + 1}`,
               discordId: p.discordId
             }))
@@ -2824,6 +2825,7 @@ export function createLobbyRouter(client, db, config, wss) {
             captain: teamB.captain,
             players: rosterB.map((p, idx) => ({
               steam_id_64: String(p.steam_id_64 || '').trim(),
+              faceit_player_id: p.faceit_player_id || null,
               nickname: p.faceit_nickname || p.discordUser?.displayName || `Jugador B${idx + 1}`,
               discordId: p.discordId
             }))
