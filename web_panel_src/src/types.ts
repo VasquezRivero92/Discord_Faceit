@@ -127,6 +127,8 @@ export interface PlayerBetStatus {
   displayName: string;
   avatarURL?: string | null;
   hasSavedPhone?: boolean;
+  hasSteam?: boolean;
+  steam_id_64?: string | null;
   team: 'A' | 'B';
   teamName: string;
   isCaptain: boolean;
@@ -142,6 +144,7 @@ export interface BetStatusResponse {
   teamA: { id: string; name: string };
   teamB: { id: string; name: string };
   players: PlayerBetStatus[];
+  missingSteamPlayers?: Array<{ discordId: string; nickname?: string; displayName?: string }>;
 }
 
 export interface MixtonQueue {

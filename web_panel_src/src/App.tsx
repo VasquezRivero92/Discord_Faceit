@@ -1920,6 +1920,14 @@ export default function App() {
   // Admin Action: Confirm Launch Match with Bet
   const handleConfirmLaunchMatch = async () => {
     if (!matchTeamA || !matchTeamB) return;
+
+    if (matchMode === 'steam') {
+      const missingSteam = betPlayers.filter(p => !p.hasSteam);
+      if (missingSteam.length > 0) {
+        showToast(`No se puede lanzar la partida. Los siguientes jugadores no tienen vinculado su Steam ID: ${missingSteam.map(p => p.faceit_nickname || p.displayName).join(', ')}.`, 'error');
+        return;
+      }
+    }
     
     setIsLaunchingMatch(true);
     try {
@@ -3900,6 +3908,37 @@ export default function App() {
                     </p>
                   </div>
                 )}
+                {matchMode === 'steam' && betPlayers.some(p => !p.hasSteam) && (
+                  <div className="bg-red-500/15 border-2 border-red-500/70 p-4 flex items-start gap-3 text-red-200">
+                    <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5 animate-pulse" />
+                    <div className="text-xs flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-black uppercase text-red-400 text-sm tracking-wide">
+                          ⚠️ BLOQUEADO: FALTA VINCULAR STEAM ID
+                        </span>
+                        <span className="text-[10px] bg-red-950 border border-red-600 px-2 py-0.5 text-red-300 font-bold uppercase font-mono">
+                          {betPlayers.filter(p => !p.hasSteam).length} jugador(es) pendiente(s)
+                        </span>
+                      </div>
+                      <p className="mt-1 leading-relaxed text-neutral-300">
+                        Para ingresar al servidor dedicado de CS2, los 10 jugadores deben tener su <strong>SteamID vinculado</strong>. No se puede lanzar el encuentro hasta que todos estén vinculados:
+                      </p>
+                      <div className="flex flex-wrap gap-2 mt-2.5">
+                        {betPlayers.filter(p => !p.hasSteam).map(p => (
+                          <span key={p.discordId} className="bg-red-950/90 border border-red-500 text-white px-2.5 py-1 text-xs font-bold font-mono flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                            <strong>{p.faceit_nickname || p.displayName}</strong>
+                            <span className="text-red-300 font-normal">({p.team === 'A' ? 'Equipo 1' : 'Equipo 2'})</span>
+                            <span className="text-red-400 text-[10px] uppercase">— Falta Steam ID</span>
+                          </span>
+                        ))}
+                      </div>
+                      <p className="mt-2.5 text-[10px] text-neutral-400 leading-normal">
+                        👉 Cada jugador debe ingresar a la web con su Discord y vincular su cuenta de Steam en <strong className="text-white">"Mi Billetera & Cuenta"</strong>, o tener su Steam público asociado a su cuenta de FACEIT.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Section 1.6: Selector de Sala / Cola Faceit */}
@@ -4050,7 +4089,9 @@ export default function App() {
 
                     <div className="space-y-2">
                       {betPlayers.filter(p => p.team === 'A').map((p) => {
-                        const ready = effectiveBetAmount === 0 || manualPaidMap[p.discordId] || p.balance >= effectiveBetAmount;
+                        const balanceReady = effectiveBetAmount === 0 || manualPaidMap[p.discordId] || p.balance >= effectiveBetAmount;
+                        const steamReady = matchMode !== 'steam' || Boolean(p.hasSteam);
+                        const ready = balanceReady && steamReady;
                         const isManual = manualPaidMap[p.discordId];
 
                         return (
@@ -4059,7 +4100,9 @@ export default function App() {
                             className={`p-2.5 border transition-all flex items-center justify-between gap-3 ${
                               ready 
                                 ? 'bg-[#181F1A] border-emerald-900/40' 
-                                : 'bg-[#221818] border-red-900/40'
+                                : !steamReady
+                                  ? 'bg-[#2E1212] border-red-600/60'
+                                  : 'bg-[#221818] border-red-900/40'
                             }`}
                           >
                             <div className="flex items-center gap-2.5 min-w-0">
@@ -4094,6 +4137,21 @@ export default function App() {
                                     Saldo: <strong className="text-white">S/ {p.balance.toFixed(2)}</strong>
                                   </span>
                                 </div>
+                                {matchMode === 'steam' && (
+                                  <div className="mt-1 flex items-center gap-1 font-mono text-[9px]">
+                                    {p.hasSteam ? (
+                                      <span className="text-sky-300 font-bold flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                                        Steam ID: {p.steam_id_64 ? `${p.steam_id_64.substring(0, 8)}...` : 'Vinculado'}
+                                      </span>
+                                    ) : (
+                                      <span className="text-red-400 font-bold flex items-center gap-1 animate-pulse">
+                                        <AlertCircle className="w-3 h-3 text-red-500 shrink-0" />
+                                        FALTA VINCULAR STEAM ID
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
 
@@ -4113,6 +4171,12 @@ export default function App() {
                               ) : (
                                 <span className="px-2 py-0.5 text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/40">
                                   FALTA S/ {p.deficit.toFixed(2)}
+                                </span>
+                              )}
+
+                              {matchMode === 'steam' && !p.hasSteam && (
+                                <span className="px-1.5 py-0.5 text-[8px] font-bold bg-red-600/30 text-red-300 border border-red-500/60 animate-pulse">
+                                  FALTA STEAM
                                 </span>
                               )}
 
@@ -4167,7 +4231,9 @@ export default function App() {
 
                     <div className="space-y-2">
                       {betPlayers.filter(p => p.team === 'B').map((p) => {
-                        const ready = effectiveBetAmount === 0 || manualPaidMap[p.discordId] || p.balance >= effectiveBetAmount;
+                        const balanceReady = effectiveBetAmount === 0 || manualPaidMap[p.discordId] || p.balance >= effectiveBetAmount;
+                        const steamReady = matchMode !== 'steam' || Boolean(p.hasSteam);
+                        const ready = balanceReady && steamReady;
                         const isManual = manualPaidMap[p.discordId];
 
                         return (
@@ -4176,7 +4242,9 @@ export default function App() {
                             className={`p-2.5 border transition-all flex items-center justify-between gap-3 ${
                               ready 
                                 ? 'bg-[#181F1A] border-emerald-900/40' 
-                                : 'bg-[#221818] border-red-900/40'
+                                : !steamReady
+                                  ? 'bg-[#2E1212] border-red-600/60'
+                                  : 'bg-[#221818] border-red-900/40'
                             }`}
                           >
                             <div className="flex items-center gap-2.5 min-w-0">
@@ -4211,6 +4279,21 @@ export default function App() {
                                     Saldo: <strong className="text-white">S/ {p.balance.toFixed(2)}</strong>
                                   </span>
                                 </div>
+                                {matchMode === 'steam' && (
+                                  <div className="mt-1 flex items-center gap-1 font-mono text-[9px]">
+                                    {p.hasSteam ? (
+                                      <span className="text-sky-300 font-bold flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                                        Steam ID: {p.steam_id_64 ? `${p.steam_id_64.substring(0, 8)}...` : 'Vinculado'}
+                                      </span>
+                                    ) : (
+                                      <span className="text-red-400 font-bold flex items-center gap-1 animate-pulse">
+                                        <AlertCircle className="w-3 h-3 text-red-500 shrink-0" />
+                                        FALTA VINCULAR STEAM ID
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
 
@@ -4230,6 +4313,12 @@ export default function App() {
                               ) : (
                                 <span className="px-2 py-0.5 text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/40">
                                   FALTA S/ {p.deficit.toFixed(2)}
+                                </span>
+                              )}
+
+                              {matchMode === 'steam' && !p.hasSteam && (
+                                <span className="px-1.5 py-0.5 text-[8px] font-bold bg-red-600/30 text-red-300 border border-red-500/60 animate-pulse">
+                                  FALTA STEAM
                                 </span>
                               )}
 
@@ -4275,12 +4364,14 @@ export default function App() {
             {/* Modal Footer */}
             {(() => {
               const isPlayerReady = (p: PlayerBetStatus) => {
+                if (matchMode === 'steam' && !p.hasSteam) return false;
                 if (effectiveBetAmount === 0) return true;
                 if (manualPaidMap[p.discordId]) return true;
                 return p.balance >= effectiveBetAmount;
               };
               const readyCount = betPlayers.filter(isPlayerReady).length;
-              const isAllReady = betPlayers.length === 10 && readyCount === 10;
+              const missingSteamPlayers = matchMode === 'steam' ? betPlayers.filter(p => !p.hasSteam) : [];
+              const isAllReady = betPlayers.length === 10 && readyCount === 10 && missingSteamPlayers.length === 0;
 
               return (
                 <div className="bg-[#161616] border-t border-[#2D2D2D] px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -4291,7 +4382,7 @@ export default function App() {
                     className="w-full sm:w-auto flex items-center justify-center gap-2 px-3 py-2 bg-[#222] hover:bg-[#2A2A2A] border border-[#333] text-xs font-bold text-neutral-300 uppercase transition-all cursor-pointer"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isLoadingBetStatus ? 'animate-spin' : ''}`} />
-                    Actualizar Saldos
+                    Actualizar Estados y Steam
                   </button>
 
                   <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -4315,9 +4406,11 @@ export default function App() {
                     >
                       {isLaunchingMatch 
                         ? 'LANZANDO ENCUENTRO...' 
-                        : isAllReady 
-                          ? `🚀 CONFIRMAR Y LANZAR ${(chosenMapForMatch?.name || lobbyState.mapVeto?.chosenMap?.name) ? `[${chosenMapForMatch?.name || lobbyState.mapVeto?.chosenMap?.name}] ` : ''}(POZO: S/ ${(effectiveBetAmount * 10).toFixed(2)})` 
-                          : `BLOQUEADO (${readyCount}/10 LISTOS)`}
+                        : missingSteamPlayers.length > 0
+                          ? `BLOQUEADO (${missingSteamPlayers.length} SIN STEAM ID)`
+                          : isAllReady 
+                            ? `🚀 CONFIRMAR Y LANZAR ${(chosenMapForMatch?.name || lobbyState.mapVeto?.chosenMap?.name) ? `[${chosenMapForMatch?.name || lobbyState.mapVeto?.chosenMap?.name}] ` : ''}(POZO: S/ ${(effectiveBetAmount * 10).toFixed(2)})` 
+                            : `BLOQUEADO (${readyCount}/10 LISTOS)`}
                     </button>
                   </div>
                 </div>

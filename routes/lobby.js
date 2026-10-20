@@ -1738,6 +1738,45 @@ export function createLobbyRouter(client, db, config, wss) {
         return res.status(400).json({ error: 'Ambos equipos deben estar completos (5 jugadores c/u).' });
       }
 
+      if (matchMode === 'steam') {
+        const rosterA = [teamA.captain, ...teamA.players];
+        const rosterB = [teamB.captain, ...teamB.players];
+        const missingSteam = [];
+
+        for (const p of [...rosterA, ...rosterB]) {
+          let s64 = String(p.steam_id_64 || '').trim();
+          if (!/^\d{17}$/.test(s64)) {
+            const uData = await db.getFullUser(p.discordId, req.guildId).catch(() => null);
+            if (uData?.steam_id_64 && /^\d{17}$/.test(String(uData.steam_id_64).trim())) {
+              p.steam_id_64 = String(uData.steam_id_64).trim();
+              s64 = p.steam_id_64;
+            } else if (p.faceit_player_id || p.faceit_nickname) {
+              try {
+                const fcPlayer = p.faceit_player_id
+                  ? await fetchFaceitPlayerById(p.faceit_player_id).catch(() => null)
+                  : await fetchFaceitPlayer(p.faceit_nickname).catch(() => null);
+                const foundS64 = fcPlayer?.games?.cs2?.game_player_id || fcPlayer?.games?.csgo?.game_player_id || fcPlayer?.steam_id_64;
+                if (foundS64 && /^\d{17}$/.test(String(foundS64).trim())) {
+                  p.steam_id_64 = String(foundS64).trim();
+                  s64 = p.steam_id_64;
+                  await db.saveUser(p.discordId, { steam_id_64: p.steam_id_64 }, req.guildId).catch(() => {});
+                }
+              } catch {}
+            }
+          }
+
+          if (!s64 || !/^\d{17}$/.test(s64)) {
+            missingSteam.push(p.faceit_nickname || p.discordUser?.displayName || p.nickname || p.discordId);
+          }
+        }
+
+        if (missingSteam.length > 0) {
+          return res.status(400).json({
+            error: `No se puede lanzar la partida. Los 10 jugadores deben tener su SteamID vinculado para ingresar al servidor CS2. Falta vincular el Steam ID de: ${missingSteam.join(', ')}.`
+          });
+        }
+      }
+
       const mapPool = getActiveMaps(state);
       if (mapPool.length < 2) {
         return res.status(400).json({ error: 'Se requieren al menos 2 mapas activos para iniciar el veto. Configura los mapas en el panel administrativo.' });
@@ -1934,10 +1973,30 @@ export function createLobbyRouter(client, db, config, wss) {
       for (const p of rosterA) {
         const balance = await db.getUserBalance(p.discordId, guildIdToUse);
         let hasSavedPhone = false;
+        let steam_id_64 = String(p.steam_id_64 || '').trim();
         try {
           const u = await db.getFullUser(p.discordId, guildIdToUse);
           if (u?.phoneNumber) hasSavedPhone = true;
+          if (!steam_id_64 && u?.steam_id_64) {
+            steam_id_64 = String(u.steam_id_64).trim();
+          }
         } catch (_) {}
+
+        if (!steam_id_64 && (p.faceit_player_id || p.faceit_nickname)) {
+          try {
+            const fc = p.faceit_player_id
+              ? await fetchFaceitPlayerById(p.faceit_player_id).catch(() => null)
+              : await fetchFaceitPlayer(p.faceit_nickname).catch(() => null);
+            const found = fc?.games?.cs2?.game_player_id || fc?.games?.csgo?.game_player_id || fc?.steam_id_64;
+            if (found && /^\d{17}$/.test(String(found).trim())) {
+              steam_id_64 = String(found).trim();
+              p.steam_id_64 = steam_id_64;
+              await db.saveUser(p.discordId, { steam_id_64 }, guildIdToUse).catch(() => {});
+            }
+          } catch (_) {}
+        }
+
+        const hasSteam = Boolean(steam_id_64 && /^\d{17}$/.test(steam_id_64));
 
         playerStatusList.push({
           discordId: p.discordId,
@@ -1945,6 +2004,8 @@ export function createLobbyRouter(client, db, config, wss) {
           displayName: p.discordUser?.displayName || p.discordUser?.username || p.faceit_nickname,
           avatarURL: p.discordUser?.avatarURL || null,
           hasSavedPhone,
+          hasSteam,
+          steam_id_64: hasSteam ? steam_id_64 : null,
           team: 'A',
           teamName: teamA.name,
           isCaptain: p.discordId === teamA.captain.discordId,
@@ -1957,10 +2018,30 @@ export function createLobbyRouter(client, db, config, wss) {
       for (const p of rosterB) {
         const balance = await db.getUserBalance(p.discordId, guildIdToUse);
         let hasSavedPhone = false;
+        let steam_id_64 = String(p.steam_id_64 || '').trim();
         try {
           const u = await db.getFullUser(p.discordId, guildIdToUse);
           if (u?.phoneNumber) hasSavedPhone = true;
+          if (!steam_id_64 && u?.steam_id_64) {
+            steam_id_64 = String(u.steam_id_64).trim();
+          }
         } catch (_) {}
+
+        if (!steam_id_64 && (p.faceit_player_id || p.faceit_nickname)) {
+          try {
+            const fc = p.faceit_player_id
+              ? await fetchFaceitPlayerById(p.faceit_player_id).catch(() => null)
+              : await fetchFaceitPlayer(p.faceit_nickname).catch(() => null);
+            const found = fc?.games?.cs2?.game_player_id || fc?.games?.csgo?.game_player_id || fc?.steam_id_64;
+            if (found && /^\d{17}$/.test(String(found).trim())) {
+              steam_id_64 = String(found).trim();
+              p.steam_id_64 = steam_id_64;
+              await db.saveUser(p.discordId, { steam_id_64 }, guildIdToUse).catch(() => {});
+            }
+          } catch (_) {}
+        }
+
+        const hasSteam = Boolean(steam_id_64 && /^\d{17}$/.test(steam_id_64));
 
         playerStatusList.push({
           discordId: p.discordId,
@@ -1968,6 +2049,8 @@ export function createLobbyRouter(client, db, config, wss) {
           displayName: p.discordUser?.displayName || p.discordUser?.username || p.faceit_nickname,
           avatarURL: p.discordUser?.avatarURL || null,
           hasSavedPhone,
+          hasSteam,
+          steam_id_64: hasSteam ? steam_id_64 : null,
           team: 'B',
           teamName: teamB.name,
           isCaptain: p.discordId === teamB.captain.discordId,
@@ -1979,6 +2062,11 @@ export function createLobbyRouter(client, db, config, wss) {
 
       const totalPot = parseFloat((parsedBetAmount * 10).toFixed(2));
       const allReady = playerStatusList.every(p => p.hasEnough);
+      const missingSteamPlayers = playerStatusList.filter(p => !p.hasSteam).map(p => ({
+        discordId: p.discordId,
+        faceit_nickname: p.faceit_nickname,
+        displayName: p.displayName
+      }));
 
       res.json({
         betAmount: parsedBetAmount,
@@ -1986,7 +2074,8 @@ export function createLobbyRouter(client, db, config, wss) {
         allReady,
         teamA: { id: teamA.id, name: teamA.name },
         teamB: { id: teamB.id, name: teamB.name },
-        players: playerStatusList
+        players: playerStatusList,
+        missingSteamPlayers
       });
     } catch (err) {
       logger.error('Error al verificar estado de apuestas:', err);
@@ -2273,6 +2362,21 @@ export function createLobbyRouter(client, db, config, wss) {
               }
             }
           }
+        }
+        // Validación estricta: Los 10 jugadores deben tener su SteamID64 vinculado para ingresar al servidor CS2
+        const missingSteam = [];
+        for (const p of [...rosterA, ...rosterB]) {
+          const s64 = String(p.steam_id_64 || '').trim();
+          if (!/^\d{17}$/.test(s64)) {
+            missingSteam.push(p.faceit_nickname || p.discordUser?.displayName || p.nickname || p.discordId);
+          }
+        }
+
+        if (missingSteam.length > 0) {
+          logger.warn(`[Lobby] Intento de iniciar partida CS2 local pero faltan SteamID64: ${missingSteam.join(', ')}`);
+          return res.status(400).json({
+            error: `No se puede lanzar la partida. Los 10 jugadores deben tener su SteamID vinculado para ingresar al servidor CS2. Falta vincular el Steam ID de: ${missingSteam.join(', ')}.`
+          });
         }
       }
 
