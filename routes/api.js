@@ -1838,6 +1838,46 @@ export function createApiRouter(client, db, config) {
     }
   });
 
+  // --- Catálogo y Configuración de Mapas CS2 para Veto Mixton ---
+  router.get('/map-catalog', requireAuth, async (req, res) => {
+    try {
+      const targetGuildId = resolveTargetGuildId(req);
+      const state = await db.getMixtonLobbyState(targetGuildId);
+      const { getEffectiveMapCatalog, getActiveMaps } = await import('./lobby.js');
+      const catalog = getEffectiveMapCatalog(state);
+      const active = getActiveMaps(state);
+      res.json({ success: true, catalog, activeCount: active.length });
+    } catch (err) {
+      logger.error('Error en GET /map-catalog:', err);
+      res.status(500).json({ error: 'Error al obtener catálogo de mapas' });
+    }
+  });
+
+  router.post('/map-catalog', requireAuth, async (req, res) => {
+    try {
+      const targetGuildId = resolveTargetGuildId(req);
+      const { catalog } = req.body;
+      if (!Array.isArray(catalog)) {
+        return res.status(400).json({ error: 'El catálogo debe ser un array de mapas.' });
+      }
+      const activeCount = catalog.filter(m => m && m.active === true).length;
+      if (activeCount < 2) {
+        return res.status(400).json({ error: 'Debes mantener al menos 2 mapas activos para el sistema de veto.' });
+      }
+      const state = await db.getMixtonLobbyState(targetGuildId);
+      state.mapCatalog = catalog;
+      await db.saveMixtonLobbyState(state, targetGuildId);
+      const { mixtonEvents, getEffectiveMapCatalog, getActiveMaps } = await import('./lobby.js');
+      if (mixtonEvents) mixtonEvents.emit('update', targetGuildId);
+      const effective = getEffectiveMapCatalog(state);
+      const active = getActiveMaps(state);
+      res.json({ success: true, catalog: effective, activeCount: active.length });
+    } catch (err) {
+      logger.error('Error en POST /map-catalog:', err);
+      res.status(500).json({ error: 'Error al guardar catálogo de mapas' });
+    }
+  });
+
   return router;
 }
 

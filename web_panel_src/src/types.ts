@@ -28,6 +28,16 @@ export interface MapVetoItem {
   icon: string;
 }
 
+export interface MapCatalogItem {
+  id: string;
+  name: string;
+  image: string;
+  icon: string;
+  active: boolean;
+  isOfficialPremier?: boolean;
+  isCustom?: boolean;
+}
+
 export interface MapVetoHistoryItem {
   mapId: string;
   mapName: string;
@@ -62,6 +72,7 @@ export interface LobbyState {
   draftStarted: boolean;
   draftFinished: boolean;
   mapVeto?: MapVetoState | null;
+  mapCatalog?: MapCatalogItem[];
 }
 
 export interface CurrentUser {

@@ -17,6 +17,180 @@ import { yapeTransactionService } from '../services/yapeTransactionService.js';
 
 export const mixtonEvents = new EventEmitter();
 
+/**
+ * Catálogo completo de mapas oficiales y competitivos de CS2.
+ * Por defecto, los 7 mapas del Premier activo están en active: true.
+ * Los demás (Train, Overpass, Cache, Office, Italy, Thera, Mills) están disponibles para activar/desactivar.
+ */
+export const CS2_CATALOG_MAPS = [
+  {
+    id: 'de_mirage',
+    name: 'Mirage',
+    image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_mirage.png',
+    icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_mirage.png',
+    active: true,
+    isOfficialPremier: true
+  },
+  {
+    id: 'de_inferno',
+    name: 'Inferno',
+    image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_inferno.png',
+    icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_inferno.png',
+    active: true,
+    isOfficialPremier: true
+  },
+  {
+    id: 'de_dust2',
+    name: 'Dust II',
+    image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_dust2.png',
+    icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_dust2.png',
+    active: true,
+    isOfficialPremier: true
+  },
+  {
+    id: 'de_nuke',
+    name: 'Nuke',
+    image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_nuke.png',
+    icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_nuke.png',
+    active: true,
+    isOfficialPremier: true
+  },
+  {
+    id: 'de_ancient',
+    name: 'Ancient',
+    image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_ancient.png',
+    icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_ancient.png',
+    active: true,
+    isOfficialPremier: true
+  },
+  {
+    id: 'de_anubis',
+    name: 'Anubis',
+    image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_anubis.png',
+    icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_anubis.png',
+    active: true,
+    isOfficialPremier: true
+  },
+  {
+    id: 'de_vertigo',
+    name: 'Vertigo',
+    image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_vertigo.png',
+    icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_vertigo.png',
+    active: true,
+    isOfficialPremier: true
+  },
+  {
+    id: 'de_train',
+    name: 'Train',
+    image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_train.png',
+    icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_train.png',
+    active: false,
+    isOfficialPremier: false
+  },
+  {
+    id: 'de_overpass',
+    name: 'Overpass',
+    image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_overpass.png',
+    icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_overpass.png',
+    active: false,
+    isOfficialPremier: false
+  },
+  {
+    id: 'de_cache',
+    name: 'Cache',
+    image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_cache.png',
+    icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_cache.png',
+    active: false,
+    isOfficialPremier: false
+  },
+  {
+    id: 'cs_office',
+    name: 'Office',
+    image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/cs_office.png',
+    icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/cs_office.png',
+    active: false,
+    isOfficialPremier: false
+  },
+  {
+    id: 'cs_italy',
+    name: 'Italy',
+    image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/cs_italy.png',
+    icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/cs_italy.png',
+    active: false,
+    isOfficialPremier: false
+  },
+  {
+    id: 'de_thera',
+    name: 'Thera',
+    image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_thera.png',
+    icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_thera.png',
+    active: false,
+    isOfficialPremier: false
+  },
+  {
+    id: 'de_mills',
+    name: 'Mills',
+    image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_mills.png',
+    icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_mills.png',
+    active: false,
+    isOfficialPremier: false
+  }
+];
+
+export const CS2_OFFICIAL_MAP_POOL = CS2_CATALOG_MAPS.filter(m => m.isOfficialPremier);
+
+/**
+ * Obtiene el catálogo efectivo de mapas fusionando la base con la configuración guardada del lobby/servidor.
+ */
+export function getEffectiveMapCatalog(state) {
+  if (!state || !Array.isArray(state.mapCatalog) || state.mapCatalog.length === 0) {
+    return JSON.parse(JSON.stringify(CS2_CATALOG_MAPS));
+  }
+  const storedMapById = new Map();
+  state.mapCatalog.forEach(m => {
+    if (m && m.id) storedMapById.set(m.id, m);
+  });
+
+  const merged = CS2_CATALOG_MAPS.map(baseMap => {
+    const stored = storedMapById.get(baseMap.id);
+    if (stored) {
+      return {
+        ...baseMap,
+        ...stored,
+        active: typeof stored.active === 'boolean' ? stored.active : baseMap.active
+      };
+    }
+    return { ...baseMap };
+  });
+
+  // Agregar mapas personalizados que haya añadido el admin
+  state.mapCatalog.forEach(m => {
+    if (m && m.id && !CS2_CATALOG_MAPS.some(b => b.id === m.id)) {
+      merged.push({
+        id: m.id,
+        name: m.name || m.id,
+        image: m.image || 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_mirage.png',
+        icon: m.icon || 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_mirage.png',
+        active: typeof m.active === 'boolean' ? m.active : true,
+        isCustom: true
+      });
+    }
+  });
+
+  return merged;
+}
+
+/**
+ * Obtiene la lista de mapas activos (que se verán en el veto).
+ */
+export function getActiveMaps(state) {
+  const catalog = getEffectiveMapCatalog(state);
+  const active = catalog.filter(m => m.active === true);
+  if (active.length >= 2) return active;
+  // Fallback de seguridad al pool Premier oficial si todos fueron desactivados
+  return CS2_CATALOG_MAPS.filter(m => m.isOfficialPremier);
+}
+
 export function createLobbyRouter(client, db, config, wss) {
   const router = Router();
   const { ADMIN_JWT_SECRET, DISCORD_GUILD_ID } = config;
@@ -162,6 +336,7 @@ export function createLobbyRouter(client, db, config, wss) {
   async function getLobbyData(guildId = null) {
     const effectiveGuildId = guildId || (DISCORD_GUILD_ID && DISCORD_GUILD_ID !== '1472731390675255410' ? DISCORD_GUILD_ID : MACHUPEEK_GUILD_ID);
     const state = await db.getMixtonLobbyState(effectiveGuildId);
+    state.mapCatalog = getEffectiveMapCatalog(state);
     const settings = await db.getGuildSettings(effectiveGuildId).catch(() => ({}));
     const commandEnabled = settings.command_mixton_listo !== false;
 
@@ -1181,53 +1356,7 @@ export function createLobbyRouter(client, db, config, wss) {
     }
   });
 
-  /**
-   * Pool oficial de 7 mapas competitivos de CS2 para la fase de Veto.
-   */
-  const CS2_OFFICIAL_MAP_POOL = [
-    {
-      id: 'de_mirage',
-      name: 'Mirage',
-      image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_mirage.png',
-      icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_mirage.png'
-    },
-    {
-      id: 'de_inferno',
-      name: 'Inferno',
-      image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_inferno.png',
-      icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_inferno.png'
-    },
-    {
-      id: 'de_dust2',
-      name: 'Dust II',
-      image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_dust2.png',
-      icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_dust2.png'
-    },
-    {
-      id: 'de_nuke',
-      name: 'Nuke',
-      image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_nuke.png',
-      icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_nuke.png'
-    },
-    {
-      id: 'de_ancient',
-      name: 'Ancient',
-      image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_ancient.png',
-      icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_ancient.png'
-    },
-    {
-      id: 'de_anubis',
-      name: 'Anubis',
-      image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_anubis.png',
-      icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_anubis.png'
-    },
-    {
-      id: 'de_vertigo',
-      name: 'Vertigo',
-      image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_vertigo.png',
-      icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_vertigo.png'
-    }
-  ];
+
 
   /**
    * Genera la secuencia exacta de elecciones de jugadores por equipo.
@@ -1579,7 +1708,10 @@ export function createLobbyRouter(client, db, config, wss) {
         return res.status(400).json({ error: 'Ambos equipos deben estar completos (5 jugadores c/u).' });
       }
 
-      const mapPool = [...CS2_OFFICIAL_MAP_POOL];
+      const mapPool = getActiveMaps(state);
+      if (mapPool.length < 2) {
+        return res.status(400).json({ error: 'Se requieren al menos 2 mapas activos para iniciar el veto. Configura los mapas en el panel administrativo.' });
+      }
       const banSequence = generateMapBanSequence(teamIdA, teamIdB, mapPool.length);
 
       state.mapVeto = {
@@ -1628,7 +1760,7 @@ export function createLobbyRouter(client, db, config, wss) {
         return res.status(400).json({ error: 'Este mapa ya fue baneado.' });
       }
 
-      const mapItem = (veto.pool || CS2_OFFICIAL_MAP_POOL).find(m => m.id === mapId);
+      const mapItem = (veto.pool || getActiveMaps(state)).find(m => m.id === mapId);
       if (!mapItem) {
         return res.status(404).json({ error: 'Mapa no válido en el pool.' });
       }
@@ -1663,7 +1795,7 @@ export function createLobbyRouter(client, db, config, wss) {
       veto.currentBanIndex++;
 
       // Verificar si solo queda 1 mapa sin banear
-      const remainingMaps = (veto.pool || CS2_OFFICIAL_MAP_POOL).filter(m => !veto.bannedMaps.includes(m.id));
+      const remainingMaps = (veto.pool || getActiveMaps(state)).filter(m => !veto.bannedMaps.includes(m.id));
       if (remainingMaps.length === 1) {
         veto.chosenMap = remainingMaps[0];
         veto.active = false;
@@ -1691,6 +1823,46 @@ export function createLobbyRouter(client, db, config, wss) {
     } catch (err) {
       logger.error('Error en mixton-cancel-veto:', err);
       res.status(500).json({ error: 'Error al cancelar veto.' });
+    }
+  });
+
+  // 7.4. Obtener catálogo completo de mapas CS2 y estado de activación
+  router.get('/map-catalog', async (req, res) => {
+    try {
+      const state = await db.getMixtonLobbyState(req.guildId);
+      const catalog = getEffectiveMapCatalog(state);
+      const active = getActiveMaps(state);
+      res.json({ success: true, catalog, activeCount: active.length });
+    } catch (err) {
+      logger.error('Error al obtener catálogo de mapas:', err);
+      res.status(500).json({ error: 'Error al consultar catálogo de mapas.' });
+    }
+  });
+
+  // 7.5. Configurar qué mapas se ven/usan en el veto (Admin)
+  router.post('/map-catalog', requireAuth, verifyGuildAdmin, async (req, res) => {
+    try {
+      const { catalog } = req.body;
+      if (!Array.isArray(catalog)) {
+        return res.status(400).json({ error: 'El catálogo debe ser un array de mapas.' });
+      }
+
+      const activeCount = catalog.filter(m => m && m.active === true).length;
+      if (activeCount < 2) {
+        return res.status(400).json({ error: 'Debes mantener al menos 2 mapas activos para el sistema de veto.' });
+      }
+
+      const state = await db.getMixtonLobbyState(req.guildId);
+      state.mapCatalog = catalog;
+      await db.saveMixtonLobbyState(state, req.guildId);
+      mixtonEvents.emit('update', req.guildId);
+
+      const effective = getEffectiveMapCatalog(state);
+      const active = getActiveMaps(state);
+      res.json({ success: true, catalog: effective, activeCount: active.length });
+    } catch (err) {
+      logger.error('Error en POST /map-catalog:', err);
+      res.status(500).json({ error: 'Error al guardar catálogo de mapas: ' + err.message });
     }
   });
 

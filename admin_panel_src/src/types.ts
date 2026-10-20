@@ -197,3 +197,13 @@ export interface PlayerStats {
   countryRank: string;
   avatarUrl: string;
 }
+
+export interface MapCatalogItem {
+  id: string;
+  name: string;
+  image: string;
+  icon: string;
+  active: boolean;
+  isOfficialPremier?: boolean;
+  isCustom?: boolean;
+}

@@ -60,7 +60,8 @@ import {
   OrderItem,
   YapeTransactionItem,
   YapeOperationItem,
-  YapeAuditLogItem
+  YapeAuditLogItem,
+  MapCatalogItem
 } from './types';
 import {
   initialUsers,
@@ -475,6 +476,13 @@ export default function App() {
   const [togglingFeatureKey, setTogglingFeatureKey] = useState<string | null>(null);
   const [batchUpdatingFeatures, setBatchUpdatingFeatures] = useState<boolean>(false);
   const [refreshingFeatures, setRefreshingFeatures] = useState<boolean>(false);
+
+  // CS2 Map Pool / Veto States
+  const [mapCatalog, setMapCatalog] = useState<MapCatalogItem[]>([]);
+  const [loadingMapCatalog, setLoadingMapCatalog] = useState<boolean>(false);
+  const [savingMapCatalog, setSavingMapCatalog] = useState<boolean>(false);
+  const [newCustomMap, setNewCustomMap] = useState({ id: '', name: '', image: '', icon: '' });
+  const [showAddMapModal, setShowAddMapModal] = useState<boolean>(false);
   
   // Pagination & Simulation States
   const [usersPage, setUsersPage] = useState<number>(1);
@@ -1521,6 +1529,121 @@ export default function App() {
       }
     } catch {
       showToast('Error de conexión.', 'error');
+    }
+  };
+
+  // --- CS2 Map Pool / Veto Management ---
+  const fetchMapCatalog = async () => {
+    setLoadingMapCatalog(true);
+    try {
+      const guildQuery = selectedGuildId ? `?guildId=${selectedGuildId}` : '';
+      const res = await apiFetch(`/api/admin/map-catalog${guildQuery}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.catalog)) {
+          setMapCatalog(data.catalog);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching map catalog:', err);
+    } finally {
+      setLoadingMapCatalog(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    if (activeTab === 'config') {
+      fetchMapCatalog();
+    }
+  }, [isLoggedIn, activeTab, selectedGuildId]);
+
+  const handleToggleMap = (mapId: string) => {
+    setMapCatalog(prev => prev.map(m => m.id === mapId ? { ...m, active: !m.active } : m));
+  };
+
+  const handleApplyPreset = (preset: 'premier' | 'all' | 'classics' | 'fast') => {
+    if (preset === 'premier') {
+      const premierIds = ['de_mirage', 'de_inferno', 'de_dust2', 'de_nuke', 'de_ancient', 'de_anubis', 'de_vertigo'];
+      setMapCatalog(prev => prev.map(m => ({
+        ...m,
+        active: premierIds.includes(m.id)
+      })));
+      showToast('Preset aplicado: Pool Oficial Premier (7 mapas)', 'info');
+    } else if (preset === 'all') {
+      setMapCatalog(prev => prev.map(m => ({ ...m, active: true })));
+      showToast('Preset aplicado: Todos los mapas activos', 'info');
+    } else if (preset === 'classics') {
+      const classicIds = ['de_mirage', 'de_inferno', 'de_dust2', 'de_nuke', 'de_overpass'];
+      setMapCatalog(prev => prev.map(m => ({
+        ...m,
+        active: classicIds.includes(m.id)
+      })));
+      showToast('Preset aplicado: 5 Clásicos (Mirage, Inferno, Dust II, Nuke, Overpass)', 'info');
+    } else if (preset === 'fast') {
+      const fastIds = ['de_mirage', 'de_inferno', 'de_dust2'];
+      setMapCatalog(prev => prev.map(m => ({
+        ...m,
+        active: fastIds.includes(m.id)
+      })));
+      showToast('Preset aplicado: 3 Mapas Rápidos (Mirage, Inferno, Dust II)', 'info');
+    }
+  };
+
+  const handleAddCustomMap = () => {
+    if (!newCustomMap.id.trim() || !newCustomMap.name.trim()) {
+      showToast('El ID y el Nombre del mapa son obligatorios.', 'error');
+      return;
+    }
+    const cleanId = newCustomMap.id.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    if (mapCatalog.some(m => m.id === cleanId)) {
+      showToast('Ya existe un mapa con ese ID.', 'error');
+      return;
+    }
+    const item: MapCatalogItem = {
+      id: cleanId,
+      name: newCustomMap.name.trim(),
+      image: newCustomMap.image.trim() || 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_mirage.png',
+      icon: newCustomMap.icon.trim() || 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_mirage.png',
+      active: true,
+      isCustom: true
+    };
+    setMapCatalog(prev => [...prev, item]);
+    setNewCustomMap({ id: '', name: '', image: '', icon: '' });
+    setShowAddMapModal(false);
+    showToast(`Mapa ${item.name} añadido correctamente. Recuerda guardar cambios.`, 'success');
+  };
+
+  const handleDeleteCustomMap = (mapId: string) => {
+    setMapCatalog(prev => prev.filter(m => m.id !== mapId));
+    showToast('Mapa eliminado del catálogo.', 'info');
+  };
+
+  const handleSaveMapCatalog = async () => {
+    const activeCount = mapCatalog.filter(m => m.active).length;
+    if (activeCount < 2) {
+      showToast('Debes mantener al menos 2 mapas activos para el sistema de veto.', 'error');
+      return;
+    }
+    setSavingMapCatalog(true);
+    try {
+      const guildQuery = selectedGuildId ? `?guildId=${selectedGuildId}` : '';
+      const res = await apiFetch(`/api/admin/map-catalog${guildQuery}`, {
+        method: 'POST',
+        body: JSON.stringify({ catalog: mapCatalog })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.catalog)) setMapCatalog(data.catalog);
+        showToast('¡Configuración de mapas guardada correctamente!', 'success');
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showToast(errData.error || 'Error al guardar mapas.', 'error');
+      }
+    } catch {
+      showToast('Error de conexión al guardar mapas.', 'error');
+    } finally {
+      setSavingMapCatalog(false);
     }
   };
 
@@ -3901,6 +4024,157 @@ export default function App() {
                       )}
                     </div>
 
+                    {/* Pool de Mapas CS2 para Veto Mixton */}
+                    <div className="bg-[#111] border-2 border-[#FF5500]/30 p-8 shadow-[8px_8px_0px_rgba(255,85,0,0.12)] rounded-none relative">
+                      <div className="absolute -top-3 -left-3 bg-[#FF5500] text-black text-[10px] font-black px-3 py-1 uppercase tracking-widest border border-black/20 flex items-center gap-1.5">
+                        <Map className="w-3.5 h-3.5" /> Pool de Mapas CS2 (Veto Mixton)
+                      </div>
+
+                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mt-2 mb-6">
+                        <div>
+                          <h4 className="text-base font-black text-white uppercase tracking-tight flex items-center gap-2">
+                            CONFIGURACIÓN DE MAPAS DISPONIBLES EN EL VETO
+                            <span className="text-xs font-mono font-bold bg-[#FF5500]/20 text-[#FF5500] border border-[#FF5500]/40 px-2 py-0.5">
+                              {mapCatalog.filter(m => m.active).length} ACTIVOS DE {mapCatalog.length}
+                            </span>
+                          </h4>
+                          <p className="text-xs text-neutral-400 font-mono mt-1">
+                            Selecciona qué mapas aparecerán en la fase interactiva de veto. El sistema calculará automáticamente la secuencia de baneos (1-2-2-1...) según la cantidad de mapas activos hasta dejar exactamente 1 mapa ganador.
+                          </p>
+                        </div>
+
+                        {/* Presets rápidos */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] font-mono text-neutral-500 uppercase font-black">Presets:</span>
+                          <button
+                            type="button"
+                            onClick={() => handleApplyPreset('premier')}
+                            className="px-2.5 py-1 bg-[#1A1A1A] hover:bg-[#252525] border border-white/20 text-[10px] font-mono font-bold text-white uppercase transition-colors"
+                          >
+                            🏆 Premier (7)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleApplyPreset('all')}
+                            className="px-2.5 py-1 bg-[#1A1A1A] hover:bg-[#252525] border border-white/20 text-[10px] font-mono font-bold text-white uppercase transition-colors"
+                          >
+                            🗺️ Todos (14)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleApplyPreset('classics')}
+                            className="px-2.5 py-1 bg-[#1A1A1A] hover:bg-[#252525] border border-white/20 text-[10px] font-mono font-bold text-white uppercase transition-colors"
+                          >
+                            ⚡ Clásicos (5)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleApplyPreset('fast')}
+                            className="px-2.5 py-1 bg-[#1A1A1A] hover:bg-[#252525] border border-white/20 text-[10px] font-mono font-bold text-white uppercase transition-colors"
+                          >
+                            🎯 Rápido (3)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddMapModal(true)}
+                            className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-[10px] font-mono font-bold text-emerald-300 uppercase transition-colors flex items-center gap-1"
+                          >
+                            <Plus className="w-3 h-3" /> Añadir Mapa
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Grid de Mapas */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+                        {mapCatalog.map((mapItem) => {
+                          const isActive = mapItem.active;
+                          return (
+                            <div
+                              key={mapItem.id}
+                              onClick={() => handleToggleMap(mapItem.id)}
+                              className={`group relative flex flex-col justify-between h-48 border-2 transition-all cursor-pointer overflow-hidden select-none ${
+                                isActive
+                                  ? 'border-emerald-500/70 shadow-[0_0_15px_rgba(16,185,129,0.2)] bg-[#141414]'
+                                  : 'border-white/10 opacity-40 hover:opacity-75 bg-[#0A0A0A]'
+                              }`}
+                            >
+                              {/* Imagen de fondo */}
+                              <div
+                                className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
+                                style={{ backgroundImage: `url(${mapItem.image})` }}
+                              />
+                              <div className={`absolute inset-0 transition-opacity ${isActive ? 'bg-gradient-to-t from-black/95 via-black/40 to-black/60' : 'bg-black/80'}`} />
+
+                              {/* Badge superior */}
+                              <div className="relative z-10 p-2 flex items-center justify-between">
+                                <span className={`text-[8px] font-mono font-black uppercase px-1.5 py-0.5 border ${
+                                  isActive ? 'bg-emerald-500 text-black border-emerald-400 font-bold' : 'bg-neutral-800 text-neutral-400 border-neutral-700'
+                                }`}>
+                                  {isActive ? '✓ ACTIVO' : '✕ INACTIVO'}
+                                </span>
+                                {mapItem.isCustom && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteCustomMap(mapItem.id);
+                                    }}
+                                    className="p-1 bg-red-950/80 hover:bg-red-800 text-red-200 border border-red-500/40 transition-colors"
+                                    title="Eliminar mapa personalizado"
+                                  >
+                                    <Trash2 className="w-2.5 h-2.5" />
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Icono central de insignia */}
+                              <div className="relative z-10 flex items-center justify-center py-1">
+                                <img
+                                  src={mapItem.icon}
+                                  alt={mapItem.name}
+                                  className={`w-12 h-12 object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] transition-transform group-hover:scale-110 ${
+                                    !isActive ? 'grayscale' : ''
+                                  }`}
+                                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                                />
+                              </div>
+
+                              {/* Nombre inferior */}
+                              <div className="relative z-10 p-2 text-center bg-black/75 border-t border-white/10">
+                                <span className={`text-xs font-black uppercase tracking-wider block truncate ${isActive ? 'text-white' : 'text-neutral-400'}`}>
+                                  {mapItem.name}
+                                </span>
+                                <span className="text-[8px] font-mono text-neutral-500 block truncate">
+                                  {mapItem.id}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Botón de Guardado de Mapas */}
+                      <div className="pt-4 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div className="text-[11px] font-mono text-neutral-400">
+                          <span className="text-white font-bold">{mapCatalog.filter(m => m.active).length} mapas</span> seleccionados para el veto.
+                          {mapCatalog.filter(m => m.active).length >= 2 && (
+                            <span className="text-neutral-500 ml-1">
+                              (Se realizarán {mapCatalog.filter(m => m.active).length - 1} baneos hasta quedar 1 mapa).
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleSaveMapCatalog}
+                          disabled={savingMapCatalog || loadingMapCatalog}
+                          className="px-6 py-2.5 bg-[#FF5500] hover:bg-[#e04c00] text-black text-xs font-black uppercase tracking-tighter transition-colors cursor-pointer border border-[#FF5500] shadow-[3px_3px_0px_rgba(255,85,0,0.3)] disabled:opacity-40 flex items-center gap-2"
+                        >
+                          {savingMapCatalog ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                          {savingMapCatalog ? 'GUARDANDO MAPAS...' : '💾 GUARDAR POOL DE MAPAS'}
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Sistema */}
                     <div className="bg-[#111] border-2 border-white/10 p-8 shadow-[8px_8px_0px_rgba(255,255,255,0.05)] rounded-none relative">
                       <div className="absolute -top-3 -left-3 bg-white text-black text-[10px] font-black px-3 py-1 uppercase tracking-widest border border-white/10">Sistema</div>
@@ -3923,6 +4197,86 @@ export default function App() {
                     </div>
 
                   </form>
+
+                  {/* Modal de Añadir Mapa Personalizado */}
+                  {showAddMapModal && (
+                    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                      <div className="bg-[#111] border-2 border-white/20 p-6 max-w-md w-full shadow-[10px_10px_0px_rgba(0,0,0,0.7)]">
+                        <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-4">
+                          <h4 className="text-sm font-black uppercase text-white tracking-wider flex items-center gap-2">
+                            <Plus className="w-4 h-4 text-emerald-400" /> Añadir Mapa Personalizado
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddMapModal(false)}
+                            className="text-neutral-400 hover:text-white"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div className="space-y-3 font-mono text-xs">
+                          <div>
+                            <label className="text-[10px] uppercase text-neutral-400 block mb-1">ID del Mapa (ej: de_tuscan)</label>
+                            <input
+                              type="text"
+                              value={newCustomMap.id}
+                              onChange={(e) => setNewCustomMap({ ...newCustomMap, id: e.target.value })}
+                              placeholder="de_tuscan"
+                              className="w-full bg-[#0A0A0A] border border-white/20 px-3 py-2 text-white font-mono text-xs outline-none focus:border-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase text-neutral-400 block mb-1">Nombre Visible (ej: Tuscan)</label>
+                            <input
+                              type="text"
+                              value={newCustomMap.name}
+                              onChange={(e) => setNewCustomMap({ ...newCustomMap, name: e.target.value })}
+                              placeholder="Tuscan"
+                              className="w-full bg-[#0A0A0A] border border-white/20 px-3 py-2 text-white font-mono text-xs outline-none focus:border-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase text-neutral-400 block mb-1">URL Imagen Fondo (Opcional)</label>
+                            <input
+                              type="text"
+                              value={newCustomMap.image}
+                              onChange={(e) => setNewCustomMap({ ...newCustomMap, image: e.target.value })}
+                              placeholder="https://.../map.png"
+                              className="w-full bg-[#0A0A0A] border border-white/20 px-3 py-2 text-white font-mono text-xs outline-none focus:border-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase text-neutral-400 block mb-1">URL Ícono / Insignia (Opcional)</label>
+                            <input
+                              type="text"
+                              value={newCustomMap.icon}
+                              onChange={(e) => setNewCustomMap({ ...newCustomMap, icon: e.target.value })}
+                              placeholder="https://.../icon.png"
+                              className="w-full bg-[#0A0A0A] border border-white/20 px-3 py-2 text-white font-mono text-xs outline-none focus:border-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-6 flex justify-end gap-2 font-mono">
+                          <button
+                            type="button"
+                            onClick={() => setShowAddMapModal(false)}
+                            className="px-4 py-2 border border-white/20 text-neutral-400 hover:text-white text-xs uppercase"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleAddCustomMap}
+                            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs uppercase tracking-wider"
+                          >
+                            Añadir Mapa
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

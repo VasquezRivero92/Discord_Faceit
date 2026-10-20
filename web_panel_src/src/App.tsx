@@ -30,7 +30,8 @@ import {
   User,
   Zap,
   Flame,
-  MapPin
+  MapPin,
+  Map
 } from 'lucide-react';
 import {
   Player, 
@@ -44,7 +45,8 @@ import {
   MixtonQueue,
   ActiveView,
   MapVetoItem,
-  MapVetoState
+  MapVetoState,
+  MapCatalogItem
 } from './types';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -166,6 +168,19 @@ export default function App() {
   const [isStartingVeto, setIsStartingVeto] = useState(false);
   const [isBanningMap, setIsBanningMap] = useState(false);
   const [chosenMapForMatch, setChosenMapForMatch] = useState<MapVetoItem | null>(null);
+
+  // Map Pool Management States in Lobby
+  const [isMapManagerOpen, setIsMapManagerOpen] = useState<boolean>(false);
+  const [localMapCatalog, setLocalMapCatalog] = useState<MapCatalogItem[]>([]);
+  const [isSavingMapCatalog, setIsSavingMapCatalog] = useState<boolean>(false);
+  const [newCustomMap, setNewCustomMap] = useState({ id: '', name: '', image: '', icon: '' });
+  const [showAddCustomMapModal, setShowAddCustomMapModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (lobbyState.mapCatalog && Array.isArray(lobbyState.mapCatalog)) {
+      setLocalMapCatalog(lobbyState.mapCatalog);
+    }
+  }, [lobbyState.mapCatalog]);
 
   // Bet Modal state (Cuota / Apuesta por jugador y verificación de los 10 jugadores)
   const [isBetModalOpen, setIsBetModalOpen] = useState(false);
@@ -1684,6 +1699,83 @@ export default function App() {
     }
   };
 
+  // Map Pool Handlers in Lobby
+  const handleToggleMapInLobby = (mapId: string) => {
+    setLocalMapCatalog(prev => prev.map(m => m.id === mapId ? { ...m, active: !m.active } : m));
+  };
+
+  const handleApplyPresetInLobby = (preset: 'premier' | 'all' | 'classics' | 'fast') => {
+    if (preset === 'premier') {
+      const premierIds = ['de_mirage', 'de_inferno', 'de_dust2', 'de_nuke', 'de_ancient', 'de_anubis', 'de_vertigo'];
+      setLocalMapCatalog(prev => prev.map(m => ({ ...m, active: premierIds.includes(m.id) })));
+      showToast('Preset: Premier Oficial (7 mapas)', 'info');
+    } else if (preset === 'all') {
+      setLocalMapCatalog(prev => prev.map(m => ({ ...m, active: true })));
+      showToast('Preset: Todos los mapas activos', 'info');
+    } else if (preset === 'classics') {
+      const classicIds = ['de_mirage', 'de_inferno', 'de_dust2', 'de_nuke', 'de_overpass'];
+      setLocalMapCatalog(prev => prev.map(m => ({ ...m, active: classicIds.includes(m.id) })));
+      showToast('Preset: 5 Clásicos (Mirage, Inferno, Dust II, Nuke, Overpass)', 'info');
+    } else if (preset === 'fast') {
+      const fastIds = ['de_mirage', 'de_inferno', 'de_dust2'];
+      setLocalMapCatalog(prev => prev.map(m => ({ ...m, active: fastIds.includes(m.id) })));
+      showToast('Preset: 3 Mapas Rápidos (Mirage, Inferno, Dust II)', 'info');
+    }
+  };
+
+  const handleAddCustomMapInLobby = () => {
+    if (!newCustomMap.id.trim() || !newCustomMap.name.trim()) {
+      showToast('ID y Nombre son obligatorios.', 'error');
+      return;
+    }
+    const cleanId = newCustomMap.id.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    if (localMapCatalog.some(m => m.id === cleanId)) {
+      showToast('Ya existe un mapa con ese ID.', 'error');
+      return;
+    }
+    const item: MapCatalogItem = {
+      id: cleanId,
+      name: newCustomMap.name.trim(),
+      image: newCustomMap.image.trim() || 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_mirage.png',
+      icon: newCustomMap.icon.trim() || 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_mirage.png',
+      active: true,
+      isCustom: true
+    };
+    setLocalMapCatalog(prev => [...prev, item]);
+    setNewCustomMap({ id: '', name: '', image: '', icon: '' });
+    setShowAddCustomMapModal(false);
+    showToast(`Mapa ${item.name} añadido. Guarda para aplicar.`, 'success');
+  };
+
+  const handleDeleteCustomMapInLobby = (mapId: string) => {
+    setLocalMapCatalog(prev => prev.filter(m => m.id !== mapId));
+    showToast('Mapa eliminado.', 'info');
+  };
+
+  const handleSaveMapCatalogInLobby = async () => {
+    const activeCount = localMapCatalog.filter(m => m.active).length;
+    if (activeCount < 2) {
+      showToast('Debes mantener al menos 2 mapas activos para el veto.', 'error');
+      return;
+    }
+    setIsSavingMapCatalog(true);
+    try {
+      const res = await apiFetch('/api/lobby/map-catalog', {
+        method: 'POST',
+        body: JSON.stringify({ catalog: localMapCatalog })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar mapas.');
+      if (Array.isArray(data.catalog)) setLocalMapCatalog(data.catalog);
+      showToast('¡Pool de mapas actualizado en tiempo real!', 'success');
+      setIsMapManagerOpen(false);
+    } catch (err: any) {
+      showToast(err.message || 'Error al guardar mapas.', 'error');
+    } finally {
+      setIsSavingMapCatalog(false);
+    }
+  };
+
   // Sincronizar automáticamente el mapa elegido y abrir el modal de saldos/apuestas para el Admin
   useEffect(() => {
     if (lobbyState.mapVeto?.completed && lobbyState.mapVeto.chosenMap) {
@@ -2325,7 +2417,7 @@ export default function App() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-mono text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 font-mono text-xs">
                 {/* 1. Setup Teams Count */}
                 <div className="p-3 bg-[#161616] border border-[#222] flex flex-col justify-between gap-3">
                   <div>
@@ -2478,6 +2570,41 @@ export default function App() {
                       <div className="w-8 h-4 bg-[#2D2D2D] peer-focus:outline-none rounded-none peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-400 after:border-neutral-400 after:border after:h-3 after:w-3.5 after:transition-all peer-checked:bg-[#FF5500] peer-checked:after:bg-white peer-checked:after:border-white" />
                     </label>
                   </div>
+                </div>
+
+                {/* 4. Map Pool CS2 */}
+                <div className="p-3 bg-[#161616] border border-[#222] flex flex-col justify-between gap-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-black uppercase text-neutral-400 block">POOL DE MAPAS VETO</label>
+                      <span className="text-[9px] font-bold text-[#FF5500] bg-[#FF5500]/10 border border-[#FF5500]/30 px-1.5 py-0.5">
+                        {(localMapCatalog.length > 0 ? localMapCatalog : (lobbyState.mapCatalog || [])).filter(m => m.active).length} ACTIVOS
+                      </span>
+                    </div>
+                    <p className="text-[9px] text-neutral-500 uppercase leading-relaxed mb-2">
+                      Configura qué mapas y cuántos se jugarán en la fase de veto.
+                    </p>
+                    <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto p-1.5 bg-[#111] border border-[#222]">
+                      {(localMapCatalog.length > 0 ? localMapCatalog : (lobbyState.mapCatalog || [])).filter(m => m.active).map(m => (
+                        <span key={m.id} className="text-[8px] bg-neutral-800 text-neutral-300 border border-neutral-700 px-1.5 py-0.5 truncate max-w-[85px]">
+                          {m.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button 
+                    className="w-full bg-[#FF5500] text-black font-black uppercase text-[10px] py-1.5 hover:bg-[#e04c00] transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-[0_0_8px_rgba(255,85,0,0.2)]"
+                    onClick={() => {
+                      if (lobbyState.mapCatalog && Array.isArray(lobbyState.mapCatalog)) {
+                        setLocalMapCatalog(lobbyState.mapCatalog);
+                      }
+                      setIsMapManagerOpen(true);
+                    }}
+                  >
+                    <Map className="w-3.5 h-3.5" />
+                    CONFIGURAR MAPAS
+                  </button>
                 </div>
               </div>
               
@@ -3207,7 +3334,13 @@ export default function App() {
 
             {/* Map Cards Grid */}
             <div className="p-4 sm:p-6 overflow-y-auto max-h-[60vh]">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              <div className={`grid gap-3 ${
+                (lobbyState.mapVeto?.pool?.length || 0) <= 4 
+                  ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 max-w-2xl mx-auto' 
+                  : (lobbyState.mapVeto?.pool?.length || 0) <= 6
+                    ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5 max-w-4xl mx-auto'
+                    : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7'
+              }`}>
                 {((lobbyState.mapVeto?.pool && lobbyState.mapVeto.pool.length > 0) ? lobbyState.mapVeto.pool : []).map(mapItem => {
                   const veto = lobbyState.mapVeto!;
                   const isBanned = (veto.bannedMaps || []).includes(mapItem.id);
@@ -3322,6 +3455,258 @@ export default function App() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Map Manager Modal (Admin Lobby) */}
+      {isMapManagerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/90 backdrop-blur-md overflow-y-auto animate-fade-in font-mono">
+          <div className="bg-[#121212] border-2 border-[#FF5500]/50 w-full max-w-5xl my-auto flex flex-col shadow-2xl rounded-none text-white overflow-hidden">
+            {/* Header */}
+            <div className="bg-[#181818] border-b border-neutral-800 p-4 sm:p-5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#FF5500]/20 border border-[#FF5500] flex items-center justify-center text-[#FF5500]">
+                  <Map className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-white flex items-center gap-2">
+                    CONFIGURAR POOL DE MAPAS PARA EL VETO
+                    <span className="text-xs font-mono font-bold bg-[#FF5500]/20 text-[#FF5500] border border-[#FF5500]/40 px-2 py-0.5">
+                      {localMapCatalog.filter(m => m.active).length} ACTIVOS
+                    </span>
+                  </h3>
+                  <p className="text-[10px] text-neutral-400 uppercase mt-0.5">
+                    Haz clic en cualquier mapa para activarlo o desactivarlo. El veto baneará automáticamente hasta dejar 1 mapa.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsMapManagerOpen(false)}
+                className="text-neutral-400 hover:text-white p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Bar Presets */}
+            <div className="bg-[#151515] border-b border-neutral-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-neutral-500 uppercase font-black mr-1">Presets:</span>
+                <button
+                  type="button"
+                  onClick={() => handleApplyPresetInLobby('premier')}
+                  className="px-2 py-1 bg-[#202020] hover:bg-[#2a2a2a] border border-neutral-700 text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                >
+                  🏆 Premier (7)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyPresetInLobby('all')}
+                  className="px-2 py-1 bg-[#202020] hover:bg-[#2a2a2a] border border-neutral-700 text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                >
+                  🗺️ Todos ({localMapCatalog.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyPresetInLobby('classics')}
+                  className="px-2 py-1 bg-[#202020] hover:bg-[#2a2a2a] border border-neutral-700 text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                >
+                  ⚡ Clásicos (5)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyPresetInLobby('fast')}
+                  className="px-2 py-1 bg-[#202020] hover:bg-[#2a2a2a] border border-neutral-700 text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                >
+                  🎯 Rápido (3)
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAddCustomMapModal(true)}
+                className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-[10px] font-bold text-emerald-300 uppercase transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3 h-3" /> Añadir Mapa Custom
+              </button>
+            </div>
+
+            {/* Grid of maps */}
+            <div className="p-4 sm:p-5 max-h-[55vh] overflow-y-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                {localMapCatalog.map((mapItem) => {
+                  const isActive = mapItem.active;
+                  return (
+                    <div
+                      key={mapItem.id}
+                      onClick={() => handleToggleMapInLobby(mapItem.id)}
+                      className={`group relative flex flex-col justify-between h-44 border-2 transition-all cursor-pointer overflow-hidden select-none ${
+                        isActive
+                          ? 'border-emerald-500/70 shadow-[0_0_12px_rgba(16,185,129,0.25)] bg-[#161616]'
+                          : 'border-white/10 opacity-35 hover:opacity-75 bg-[#0C0C0C]'
+                      }`}
+                    >
+                      <div
+                        className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
+                        style={{ backgroundImage: `url(${mapItem.image})` }}
+                      />
+                      <div className={`absolute inset-0 transition-opacity ${isActive ? 'bg-gradient-to-t from-black/95 via-black/40 to-black/60' : 'bg-black/80'}`} />
+
+                      <div className="relative z-10 p-1.5 flex items-center justify-between">
+                        <span className={`text-[8px] font-bold uppercase px-1.5 py-0.2 border ${
+                          isActive ? 'bg-emerald-500 text-black border-emerald-400' : 'bg-neutral-800 text-neutral-400 border-neutral-700'
+                        }`}>
+                          {isActive ? '✓ ACTIVO' : '✕ INACTIVO'}
+                        </span>
+                        {mapItem.isCustom && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteCustomMapInLobby(mapItem.id);
+                            }}
+                            className="p-1 bg-red-950/80 hover:bg-red-800 text-red-200 border border-red-500/40"
+                          >
+                            <Trash2 className="w-2.5 h-2.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="relative z-10 flex items-center justify-center py-1">
+                        <img
+                          src={mapItem.icon}
+                          alt={mapItem.name}
+                          className={`w-11 h-11 object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] transition-transform group-hover:scale-110 ${
+                            !isActive ? 'grayscale' : ''
+                          }`}
+                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                        />
+                      </div>
+
+                      <div className="relative z-10 p-1.5 text-center bg-black/80 border-t border-white/10">
+                        <span className={`text-[11px] font-black uppercase tracking-wider block truncate ${isActive ? 'text-white' : 'text-neutral-400'}`}>
+                          {mapItem.name}
+                        </span>
+                        <span className="text-[8px] text-neutral-500 block truncate">
+                          {mapItem.id}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-[#181818] border-t border-neutral-800 p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="text-[10px] text-neutral-400">
+                <span className="text-[#FF5500] font-bold">{localMapCatalog.filter(m => m.active).length} mapas</span> configurados para el veto.
+                {localMapCatalog.filter(m => m.active).length >= 2 && (
+                  <span className="text-neutral-500 ml-1">
+                    (Se realizarán {localMapCatalog.filter(m => m.active).length - 1} baneos hasta quedar 1 mapa ganador).
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsMapManagerOpen(false)}
+                  className="px-4 py-2 border border-neutral-700 text-neutral-400 hover:text-white text-xs uppercase cursor-pointer"
+                >
+                  Cerrar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveMapCatalogInLobby}
+                  disabled={isSavingMapCatalog}
+                  className="px-6 py-2 bg-[#FF5500] hover:bg-[#e04c00] text-black text-xs font-black uppercase tracking-wider transition-colors disabled:opacity-40 flex items-center gap-2 cursor-pointer shadow-[2px_2px_0px_rgba(255,85,0,0.3)]"
+                >
+                  {isSavingMapCatalog ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                  {isSavingMapCatalog ? 'GUARDANDO...' : 'GUARDAR Y APLICAR'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Añadir Mapa Custom en Lobby */}
+      {showAddCustomMapModal && (
+        <div className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 font-mono">
+          <div className="bg-[#141414] border-2 border-neutral-700 p-5 max-w-md w-full shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-800 mb-4">
+              <h4 className="text-sm font-black uppercase text-white flex items-center gap-2">
+                <Plus className="w-4 h-4 text-emerald-400" /> Añadir Mapa Personalizado
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowAddCustomMapModal(false)}
+                className="text-neutral-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="text-[10px] uppercase text-neutral-400 block mb-1">ID del Mapa (ej: de_tuscan)</label>
+                <input
+                  type="text"
+                  value={newCustomMap.id}
+                  onChange={(e) => setNewCustomMap({ ...newCustomMap, id: e.target.value })}
+                  placeholder="de_tuscan"
+                  className="w-full bg-[#0A0A0A] border border-neutral-700 px-3 py-2 text-white text-xs outline-none focus:border-white"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase text-neutral-400 block mb-1">Nombre Visible (ej: Tuscan)</label>
+                <input
+                  type="text"
+                  value={newCustomMap.name}
+                  onChange={(e) => setNewCustomMap({ ...newCustomMap, name: e.target.value })}
+                  placeholder="Tuscan"
+                  className="w-full bg-[#0A0A0A] border border-neutral-700 px-3 py-2 text-white text-xs outline-none focus:border-white"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase text-neutral-400 block mb-1">URL Imagen Fondo (Opcional)</label>
+                <input
+                  type="text"
+                  value={newCustomMap.image}
+                  onChange={(e) => setNewCustomMap({ ...newCustomMap, image: e.target.value })}
+                  placeholder="https://.../map.png"
+                  className="w-full bg-[#0A0A0A] border border-neutral-700 px-3 py-2 text-white text-xs outline-none focus:border-white"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase text-neutral-400 block mb-1">URL Ícono (Opcional)</label>
+                <input
+                  type="text"
+                  value={newCustomMap.icon}
+                  onChange={(e) => setNewCustomMap({ ...newCustomMap, icon: e.target.value })}
+                  placeholder="https://.../icon.png"
+                  className="w-full bg-[#0A0A0A] border border-neutral-700 px-3 py-2 text-white text-xs outline-none focus:border-white"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddCustomMapModal(false)}
+                className="px-3 py-1.5 border border-neutral-700 text-neutral-400 hover:text-white text-xs uppercase"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleAddCustomMapInLobby}
+                className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs uppercase"
+              >
+                Añadir Mapa
+              </button>
+            </div>
           </div>
         </div>
       )}
