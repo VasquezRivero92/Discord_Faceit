@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   Gamepad2, 
   Users, 
@@ -36,7 +36,10 @@ import {
   Crown,
   Crosshair,
   Trophy,
-  Swords
+  Swords,
+  ChevronDown,
+  ChevronUp,
+  Clock
 } from 'lucide-react';
 import {
   Player, 
@@ -50,6 +53,7 @@ import {
   MixtonQueue,
   ActiveView,
   MapVetoItem,
+  MapVetoHistoryItem,
   MapVetoState,
   MapCatalogItem
 } from './types';
@@ -64,6 +68,236 @@ import { ContactoView } from './components/ContactoView';
 import { GuiaFaceitView } from './components/GuiaFaceitView';
 import { MatchHistoryView } from './components/MatchHistoryView';
 import { MixtonLiveStepper } from './components/MixtonLiveStepper';
+
+// Interactive High-Fidelity Simulation Dataset matching the Approved CS2 Concept Mockup
+const DEMO_CONCEPT_PLAYERS: Player[] = [
+  {
+    discordId: 'demo_1',
+    faceit_nickname: 'm0NESY_pe',
+    faceit_level: 10,
+    faceit_elo: 2600,
+    mixton_tier: 'S',
+    discordUser: {
+      displayName: 'm0NESY_pe',
+      avatarURL: 'https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=120&auto=format&fit=crop&q=80'
+    }
+  },
+  {
+    discordId: 'demo_2',
+    faceit_nickname: 'SimpleCS',
+    faceit_level: 10,
+    faceit_elo: 2520,
+    mixton_tier: 'S',
+    discordUser: {
+      displayName: 'SimpleCS',
+      avatarURL: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80'
+    }
+  },
+  {
+    discordId: 'demo_3',
+    faceit_nickname: 'b1t_latam',
+    faceit_level: 9,
+    faceit_elo: 2180,
+    mixton_tier: 'A',
+    discordUser: {
+      displayName: 'b1t_latam',
+      avatarURL: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=120&auto=format&fit=crop&q=80'
+    }
+  },
+  {
+    discordId: 'demo_4',
+    faceit_nickname: 'FalleN_fan',
+    faceit_level: 8,
+    faceit_elo: 1950,
+    mixton_tier: 'A',
+    discordUser: {
+      displayName: 'FalleN_fan',
+      avatarURL: 'https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=120&auto=format&fit=crop&q=80'
+    }
+  },
+  {
+    discordId: 'demo_5',
+    faceit_nickname: 'arT_rush',
+    faceit_level: 8,
+    faceit_elo: 1910,
+    mixton_tier: 'A',
+    discordUser: {
+      displayName: 'arT_rush',
+      avatarURL: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=120&auto=format&fit=crop&q=80'
+    }
+  },
+  {
+    discordId: 'demo_6',
+    faceit_nickname: 'coldzera_99',
+    faceit_level: 7,
+    faceit_elo: 1720,
+    mixton_tier: 'B',
+    discordUser: {
+      displayName: 'coldzera_99',
+      avatarURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80'
+    }
+  },
+  {
+    discordId: 'demo_7',
+    faceit_nickname: 'KSCERATO_jr',
+    faceit_level: 7,
+    faceit_elo: 1680,
+    mixton_tier: 'B',
+    discordUser: {
+      displayName: 'KSCERATO_jr',
+      avatarURL: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80'
+    }
+  },
+  {
+    discordId: 'demo_8',
+    faceit_nickname: 'yuurih_pe',
+    faceit_level: 6,
+    faceit_elo: 1540,
+    mixton_tier: 'B',
+    discordUser: {
+      displayName: 'yuurih_pe',
+      avatarURL: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=120&auto=format&fit=crop&q=80'
+    }
+  },
+  {
+    discordId: 'demo_9',
+    faceit_nickname: 'drop_pe',
+    faceit_level: 5,
+    faceit_elo: 1420,
+    mixton_tier: 'B',
+    discordUser: {
+      displayName: 'drop_pe',
+      avatarURL: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=120&auto=format&fit=crop&q=80'
+    }
+  },
+  {
+    discordId: 'demo_10',
+    faceit_nickname: 'chelo_cs',
+    faceit_level: 4,
+    faceit_elo: 1250,
+    mixton_tier: 'C',
+    discordUser: {
+      displayName: 'chelo_cs',
+      avatarURL: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=120&auto=format&fit=crop&q=80'
+    }
+  }
+];
+
+const DEMO_CONCEPT_TEAM_A: Team = {
+  id: 'demo_team_1',
+  name: 'EQUIPO FÉNIX',
+  captain: {
+    discordId: 'demo_cap_1',
+    faceit_nickname: 's4vitar',
+    faceit_level: 10,
+    faceit_elo: 2540,
+    mixton_tier: 'S',
+    discordUser: {
+      displayName: 's4vitar',
+      avatarURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80'
+    }
+  },
+  players: [
+    {
+      discordId: 'demo_p_1',
+      faceit_nickname: 'EliGE_pe',
+      faceit_level: 10,
+      faceit_elo: 2480,
+      mixton_tier: 'S',
+      discordUser: {
+        displayName: 'EliGE_pe',
+        avatarURL: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=120&auto=format&fit=crop&q=80'
+      }
+    },
+    {
+      discordId: 'demo_p_2',
+      faceit_nickname: 'twistzz_latam',
+      faceit_level: 9,
+      faceit_elo: 2240,
+      mixton_tier: 'A',
+      discordUser: {
+        displayName: 'twistzz_latam',
+        avatarURL: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=120&auto=format&fit=crop&q=80'
+      }
+    },
+    {
+      discordId: 'demo_p_3',
+      faceit_nickname: 'rain_cs2',
+      faceit_level: 8,
+      faceit_elo: 1980,
+      mixton_tier: 'A',
+      discordUser: {
+        displayName: 'rain_cs2',
+        avatarURL: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80'
+      }
+    }
+  ]
+};
+
+const DEMO_CONCEPT_TEAM_B: Team = {
+  id: 'demo_team_2',
+  name: 'EQUIPO KOBRA',
+  captain: {
+    discordId: 'demo_cap_2',
+    faceit_nickname: 'shadow',
+    faceit_level: 10,
+    faceit_elo: 2420,
+    mixton_tier: 'S',
+    discordUser: {
+      displayName: 'shadow',
+      avatarURL: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=120&auto=format&fit=crop&q=80'
+    }
+  },
+  players: [
+    {
+      discordId: 'demo_p_4',
+      faceit_nickname: 'broky_fan',
+      faceit_level: 9,
+      faceit_elo: 2290,
+      mixton_tier: 'A',
+      discordUser: {
+        displayName: 'broky_fan',
+        avatarURL: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120&auto=format&fit=crop&q=80'
+      }
+    },
+    {
+      discordId: 'demo_p_5',
+      faceit_nickname: 'ropz_pe',
+      faceit_level: 9,
+      faceit_elo: 2210,
+      mixton_tier: 'A',
+      discordUser: {
+        displayName: 'ropz_pe',
+        avatarURL: 'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=120&auto=format&fit=crop&q=80'
+      }
+    }
+  ]
+};
+
+const DEMO_CONCEPT_MAP_VETO: MapVetoState = {
+  active: true,
+  completed: false,
+  teamIdA: 'demo_team_1',
+  teamIdB: 'demo_team_2',
+  pool: [
+    { id: 'de_mirage', name: 'Mirage', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_mirage.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_mirage.png' },
+    { id: 'de_inferno', name: 'Inferno', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_inferno.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_inferno.png' },
+    { id: 'de_nuke', name: 'Nuke', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_nuke.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_nuke.png' },
+    { id: 'de_anubis', name: 'Anubis', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_anubis.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_anubis.png' },
+    { id: 'de_ancient', name: 'Ancient', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_ancient.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_ancient.png' },
+    { id: 'de_dust2', name: 'Dust II', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_dust2.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_dust2.png' },
+    { id: 'de_vertigo', name: 'Vertigo', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_vertigo.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_vertigo.png' }
+  ],
+  bannedMaps: ['de_mirage', 'de_nuke', 'de_dust2'],
+  banHistory: [
+    { mapId: 'de_mirage', mapName: 'Mirage', teamId: 'demo_team_2', teamName: 'EQUIPO KOBRA', timestamp: Date.now() - 60000 },
+    { mapId: 'de_nuke', mapName: 'Nuke', teamId: 'demo_team_1', teamName: 'EQUIPO FÉNIX', timestamp: Date.now() - 40000 },
+    { mapId: 'de_dust2', mapName: 'Dust II', teamId: 'demo_team_2', teamName: 'EQUIPO KOBRA', timestamp: Date.now() - 20000 }
+  ],
+  banSequence: ['demo_team_1', 'demo_team_2', 'demo_team_1', 'demo_team_2', 'demo_team_1', 'demo_team_2'],
+  currentBanIndex: 3,
+  chosenMap: null
+};
 
 export default function App() {
   // Authentication & Loading states
@@ -215,9 +449,39 @@ export default function App() {
   // Toast stack state
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Concept Mockup Preview Modal
+  // Concept Mockup Preview Modal & Interactive Concept Demo Mode
   const [showMockupModal, setShowMockupModal] = useState<boolean>(false);
   const [selectedMockupTab, setSelectedMockupTab] = useState<'draft' | 'veto'>('draft');
+  const [arenaStageTab, setArenaStageTab] = useState<'draft' | 'veto'>('draft');
+  const [isConceptDemoMode, setIsConceptDemoMode] = useState<boolean>(true);
+  const [isAdminControlsOpen, setIsAdminControlsOpen] = useState<boolean>(false);
+  const [demoMapVeto, setDemoMapVeto] = useState<MapVetoState>(DEMO_CONCEPT_MAP_VETO);
+
+  const handleDemoBanMap = (mapId: string) => {
+    setDemoMapVeto(prev => {
+      if (prev.bannedMaps.includes(mapId)) return prev;
+      const map = (prev.pool || []).find(m => m.id === mapId);
+      const mapName = map ? map.name : mapId;
+      const teamName = prev.currentBanIndex % 2 === 0 ? 'EQUIPO FÉNIX' : 'EQUIPO KOBRA';
+      const newBanned = [...prev.bannedMaps, mapId];
+      const newHistory: MapVetoHistoryItem[] = [
+        ...(prev.banHistory || []), 
+        { mapId, mapName, teamId: 'demo', teamName, timestamp: Date.now() }
+      ];
+      
+      const remaining = (prev.pool || []).filter(m => !newBanned.includes(m.id));
+      const isDone = remaining.length === 1;
+      showToast(`🎯 [Simulación] Mapa ${mapName} descartado por ${teamName}`, 'info');
+      return {
+        ...prev,
+        bannedMaps: newBanned,
+        banHistory: newHistory,
+        currentBanIndex: prev.currentBanIndex + 1,
+        completed: isDone,
+        chosenMap: isDone ? remaining[0] : null
+      };
+    });
+  };
 
   const wsRef = useRef<WebSocket | null>(null);
   const wsReconnectTimerRef = useRef<number | null>(null);
@@ -2113,10 +2377,38 @@ export default function App() {
 
   const statusInfo = getDraftStatusInfo();
 
+  // Concept Demo Mode Data vs Live Discord Database
+  const effectiveAvailablePlayers = useMemo(() => {
+    if (isConceptDemoMode) {
+      return {
+        S: DEMO_CONCEPT_PLAYERS.filter(p => p.mixton_tier === 'S'),
+        A: DEMO_CONCEPT_PLAYERS.filter(p => p.mixton_tier === 'A'),
+        B: DEMO_CONCEPT_PLAYERS.filter(p => p.mixton_tier === 'B'),
+        C: DEMO_CONCEPT_PLAYERS.filter(p => p.mixton_tier === 'C'),
+      };
+    }
+    return availablePlayers;
+  }, [isConceptDemoMode, availablePlayers]);
+
+  const effectiveLobbyState = useMemo<LobbyState>(() => {
+    if (isConceptDemoMode) {
+      return {
+        teams: [DEMO_CONCEPT_TEAM_A, DEMO_CONCEPT_TEAM_B],
+        pickOrder: ['demo_team_1', 'demo_team_2'],
+        currentPickIndex: 5,
+        pickSequence: ['demo_team_1', 'demo_team_2', 'demo_team_2', 'demo_team_1', 'demo_team_1', 'demo_team_2', 'demo_team_2', 'demo_team_1'],
+        draftStarted: true,
+        draftFinished: false,
+        mapVeto: demoMapVeto
+      };
+    }
+    return lobbyState;
+  }, [isConceptDemoMode, lobbyState, demoMapVeto]);
+
   // Filter ready players by search query and tier
   const getFilteredPlayers = () => {
     const filterTierGroup = (tier: string) => {
-      const list = availablePlayers[tier] || [];
+      const list = effectiveAvailablePlayers[tier] || [];
       return list.filter(p => {
         const dName = (p.discordUser?.displayName || '').toLowerCase();
         const fNick = (p.faceit_nickname || '').toLowerCase();
@@ -2144,6 +2436,7 @@ export default function App() {
 
   // Check if current user is captain and it's their turn
   const checkIsMyTurn = () => {
+    if (isConceptDemoMode) return true; // Allows testing interactive pick/ban
     if (!lobbyState.draftStarted || lobbyState.draftFinished) return false;
     const currentTeamId = lobbyState.pickSequence?.[lobbyState.currentPickIndex] || lobbyState.pickOrder[lobbyState.currentPickIndex % (lobbyState.pickOrder.length || 1)];
     const currentTeam = lobbyState.teams.find(t => t.id === currentTeamId);
@@ -2151,20 +2444,20 @@ export default function App() {
   };
 
   const isMyTurn = checkIsMyTurn();
-  const canInteract = lobbyState.draftStarted && !lobbyState.draftFinished && (isMyTurn || currentUser?.isAdmin);
+  const canInteract = isConceptDemoMode || (lobbyState.draftStarted && !lobbyState.draftFinished && (isMyTurn || currentUser?.isAdmin));
 
   // Teams with captains for the pick order list editor
-  const teamsWithCaptains = lobbyState.teams.filter(t => t.captain !== null);
-  const hasCaptainsForAll = lobbyState.teams.length >= 2 && lobbyState.teams.every(t => t.captain !== null);
+  const teamsWithCaptains = effectiveLobbyState.teams.filter(t => t.captain !== null);
+  const hasCaptainsForAll = effectiveLobbyState.teams.length >= 2 && effectiveLobbyState.teams.every(t => t.captain !== null);
   
   // Teams that are complete (captain + 4 players) to display in the match selectors
-  const completedTeams = lobbyState.teams.filter(t => t.captain !== null && (t.players?.length || 0) === 4);
+  const completedTeams = effectiveLobbyState.teams.filter(t => t.captain !== null && (t.players?.length || 0) === 4);
 
   // Ready players list for Captain assignment (only Tier S and A are allowed to be captains)
   const getCaptainEligiblePlayers = () => {
     const list: Player[] = [];
-    if (availablePlayers.S) list.push(...availablePlayers.S);
-    if (availablePlayers.A) list.push(...availablePlayers.A);
+    if (effectiveAvailablePlayers.S) list.push(...effectiveAvailablePlayers.S);
+    if (effectiveAvailablePlayers.A) list.push(...effectiveAvailablePlayers.A);
     return list;
   };
 
@@ -2260,13 +2553,13 @@ export default function App() {
           {/* Arena Subheader Bar with Live Stepper */}
           <div className="border-b border-white/10 bg-[#0B0E14] px-4 sm:px-6 py-3 flex flex-col md:flex-row justify-between items-center gap-3 relative z-10 shadow-lg">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-[#FF5500] text-black flex items-center justify-center font-black shadow-[0_0_15px_rgba(255,85,0,0.3)]">
+              <div className="w-10 h-10 bg-[#FF5500] text-black flex items-center justify-center font-black rounded-xl shadow-[0_0_15px_rgba(255,85,0,0.4)] flex-shrink-0">
                 <Gamepad2 className="w-5 h-5" />
               </div>
               <div>
                 <h2 className="text-base sm:text-lg font-black italic tracking-tighter uppercase leading-none text-white font-mono flex items-center gap-2">
                   SALA MIXTON: <span className="text-[#FF5500]">MACHUPEEK</span>
-                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded font-mono font-bold uppercase not-italic tracking-wider animate-pulse">
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-mono font-bold uppercase not-italic tracking-wider animate-pulse">
                     ● EN VIVO
                   </span>
                 </h2>
@@ -2276,23 +2569,74 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* Button to view CS2 improved visual mockups */}
+            {/* Arena Stage Switcher (Draft vs Veto) and Mode Controls */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Quick Tab Switcher: Draft Lobby vs Map Veto */}
+              <div className="flex items-center gap-1 bg-[#121622] p-1 border border-white/10 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setArenaStageTab('draft')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                    arenaStageTab === 'draft'
+                      ? 'bg-[#FF5500] text-black shadow-[0_0_15px_rgba(255,85,0,0.4)]'
+                      : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Ver sala de selección de jugadores (Draft)"
+                >
+                  <Swords className="w-3.5 h-3.5" />
+                  <span>1. Draft Lobby</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setArenaStageTab('veto')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                    arenaStageTab === 'veto'
+                      ? 'bg-[#00A3FF] text-black shadow-[0_0_15px_rgba(0,163,255,0.4)]'
+                      : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Ver fase de descarte de mapas de torneo (Veto)"
+                >
+                  <Map className="w-3.5 h-3.5" />
+                  <span>2. Veto Mapas</span>
+                  <span className="text-[9px] bg-white/20 px-1.5 py-0.2 rounded font-black">CS2</span>
+                </button>
+              </div>
+
+              {/* Concept Simulation Mode Toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !isConceptDemoMode;
+                  setIsConceptDemoMode(next);
+                  showToast(next ? '⚡ Simulación del Concepto activada (Fénix vs Kobra)' : '🔴 Cambiado a datos en tiempo real de Discord', 'info');
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  isConceptDemoMode
+                    ? 'bg-gradient-to-r from-amber-500/20 to-[#FF5500]/20 border-[#FF5500]/60 text-[#FF5500] shadow-[0_0_15px_rgba(255,85,0,0.25)]'
+                    : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white'
+                }`}
+                title="Alternar entre la simulación visual idéntica al concepto y la cola real de Discord"
+              >
+                <span className={`w-2 h-2 rounded-full ${isConceptDemoMode ? 'bg-[#FF5500] animate-pulse' : 'bg-neutral-500'}`} />
+                <span>{isConceptDemoMode ? '⚡ Concepto Mockup: ON' : '🔴 Datos Discord: LIVE'}</span>
+              </button>
+
+              {/* View Mockup Modal */}
               <button
                 type="button"
                 onClick={() => setShowMockupModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-[#FF5500]/20 to-purple-600/20 border border-[#FF5500]/50 hover:border-[#FF5500] text-white hover:text-white transition-all text-xs font-mono font-bold uppercase tracking-wider cursor-pointer shadow-md"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-[#FF5500]/15 to-purple-600/15 border border-[#FF5500]/40 hover:border-[#FF5500] text-white hover:text-white transition-all text-xs font-mono font-bold uppercase tracking-wider cursor-pointer rounded-xl shadow-md"
                 title="Ver vista previa gráfica de la mejora visual del Mixtón"
               >
                 <span>🎨</span>
-                <span>Ver Diseño Concepto</span>
+                <span>Ver Mockups</span>
               </button>
 
               <a 
                 href="https://www.faceit.com/es/hub/52a88f17-1660-42ae-8322-76592f0c6f23/Mixtones"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5500]/10 border border-[#FF5500]/40 text-[#FF5500] hover:bg-[#FF5500] hover:text-black transition-all text-xs font-mono font-bold uppercase tracking-wider"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5500]/10 border border-[#FF5500]/40 text-[#FF5500] hover:bg-[#FF5500] hover:text-black transition-all text-xs font-mono font-bold uppercase tracking-wider rounded-xl"
                 title="Abrir Hub de Faceit en una pestaña nueva"
               >
                 <span className="w-2 h-2 rounded-full bg-[#FF5500] animate-pulse" />
@@ -2301,10 +2645,34 @@ export default function App() {
             </div>
           </div>
 
+          {/* Concept Mode Notification Banner */}
+          {isConceptDemoMode && (
+            <div className="bg-gradient-to-r from-amber-950/40 via-[#10141E] to-[#FF5500]/15 border-b border-[#FF5500]/30 px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#FF5500] animate-ping" />
+                <span className="text-white font-bold">
+                  <strong className="text-[#FF5500]">VISTA PREVIA ACTIVA DEL CONCEPTO GRÁFICO:</strong> Mostrando el enfrentamiento <strong>EQUIPO FÉNIX VS EQUIPO KOBRA</strong> con 10 jugadores y veto interactivo idéntico al mockup aprobado.
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsConceptDemoMode(false);
+                    showToast('🔴 Mostrando cola real del bot de Discord', 'info');
+                  }}
+                  className="px-2.5 py-1 bg-black/60 hover:bg-neutral-800 border border-white/20 text-neutral-300 hover:text-white text-[10px] uppercase font-bold rounded-lg transition-colors cursor-pointer"
+                >
+                  Ver datos Discord ({availablePlayers.S?.length || 0} listos)
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Stepper Banner Container */}
           <div className="px-4 sm:px-6 pt-4 pb-0 bg-[#08090C]">
             <MixtonLiveStepper
-              lobbyState={lobbyState}
+              lobbyState={effectiveLobbyState}
               totalReadyCount={totalReadyCountVal}
               requiredPlayers={numTeamsSelect * 5}
               currentUser={currentUser}
@@ -2317,13 +2685,13 @@ export default function App() {
           <main className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 p-4 sm:p-6 relative z-10 lg:overflow-hidden overflow-y-auto lg:max-h-[calc(100vh-140px)]">
         
         {/* Left Panel: Available Players */}
-        <section className="lg:col-span-1 p-4 sm:p-5 bg-[#0D1017]/95 border border-white/10 shadow-2xl flex flex-col lg:max-h-[calc(100vh-140px)] rounded-none backdrop-blur-md">
+        <section className="lg:col-span-1 p-4 sm:p-5 bg-[#0D1017]/95 border border-white/10 shadow-2xl flex flex-col lg:max-h-[calc(100vh-140px)] rounded-2xl backdrop-blur-md">
           <div className="mb-3.5 pb-3 border-b border-white/10">
             <div className="flex items-center justify-between">
               <h2 className="text-base sm:text-lg font-black italic tracking-tighter uppercase text-white flex items-center gap-2">
                 <Users className="w-4 h-4 text-[#FF5500]" /> JUGADORES LISTOS
               </h2>
-              <span className="text-[10px] font-mono bg-[#FF5500]/15 border border-[#FF5500]/40 px-2 py-0.5 text-[#FF5500] font-black uppercase tracking-wider">
+              <span className="text-[10px] font-mono bg-[#FF5500]/15 border border-[#FF5500]/40 px-2.5 py-0.5 text-[#FF5500] font-black uppercase tracking-wider rounded-lg shadow-sm">
                 {totalReadyCountVal} EN COLA
               </span>
             </div>
@@ -2338,7 +2706,7 @@ export default function App() {
             {['ALL', 'S', 'A', 'B', 'C'].map(tier => (
               <button 
                 key={tier}
-                className={`py-1 text-[9px] font-mono font-black uppercase tracking-wider border transition-all cursor-pointer ${
+                className={`py-1.5 text-[9px] font-mono font-black uppercase tracking-wider border rounded-lg transition-all cursor-pointer ${
                   selectedTier === tier 
                     ? 'bg-[#FF5500] text-black border-[#FF5500] shadow-[0_0_10px_rgba(255,85,0,0.4)]' 
                     : 'bg-[#121622] text-neutral-400 border-white/10 hover:border-white/30 hover:text-white'
@@ -2354,7 +2722,7 @@ export default function App() {
           <div className="relative mb-3.5">
             <input 
               type="text" 
-              className="w-full bg-[#121622] border border-white/15 text-xs font-mono text-white placeholder-neutral-500 px-3 py-2 pl-8 focus:outline-none focus:border-[#FF5500] focus:ring-1 focus:ring-[#FF5500] transition-all rounded-none"
+              className="w-full bg-[#121622] border border-white/15 text-xs font-mono text-white placeholder-neutral-500 px-3 py-2 pl-8 focus:outline-none focus:border-[#FF5500] focus:ring-1 focus:ring-[#FF5500] transition-all rounded-xl"
               placeholder="BUSCAR JUGADOR..." 
               autoComplete="off"
               value={searchQuery}
@@ -2373,7 +2741,7 @@ export default function App() {
                 return (
                   <div key={tier} className="space-y-1.5">
                     <div className="flex items-center gap-2">
-                      <span className={`text-[9px] font-black px-2 py-0.5 border ${
+                      <span className={`text-[9px] font-black px-2 py-0.5 border rounded ${
                         tier === 'S' ? 'border-red-500/80 text-red-400 bg-red-950/30' :
                         tier === 'A' ? 'border-[#FF5500]/80 text-[#FF5500] bg-orange-950/30' :
                         tier === 'B' ? 'border-blue-500/80 text-blue-400 bg-blue-950/30' :
@@ -2392,52 +2760,59 @@ export default function App() {
                         return (
                           <div 
                             key={player.discordId}
-                            className={`p-2.5 bg-[#121622]/90 border transition-all flex items-center justify-between gap-2 rounded-none group ${
+                            className={`p-2.5 bg-[#121622]/90 border transition-all flex items-center justify-between gap-2 rounded-xl group ${
                               isPendingThis 
                                 ? 'border-[#FF5500] bg-[#FF5500]/15 ring-2 ring-[#FF5500]/50 shadow-[0_0_15px_rgba(255,85,0,0.3)] animate-pulse' 
-                                : 'border-white/10 hover:border-white/30 hover:bg-[#161C2C]'
+                                : 'border-white/10 hover:border-[#FF5500]/50 hover:bg-[#161C2C]'
                             }`}
                           >
                             <div className="flex items-center gap-2.5 overflow-hidden">
                               <div className="relative flex-shrink-0">
                                 <img 
-                                  className="w-7 h-7 rounded-none border border-white/20 object-cover" 
+                                  className="w-8 h-8 rounded-full border border-white/20 object-cover" 
                                   src={avatarURL} 
                                   alt="Avatar" 
                                 />
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 border border-black absolute -bottom-0.5 -right-0.5" title="En línea" />
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-black absolute -bottom-0.5 -right-0.5" title="En línea" />
                               </div>
                               <div className="min-w-0">
                                 <p className="text-[11px] font-bold text-white leading-tight truncate group-hover:text-[#FF5500] transition-colors">
                                   {player.discordUser?.displayName || player.faceit_nickname}
                                 </p>
-                                <a 
-                                  href={`https://www.faceit.com/es/players/${player.faceit_nickname}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-[9px] text-neutral-400 hover:text-[#FF5500] hover:underline block leading-none mt-0.5 font-mono truncate"
-                                  title="Ver perfil de Faceit"
-                                >
-                                  {player.faceit_nickname} ↗
-                                </a>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <a 
+                                    href={`https://www.faceit.com/es/players/${player.faceit_nickname}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[9px] text-neutral-400 hover:text-[#FF5500] hover:underline leading-none font-mono truncate"
+                                    title="Ver perfil de Faceit"
+                                  >
+                                    {player.faceit_nickname} ↗
+                                  </a>
+                                  {player.faceit_elo && (
+                                    <span className="text-[8px] text-neutral-400 bg-black/60 px-1 py-0.2 rounded border border-white/10">
+                                      {player.faceit_elo} ELO
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
 
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className={`text-[9px] font-black px-1.5 py-0.5 border font-mono ${
+                              <span className={`text-[9px] font-black px-1.5 py-0.5 border font-mono rounded ${
                                 player.faceit_level === 10 ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.5)]' :
                                 player.faceit_level >= 8 ? 'bg-gradient-to-r from-[#FF5500] to-amber-600 text-white border-orange-500/80 shadow-[0_0_6px_rgba(255,85,0,0.4)]' :
                                 player.faceit_level >= 5 ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white border-blue-500/80' :
                                 'bg-neutral-800 text-neutral-300 border-neutral-700'
                               }`}>
-                                L_{player.faceit_level}
+                                LVL {player.faceit_level}
                               </span>
 
-                              {currentUser?.isAdmin && (
+                              {currentUser?.isAdmin && !isConceptDemoMode && (
                                 <div className="flex gap-1">
                                   {/* Admin override select */}
                                   <select 
-                                    className="bg-[#1A2030] border border-white/20 text-[9px] font-mono text-neutral-300 px-1 py-0.5 focus:outline-none focus:text-white focus:border-[#FF5500] rounded-none cursor-pointer"
+                                    className="bg-[#1A2030] border border-white/20 text-[9px] font-mono text-neutral-300 px-1 py-0.5 focus:outline-none focus:text-white focus:border-[#FF5500] rounded cursor-pointer"
                                     value={player.mixton_tier_override || ''}
                                     onChange={(e) => handleOverridePlayerTier(player.discordId, e.target.value)}
                                   >
@@ -2450,19 +2825,19 @@ export default function App() {
 
                                   {/* Directly assign to team */}
                                   <select 
-                                    className="bg-[#1A2030] border border-white/20 text-[9px] font-mono text-neutral-300 px-1 py-0.5 focus:outline-none focus:text-white focus:border-[#FF5500] rounded-none cursor-pointer"
+                                    className="bg-[#1A2030] border border-white/20 text-[9px] font-mono text-neutral-300 px-1 py-0.5 focus:outline-none focus:text-white focus:border-[#FF5500] rounded cursor-pointer"
                                     value=""
                                     onChange={(e) => handleAssignPlayerToTeam(player.discordId, e.target.value)}
                                   >
                                     <option value="">ASIG...</option>
-                                    {lobbyState.teams.map(t => (
+                                    {effectiveLobbyState.teams.map(t => (
                                       <option key={t.id} value={t.id}>{t.name.toUpperCase()}</option>
                                     ))}
                                   </select>
 
                                   {/* Remove player from queue */}
                                   <button
-                                    className="p-1 bg-red-950/60 border border-red-700/60 hover:bg-red-900 hover:text-white text-red-300 transition-colors rounded-none cursor-pointer"
+                                    className="p-1 bg-red-950/60 border border-red-700/60 hover:bg-red-900 hover:text-white text-red-300 transition-colors rounded cursor-pointer"
                                     onClick={() => handleRemovePlayerFromQueue(player.discordId, player.discordUser?.displayName || player.faceit_nickname)}
                                     title="Quitar de la Cola"
                                   >
@@ -2476,14 +2851,14 @@ export default function App() {
                                 isPendingThis ? (
                                   <div className="flex gap-1">
                                     <button 
-                                      className="bg-emerald-500 text-black border border-emerald-400 font-mono text-[9px] font-black px-2 py-0.5 hover:bg-emerald-400 transition-colors shadow-sm cursor-pointer"
+                                      className="bg-emerald-500 text-black border border-emerald-400 font-mono text-[9px] font-black px-2 py-0.5 hover:bg-emerald-400 transition-colors shadow-sm cursor-pointer rounded"
                                       onClick={handleConfirmPendingPlayer}
                                       title="Confirmar elección"
                                     >
                                       ✓ OK
                                     </button>
                                     <button 
-                                      className="bg-red-950 border border-red-500 text-red-300 font-mono text-[9px] font-black px-1.5 py-0.5 hover:bg-red-900 transition-colors cursor-pointer"
+                                      className="bg-red-950 border border-red-500 text-red-300 font-mono text-[9px] font-black px-1.5 py-0.5 hover:bg-red-900 transition-colors cursor-pointer rounded"
                                       onClick={handleCancelPendingPlayer}
                                       title="Cancelar"
                                     >
@@ -2492,8 +2867,14 @@ export default function App() {
                                   </div>
                                 ) : (
                                   <button 
-                                    className="bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] text-black font-mono text-[9px] font-black tracking-wider px-2.5 py-1 transition-all shadow-[0_0_10px_rgba(255,85,0,0.3)] hover:scale-105 active:scale-95 cursor-pointer"
-                                    onClick={() => handleSelectPendingPlayer(player)}
+                                    className="bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] text-black font-mono text-[9px] font-black tracking-wider px-2.5 py-1 transition-all shadow-[0_0_10px_rgba(255,85,0,0.3)] hover:scale-105 active:scale-95 cursor-pointer rounded-lg"
+                                    onClick={() => {
+                                      if (isConceptDemoMode) {
+                                        showToast(`🎯 [Simulación] Seleccionaste a ${player.faceit_nickname} (Nivel ${player.faceit_level}) para EQUIPO FÉNIX`, 'success');
+                                      } else {
+                                        handleSelectPendingPlayer(player);
+                                      }
+                                    }}
                                     title="Elegir para tu equipo"
                                   >
                                     ELEGIR
@@ -2509,10 +2890,17 @@ export default function App() {
                 );
               })
             ) : (
-              <div className="text-center py-10 border border-dashed border-white/10 bg-[#121622]/40">
+              <div className="text-center py-10 border border-dashed border-white/10 bg-[#121622]/40 rounded-xl p-4">
                 <Users className="w-8 h-8 text-neutral-600 mx-auto mb-2" />
                 <p className="text-xs text-neutral-400 font-mono uppercase font-bold">SIN JUGADORES EN COLA</p>
                 <p className="text-[10px] text-neutral-500 font-mono mt-1">Usa /mixton_listo en Discord para sumarte</p>
+                <button
+                  type="button"
+                  onClick={() => setIsConceptDemoMode(true)}
+                  className="mt-3 px-3 py-1.5 bg-[#FF5500]/20 hover:bg-[#FF5500]/30 border border-[#FF5500]/50 text-[#FF5500] text-[10px] font-mono font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
+                >
+                  ⚡ Activar Simulación Mockup
+                </button>
               </div>
             )}
           </div>
@@ -2521,726 +2909,1026 @@ export default function App() {
         {/* Center & Right Panel */}
         <section className="lg:col-span-3 flex flex-col gap-5 lg:overflow-y-auto lg:max-h-[calc(100vh-140px)] pr-2">
           
-          {/* Hero Live Action Status Card */}
-          {(() => {
-            const currentActiveTeamId = lobbyState.pickSequence?.[lobbyState.currentPickIndex] || lobbyState.pickOrder[lobbyState.currentPickIndex % (lobbyState.pickOrder.length || 1)];
-            const activeTeam = lobbyState.teams.find(t => t.id === currentActiveTeamId);
-            const isTeamTurn = lobbyState.draftStarted && !lobbyState.draftFinished && activeTeam;
-            const isVetoActive = lobbyState.mapVeto && (lobbyState.mapVeto.active || lobbyState.mapVeto.completed);
-
-            if (isVetoActive) {
-              const veto = lobbyState.mapVeto!;
-              const teamA = lobbyState.teams.find(t => t.id === veto.teamIdA);
-              const teamB = lobbyState.teams.find(t => t.id === veto.teamIdB);
-              return (
-                <div className="p-4 bg-gradient-to-r from-red-950/40 via-[#10141E] to-[#FF5500]/20 border border-[#FF5500]/40 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#FF5500] text-black flex items-center justify-center font-black text-xl shadow-[0_0_15px_rgba(255,85,0,0.5)] flex-shrink-0">
-                      🎯
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black uppercase text-[#FF5500] tracking-widest bg-[#FF5500]/15 border border-[#FF5500]/30 px-2 py-0.5">
-                          FASE DE VETO DE MAPAS CS2
-                        </span>
-                        <span className="text-[10px] text-neutral-400">
-                          {veto.completed ? '🏆 MAPA DECIDIDO' : `Baneo ${veto.currentBanIndex + 1} de ${veto.banSequence?.length || 6}`}
-                        </span>
-                      </div>
-                      <h3 className="text-sm sm:text-base font-black text-white uppercase mt-0.5">
-                        {teamA ? getTeamName(teamA) : 'EQUIPO A'} <span className="text-[#FF5500]">VS</span> {teamB ? getTeamName(teamB) : 'EQUIPO B'}
-                      </h3>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-neutral-400 bg-black/60 px-2.5 py-1 border border-white/10">Modal de Veto Activo en Pantalla</span>
-                  </div>
-                </div>
-              );
-            }
-
-            if (isTeamTurn) {
-              const captainNick = activeTeam.captain?.discordUser?.displayName || activeTeam.captain?.faceit_nickname || 'Capitán';
-              const isMyTurn = (activeTeam.captain && currentUser && activeTeam.captain.discordId === currentUser.userId);
-              const totalPicks = lobbyState.pickSequence?.length || 8;
-              const currentPickNum = (lobbyState.currentPickIndex || 0) + 1;
-
-              return (
-                <div className="p-4 sm:p-5 bg-gradient-to-r from-[#FF5500]/20 via-[#121622] to-[#00A3FF]/20 border-2 border-[#FF5500]/60 shadow-[0_0_30px_rgba(255,85,0,0.25)] flex flex-col sm:flex-row items-center justify-between gap-4 font-mono relative overflow-hidden">
-                  <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-[#FF5500]/10 to-transparent pointer-events-none" />
-                  <div className="flex items-center gap-3.5 relative z-10">
-                    <div className="w-12 h-12 bg-[#FF5500] text-black font-black flex items-center justify-center text-2xl shadow-[0_0_20px_rgba(255,85,0,0.6)] animate-pulse flex-shrink-0">
-                      🔥
-                    </div>
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[10px] font-black uppercase text-[#FF5500] tracking-widest bg-[#FF5500]/20 border border-[#FF5500]/40 px-2 py-0.5">
-                          DRAFT EN VIVO // TURNO DE ELECCIÓN
-                        </span>
-                        <span className="text-[10px] font-bold text-neutral-400 bg-black/60 px-2 py-0.5 border border-white/10">
-                          ELECCIÓN {currentPickNum} DE {totalPicks}
-                        </span>
-                      </div>
-                      <h3 className="text-base sm:text-lg font-black text-white uppercase mt-1">
-                        Capitán <span className="text-[#FF5500]">{captainNick}</span> eligiendo para <span className="text-white underline">{getTeamName(activeTeam)}</span>
-                      </h3>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 relative z-10">
-                    {isMyTurn ? (
-                      <div className="flex items-center gap-2 bg-[#FF5500] text-black px-4 py-2 font-black text-xs uppercase tracking-wider animate-bounce shadow-lg">
-                        <span>👉</span>
-                        <span>¡ES TU TURNO! HAZ CLIC EN "ELEGIR"</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 bg-black/70 border border-white/20 text-neutral-300 px-3.5 py-2 text-xs font-bold">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#FF5500] animate-ping" />
-                        <span>Esperando selección de {captainNick}...</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            }
-
-            if (lobbyState.draftFinished) {
-              return (
-                <div className="p-4 bg-gradient-to-r from-emerald-950/40 via-[#10141E] to-emerald-950/40 border border-emerald-500/50 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-emerald-500 text-black flex items-center justify-center font-black text-xl shadow-[0_0_15px_rgba(16,185,129,0.5)] flex-shrink-0">
-                      ✓
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black uppercase text-emerald-400 tracking-widest bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5">
-                          DRAFT COMPLETADO
-                        </span>
-                        <span className="text-[10px] text-neutral-400">
-                          Equipos listos para el Sorteo de Enfrentamientos y Veto de Mapas
-                        </span>
-                      </div>
-                      <h3 className="text-sm sm:text-base font-black text-white uppercase mt-0.5">
-                        Todas las escuadras están completas con 5 jugadores
-                      </h3>
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-
-            return (
-              <div className="p-3.5 bg-[#0D1017]/95 border border-white/10 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
+          {/* TOURNAMENT BROADCAST CS2 MAP VETO STAGE */}
+          {arenaStageTab === 'veto' ? (
+            <div className="bg-[#0A0D14]/95 border-2 border-white/10 rounded-2xl shadow-2xl p-4 sm:p-6 backdrop-blur-md font-mono flex flex-col gap-4">
+              {/* Veto Header */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-b border-white/10 pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-[#161C2C] border border-white/15 text-[#FF5500] flex items-center justify-center font-black text-base flex-shrink-0">
-                    <Swords className="w-4 h-4 text-[#FF5500]" />
+                  <div className="w-11 h-11 bg-[#FF5500] text-black flex items-center justify-center font-black rounded-xl shadow-[0_0_20px_rgba(255,85,0,0.5)] flex-shrink-0">
+                    <Flame className="w-6 h-6 animate-pulse" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-black uppercase text-[#FF5500] tracking-widest bg-[#FF5500]/10 border border-[#FF5500]/30 px-2 py-0.5">
-                        SALA PRE-DRAFT
-                      </span>
-                      <span className="text-[10px] text-neutral-400">
-                        {totalReadyCountVal} / {numTeamsSelect * 5} JUGADORES LISTOS
-                      </span>
-                    </div>
-                    <span className="text-xs font-bold text-white block mt-0.5">
-                      {totalReadyCountVal >= numTeamsSelect * 5 
-                        ? '¡Convocatoria completa! Listo para configurar capitanes e iniciar el draft' 
-                        : `Faltan ${Math.max(0, numTeamsSelect * 5 - totalReadyCountVal)} jugadores para completar los equipos`}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-          
-          {/* Admin Dashboard Section */}
-          {currentUser?.isAdmin && (
-            <div className="p-4 sm:p-5 bg-[#0D1017]/95 border border-white/10 shadow-2xl rounded-none flex flex-col gap-4 relative">
-              <div className="border-b border-white/10 pb-3 flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-black italic tracking-tighter uppercase text-white flex items-center gap-2">
-                    <ShieldAlert className="w-4 h-4 text-[#FF5500]" /> PANEL DE CONTROL DE ADMINISTRACIÓN
-                  </h3>
-                  <p className="text-[9px] font-mono text-neutral-400 uppercase tracking-widest mt-0.5">
-                    Gestión directa de equipos, cola de jugadores, órdenes de elección y despliegues
-                  </p>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 font-mono text-xs">
-                {/* 1. Setup Teams Count */}
-                <div className="p-3 bg-[#161616] border border-[#222] flex flex-col justify-between gap-3">
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-neutral-400 block mb-1">CANTIDAD DE EQUIPOS</label>
-                    <select 
-                      className="w-full bg-[#222] border border-[#333] text-xs font-mono text-white px-2 py-1 focus:outline-none focus:border-white rounded-none cursor-pointer"
-                      value={numTeamsSelect}
-                      disabled={lobbyState.draftStarted || lobbyState.draftFinished}
-                      onChange={(e) => setNumTeamsSelect(parseInt(e.target.value))}
-                    >
-                      <option value="2">2 EQUIPOS (10 JUGADORES)</option>
-                      <option value="3">3 EQUIPOS (15 JUGADORES)</option>
-                      <option value="4">4 EQUIPOS (20 JUGADORES)</option>
-                      <option value="5">5 EQUIPOS (25 JUGADORES)</option>
-                      <option value="6">6 EQUIPOS (30 JUGADORES)</option>
-                    </select>
-                  </div>
-                  <button 
-                    className="w-full bg-white text-black font-bold uppercase py-1 border border-white hover:bg-neutral-200 transition-colors disabled:opacity-30 disabled:hover:bg-white"
-                    onClick={handleSetupTeams}
-                    disabled={lobbyState.draftStarted || lobbyState.draftFinished}
-                  >
-                    CONFIGURAR EQUIPOS
-                  </button>
-                </div>
-
-                {/* 2. Reorder Capitanes / Pick Order */}
-                <div className="p-3 bg-[#161616] border border-[#222] flex flex-col gap-2">
-                  <label className="text-[10px] font-black uppercase text-neutral-400 block">ORDEN DE ELECCIÓN</label>
-                  <div className="border border-[#222] bg-[#111] max-h-24 overflow-y-auto p-1.5 space-y-1">
-                    {!lobbyState.draftStarted && !lobbyState.draftFinished && teamsWithCaptains.length > 0 ? (
-                      localPickOrder.map((teamId, index) => {
-                        const team = lobbyState.teams.find(t => t.id === teamId);
-                        if (!team) return null;
-                        return (
-                          <div 
-                            key={teamId} 
-                            className={`flex items-center justify-between text-[9px] p-1 border transition-all duration-75 ${
-                              isShuffling 
-                                ? 'border-[#FF5500] bg-[#FF5500]/5 text-[#FF5500] scale-[0.98] blur-[0.2px] animate-pulse' 
-                                : 'bg-[#181818] border-[#222] text-white'
-                            }`}
-                          >
-                            <span className="font-bold">{index + 1}. {getTeamName(team).toUpperCase()}</span>
-                            <div className="flex gap-1">
-                              <button 
-                                className="p-0.5 bg-[#252525] border border-[#333] hover:border-white text-neutral-400 hover:text-white disabled:opacity-20"
-                                onClick={() => handleMoveOrder(index, -1)} 
-                                disabled={index === 0 || isShuffling}
-                              >
-                                <ArrowUp className="w-2.5 h-2.5" />
-                              </button>
-                              <button 
-                                className="p-0.5 bg-[#252525] border border-[#333] hover:border-white text-neutral-400 hover:text-white disabled:opacity-20"
-                                onClick={() => handleMoveOrder(index, 1)} 
-                                disabled={index === localPickOrder.length - 1 || isShuffling}
-                              >
-                                <ArrowDown className="w-2.5 h-2.5" />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      (lobbyState.draftStarted || lobbyState.draftFinished) ? (
-                        lobbyState.pickOrder.map((teamId, index) => {
-                          const team = lobbyState.teams.find(t => t.id === teamId);
-                          if (!team) return null;
-                          const currentActiveTeamId = lobbyState.pickSequence?.[lobbyState.currentPickIndex] || lobbyState.pickOrder[lobbyState.currentPickIndex % (lobbyState.pickOrder.length || 1)];
-                          const isCurrent = lobbyState.draftStarted && currentActiveTeamId === teamId;
-                          return (
-                            <div key={teamId} className={`flex items-center justify-between text-[9px] p-1 border ${
-                              isCurrent ? 'border-[#FF5500] bg-[#FF5500]/5 text-[#FF5500]' : 'border-[#222] bg-[#151515] text-neutral-400'
-                            }`}>
-                              <span>{index + 1}. {getTeamName(team).toUpperCase()}</span>
-                              {isCurrent && <span className="font-bold animate-pulse text-[8px] bg-[#FF5500] text-black px-1">TURNO</span>}
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <p className="text-[9px] text-neutral-600 text-center py-2">ASIGNA CAPITANES PRIMERO</p>
-                      )
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button 
-                      className="bg-transparent border border-neutral-600 hover:border-white text-white font-bold uppercase py-0.5 text-[10px] transition-colors disabled:opacity-30"
-                      onClick={handleSavePickOrder}
-                      disabled={lobbyState.draftStarted || lobbyState.draftFinished || !isSavingOrder || teamsWithCaptains.length === 0 || isShuffling}
-                    >
-                      GUARDAR ORDEN
-                    </button>
-                    <button 
-                      className="bg-transparent border border-neutral-600 hover:border-white text-white font-bold uppercase py-0.5 text-[10px] transition-colors disabled:opacity-30"
-                      onClick={handleRandomizeOrder}
-                      disabled={lobbyState.draftStarted || lobbyState.draftFinished || teamsWithCaptains.length === 0 || isShuffling}
-                    >
-                      MEZCLAR
-                    </button>
-                  </div>
-                </div>
-
-                {/* 3. Actions (Start, Reset, Command Toggle) */}
-                <div className="p-3 bg-[#161616] border border-[#222] flex flex-col justify-between gap-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <button 
-                      className="bg-white text-black font-bold uppercase text-[10px] py-1 border border-white hover:bg-neutral-200 transition-colors disabled:opacity-30 disabled:hover:bg-white flex items-center justify-center gap-1.5"
-                      onClick={handleStartDraft}
-                      disabled={lobbyState.draftStarted || lobbyState.draftFinished || !hasCaptainsForAll}
-                    >
-                      <Play className="w-3 h-3 fill-current" />
-                      {lobbyState.draftStarted ? 'EN CURSO' : 'INICIAR DRAFT'}
-                    </button>
-                    <button 
-                      className="bg-red-950 border border-[#FF3E3E] text-[#FF3E3E] font-bold uppercase text-[10px] py-1 hover:bg-red-900 transition-colors flex items-center justify-center gap-1.5"
-                      onClick={handleResetLobby}
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      REINICIAR
-                    </button>
-                  </div>
-
-                  {/* Botón de Asignación Automática y Balanceo */}
-                  <button 
-                    className="w-full bg-[#1B9AAA]/20 hover:bg-[#1B9AAA]/30 border border-[#1B9AAA] text-[#1B9AAA] font-bold uppercase text-[10px] py-1.5 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-30 cursor-pointer shadow-[0_0_10px_rgba(27,154,170,0.15)]"
-                    onClick={handleAutoAssignPlayers}
-                    disabled={!hasCaptainsForAll || lobbyState.draftFinished || isAutoAssigning}
-                    title="Asigna y balancea automáticamente a los jugadores disponibles por Tier / ELO (requiere capitanes asignados)"
-                  >
-                    <Zap className="w-3.5 h-3.5 fill-current" />
-                    {isAutoAssigning ? 'BALANCEANDO EQUIPOS...' : '⚡ AUTO-ASIGNAR JUGADORES'}
-                  </button>
-                  
-                  <button 
-                    className="w-full bg-transparent border border-yellow-600 hover:border-yellow-500 text-yellow-500 font-bold uppercase text-[10px] py-0.5 transition-colors"
-                    onClick={handleResetPlayers}
-                  >
-                    VACIAR COLA (TODOS NO LISTO)
-                  </button>
-
-                  <div className="flex items-center justify-between border-t border-[#222] pt-2 mt-1">
-                    <span className="text-[10px] font-bold text-neutral-400">COMANDO /mixton_listo</span>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        className="sr-only peer"
-                        checked={commandEnabled}
-                        onChange={handleToggleMixtonCommand}
-                      />
-                      <div className="w-8 h-4 bg-[#2D2D2D] peer-focus:outline-none rounded-none peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-400 after:border-neutral-400 after:border after:h-3 after:w-3.5 after:transition-all peer-checked:bg-[#FF5500] peer-checked:after:bg-white peer-checked:after:border-white" />
-                    </label>
-                  </div>
-                </div>
-
-                {/* 4. Map Pool CS2 */}
-                <div className="p-3 bg-[#161616] border border-[#222] flex flex-col justify-between gap-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] font-black uppercase text-neutral-400 block">POOL DE MAPAS VETO</label>
-                      <span className="text-[9px] font-bold text-[#FF5500] bg-[#FF5500]/10 border border-[#FF5500]/30 px-1.5 py-0.5">
-                        {(localMapCatalog.length > 0 ? localMapCatalog : (lobbyState.mapCatalog || [])).filter(m => m.active).length} ACTIVOS
-                      </span>
-                    </div>
-                    <p className="text-[9px] text-neutral-500 uppercase leading-relaxed mb-2">
-                      Configura qué mapas y cuántos se jugarán en la fase de veto.
+                    <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-white flex items-center gap-2">
+                      FASE DE VETO DE MAPAS CS2 <span className="text-[#FF5500]">// MACHUPEEK ARENA</span>
+                    </h3>
+                    <p className="text-[10px] text-neutral-400">
+                      Baneo alternado por turnos hasta definir el mapa competitivo oficial
                     </p>
-                    <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto p-1.5 bg-[#111] border border-[#222]">
-                      {(localMapCatalog.length > 0 ? localMapCatalog : (lobbyState.mapCatalog || [])).filter(m => m.active).map(m => (
-                        <span key={m.id} className="text-[8px] bg-neutral-800 text-neutral-300 border border-neutral-700 px-1.5 py-0.5 truncate max-w-[85px]">
-                          {m.name}
-                        </span>
-                      ))}
-                    </div>
                   </div>
+                </div>
 
-                  <button 
-                    className="w-full bg-[#FF5500] text-black font-black uppercase text-[10px] py-1.5 hover:bg-[#e04c00] transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-[0_0_8px_rgba(255,85,0,0.2)]"
-                    onClick={() => {
-                      if (lobbyState.mapCatalog && Array.isArray(lobbyState.mapCatalog)) {
-                        setLocalMapCatalog(lobbyState.mapCatalog);
-                      }
-                      setIsMapManagerOpen(true);
-                    }}
+                {/* Matchup Badges */}
+                <div className="flex items-center gap-2 bg-[#090C12] px-4 py-2 border border-white/15 rounded-xl shadow-md text-xs">
+                  <span className="font-black text-[#FF5500] tracking-wider">
+                    EQUIPO FÉNIX <span className="text-[9px] font-normal text-neutral-400">(Cap. s4vitar)</span>
+                  </span>
+                  <span className="text-white font-black text-[10px] px-2 py-0.5 bg-neutral-800 border border-neutral-700 rounded">
+                    VS
+                  </span>
+                  <span className="font-black text-[#00A3FF] tracking-wider">
+                    EQUIPO KOBRA <span className="text-[9px] font-normal text-neutral-400">(Cap. shadow)</span>
+                  </span>
+                </div>
+
+                {/* Veto controls */}
+                <div className="flex items-center gap-2">
+                  {isConceptDemoMode && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDemoMapVeto(DEMO_CONCEPT_MAP_VETO);
+                        showToast('↺ Simulación de Veto de Mapas reiniciada', 'info');
+                      }}
+                      className="text-xs text-neutral-300 hover:text-white border border-white/15 hover:border-white/40 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer bg-white/5"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Reiniciar Veto</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setArenaStageTab('draft')}
+                    className="text-xs text-[#FF5500] hover:text-white border border-[#FF5500]/40 hover:border-[#FF5500] px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer bg-[#FF5500]/10"
                   >
-                    <Map className="w-3.5 h-3.5" />
-                    CONFIGURAR MAPAS
+                    <Swords className="w-3.5 h-3.5" />
+                    <span>Volver a Draft</span>
                   </button>
                 </div>
               </div>
-              
-              {/* Launch Match Sub-panel */}
-              <div className="border-t border-[#2D2D2D] pt-4 mt-2">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex-1 flex flex-col md:flex-row md:items-center gap-4 font-mono text-xs">
-                    <span className="text-[10px] font-black uppercase text-neutral-400 flex-shrink-0 flex items-center gap-1.5">
-                      <Volume2 className="w-4 h-4 text-neutral-400 animate-pulse" /> CREAR PARTIDA DISCORD
-                    </span>
-                    <div className="flex items-center gap-2 w-full max-w-lg">
-                      <select 
-                        className="flex-1 bg-[#1A1A1A] border border-[#2D2D2D] text-xs font-mono text-white px-2 py-1.5 focus:outline-none focus:border-white rounded-none cursor-pointer"
-                        value={matchTeamA}
-                        onChange={(e) => setMatchTeamA(e.target.value)}
-                      >
-                        <option value="">-- ELIGE EQUIPO A --</option>
-                        {completedTeams.map(t => (
-                          <option key={t.id} value={t.id}>{getTeamName(t).toUpperCase()} ({getAvgEloMatch(t)} ELO)</option>
-                        ))}
-                      </select>
-                      <span className="text-neutral-500 font-bold uppercase text-[9px]">VS</span>
-                      <select 
-                        className="flex-1 bg-[#1A1A1A] border border-[#2D2D2D] text-xs font-mono text-white px-2 py-1.5 focus:outline-none focus:border-white rounded-none cursor-pointer"
-                        value={matchTeamB}
-                        onChange={(e) => setMatchTeamB(e.target.value)}
-                      >
-                        <option value="">-- ELIGE EQUIPO B --</option>
-                        {completedTeams.map(t => (
-                          <option key={t.id} value={t.id}>{getTeamName(t).toUpperCase()} ({getAvgEloMatch(t)} ELO)</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button 
-                      className="bg-transparent border border-neutral-600 hover:border-white text-white font-bold uppercase text-[10px] py-1.5 px-4 rounded-none transition-all disabled:opacity-30 cursor-pointer"
-                      disabled={completedTeams.length < 2 || isLaunchingMatch}
-                      onClick={handleOpenMatchupRoulette}
-                    >
-                      🎲 SORTEAR
-                    </button>
-                    <button 
-                      className="bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] hover:border-[#FF7733] text-white font-bold uppercase text-[10px] py-1.5 px-6 rounded-none transition-all disabled:opacity-30 cursor-pointer flex items-center gap-1.5"
-                      disabled={!matchTeamA || !matchTeamB || matchTeamA === matchTeamB || isLaunchingMatch || isStartingVeto}
-                      onClick={handleLaunchEncounterClick}
-                    >
-                      <Coins className="w-3.5 h-3.5" />
-                      {isStartingVeto ? 'INICIANDO VETO...' : 'LANZAR ENCUENTRO'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
-          {/* Teams Grid Title & Head-to-Head Banner */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
-            <div>
-              <h2 className="text-xl font-black italic tracking-tighter uppercase text-white flex items-center gap-2">
-                <Award className="w-5 h-5 text-[#FF5500]" /> ESCUADRAS RIVALES
-              </h2>
-              <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest">
-                {lobbyState.teams.length === 2 ? 'Enfrentamiento directo 5v5 CS2 // Fase de Draft' : `${lobbyState.teams.length} Equipos Participantes`}
-              </span>
-            </div>
-
-            {/* VS Showdown Bar (If 2 Teams) */}
-            {lobbyState.teams.length === 2 && (
-              <div className="flex items-center gap-2 bg-[#0D1017]/95 border border-white/10 px-3 py-1.5 font-mono shadow-md text-xs">
-                <span className="text-[#FF5500] font-black tracking-wider">{getTeamName(lobbyState.teams[0]).toUpperCase()}</span>
-                <span className="text-[10px] font-bold text-neutral-300 bg-black/60 px-2 py-0.5 border border-white/10">
-                  AVG {getAverageElo(lobbyState.teams[0])}
-                </span>
-                <span className="text-white font-black text-[10px] px-1.5 py-0.5 bg-neutral-900 border border-neutral-700">
-                  VS
-                </span>
-                <span className="text-[10px] font-bold text-neutral-300 bg-black/60 px-2 py-0.5 border border-white/10">
-                  AVG {getAverageElo(lobbyState.teams[1])}
-                </span>
-                <span className="text-[#00A3FF] font-black tracking-wider">{getTeamName(lobbyState.teams[1]).toUpperCase()}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Live teams stay intentionally independent from completed matches. */}
-          <div className="pb-6">
-            {/* Teams Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {lobbyState.teams.map((team, tIdx) => {
-                const currentActiveTeamId = lobbyState.pickSequence?.[lobbyState.currentPickIndex] || lobbyState.pickOrder[lobbyState.currentPickIndex % (lobbyState.pickOrder.length || 1)];
-                const isCurrentTurn = lobbyState.draftStarted && !lobbyState.draftFinished && currentActiveTeamId === team.id;
-                const avgElo = getAverageElo(team);
-                const isTeamA = tIdx === 0;
-                const isTeamB = tIdx === 1;
-
-                // Render Captain Slot
-                let captainElement;
-                if (team.captain) {
-                  const capAvatar = team.captain.discordUser?.avatarURL || 'https://cdn.discordapp.com/embed/avatars/0.png';
-                  captainElement = (
-                    <div className={`p-3 bg-[#131722]/90 border-2 flex items-center justify-between gap-3 relative overflow-hidden transition-all shadow-md ${
-                      isTeamA 
-                        ? 'border-amber-400/80 bg-gradient-to-r from-amber-950/20 to-[#131722]' 
-                        : 'border-cyan-400/80 bg-gradient-to-r from-cyan-950/20 to-[#131722]'
-                    }`}>
-                      {/* Top corner Captain Badge */}
-                      <div className={`absolute right-0 top-0 text-[8px] font-black px-2 py-0.5 uppercase tracking-wider font-mono flex items-center gap-1 shadow-sm ${
-                        isTeamA ? 'bg-amber-400 text-black' : 'bg-cyan-400 text-black'
-                      }`}>
-                        <Crown className="w-3 h-3 fill-current" />
-                        <span>CAPITÁN</span>
-                      </div>
-
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="relative flex-shrink-0">
-                          <img 
-                            className={`w-9 h-9 rounded-none border-2 object-cover ${
-                              isTeamA ? 'border-amber-400' : 'border-cyan-400'
-                            }`} 
-                            src={capAvatar} 
-                            alt="Capitán" 
-                          />
-                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-black absolute -bottom-0.5 -right-0.5" />
+              {/* Status Banner */}
+              {(() => {
+                const veto = effectiveLobbyState.mapVeto || demoMapVeto;
+                if (veto.completed && veto.chosenMap) {
+                  return (
+                    <div className="bg-gradient-to-r from-emerald-950/80 via-emerald-900/40 to-emerald-950/80 border-2 border-emerald-400 rounded-xl p-4 sm:p-5 text-center flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-emerald-500 text-black font-black flex items-center justify-center text-2xl rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.6)]">
+                          <Trophy className="w-6 h-6 text-black fill-current" />
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-black text-white leading-tight truncate">
-                            {team.captain.discordUser?.displayName || team.captain.faceit_nickname}
-                          </p>
-                          <a 
-                            href={`https://www.faceit.com/es/players/${team.captain.faceit_nickname}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[9px] text-neutral-400 hover:text-[#FF5500] hover:underline block leading-none mt-1 font-mono truncate"
-                            title="Abrir perfil de Faceit"
-                          >
-                            {team.captain.faceit_nickname} ↗
-                          </a>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-[10px] font-black px-2 py-0.5 border font-mono ${
-                          team.captain.faceit_level === 10
-                            ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white border-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
-                            : team.captain.faceit_level >= 8
-                              ? 'bg-gradient-to-r from-[#FF5500] to-amber-600 text-white border-orange-500 shadow-[0_0_6px_rgba(255,85,0,0.4)]'
-                              : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white border-blue-500'
-                        }`}>
-                          LVL {team.captain.faceit_level}
-                        </span>
-                        {currentUser?.isAdmin && (
-                          <button 
-                            className="p-1 bg-red-950/80 border border-red-500/80 hover:bg-red-900 text-red-300 hover:text-white transition-colors cursor-pointer"
-                            onClick={() => handleRemoveCaptain(team.id)}
-                            title="Remover Capitán"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                } else {
-                  captainElement = (
-                    <div className="p-3 bg-[#10141E]/60 border-2 border-dashed border-white/15 flex items-center justify-between gap-3">
-                      <span className="text-[10px] text-neutral-500 font-mono font-black uppercase tracking-wider flex items-center gap-1.5">
-                        <span>⚠️</span> SIN CAPITÁN ASIGNADO
-                      </span>
-                      {currentUser?.isAdmin && (
-                        <button 
-                          className="bg-white hover:bg-neutral-200 text-black font-mono text-[9px] font-black uppercase tracking-widest px-3 py-1.5 transition-colors cursor-pointer shadow-md"
-                          onClick={() => handleOpenCaptainModal(team.id, team.name)}
-                        >
-                          + ASIGNAR
-                        </button>
-                      )}
-                    </div>
-                  );
-                }
-
-                // Render Players Slots (4 slots)
-                const playerSlots = [];
-                let pendingRendered = false;
-                const isThisTeamTurn = isCurrentTurn;
-
-                for (let i = 0; i < 4; i++) {
-                  const player = team.players ? team.players[i] : null;
-                  if (player) {
-                    const avatar = player.discordUser?.avatarURL || 'https://cdn.discordapp.com/embed/avatars/0.png';
-                    playerSlots.push(
-                      <div key={player.discordId} className="p-2.5 bg-[#121622]/90 border border-white/10 hover:border-white/25 flex items-center justify-between gap-2.5 text-xs relative overflow-hidden transition-all group">
-                        <div className="flex items-center gap-2 overflow-hidden">
-                          <div className="relative flex-shrink-0">
-                            <img className="w-7 h-7 rounded-none border border-white/20 object-cover" src={avatar} alt="Avatar" />
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 absolute -bottom-0.5 -right-0.5 border border-black" />
-                          </div>
-                          <div className="min-w-0">
-                            <span className="text-[10px] text-white font-bold font-mono truncate block leading-tight group-hover:text-[#FF5500] transition-colors">
-                              {player.discordUser?.displayName || player.faceit_nickname}
-                            </span>
-                            <a 
-                              href={`https://www.faceit.com/es/players/${player.faceit_nickname}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[8px] text-neutral-400 hover:text-[#FF5500] hover:underline font-mono truncate mt-0.5 block leading-none"
-                              title="Ver perfil de Faceit"
-                            >
-                              {player.faceit_nickname} ↗
-                            </a>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <span className={`text-[9px] font-mono font-black px-1.5 py-0.5 border ${
-                            player.faceit_level === 10
-                              ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white border-red-500/80 shadow-[0_0_6px_rgba(239,68,68,0.4)]'
-                              : player.faceit_level >= 8
-                                ? 'bg-gradient-to-r from-[#FF5500] to-amber-600 text-white border-orange-500/80'
-                                : player.faceit_level >= 5
-                                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white border-blue-500/80'
-                                  : 'bg-neutral-800 text-neutral-300 border-neutral-700'
-                          }`}>
-                            L_{player.faceit_level}
+                        <div className="text-left">
+                          <span className="text-xs uppercase text-emerald-400 font-black tracking-widest block">
+                            🏆 MAPA FINAL DECIDIDO
                           </span>
-                          {currentUser?.isAdmin && (
-                            <button 
-                              className="p-1 bg-neutral-900 border border-white/10 hover:border-red-500 text-neutral-400 hover:text-red-400 transition-colors cursor-pointer"
-                              onClick={() => handleRemovePlayerFromTeam(team.id, player.discordId)}
-                              title="Remover Jugador"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          )}
+                          <span className="text-xl font-black text-white uppercase tracking-wider">
+                            {veto.chosenMap.name} ({veto.chosenMap.id})
+                          </span>
                         </div>
                       </div>
-                    );
-                  } else if (isThisTeamTurn && pendingPick && !pendingRendered) {
-                    const playerAvatar = pendingPick.discordUser?.avatarURL || 'https://cdn.discordapp.com/embed/avatars/0.png';
-                    playerSlots.push(
-                      <div key="pending-slot" className="p-2.5 bg-[#FF5500]/15 border-2 border-dashed border-[#FF5500] flex items-center justify-between gap-2.5 text-xs animate-pulse shadow-[0_0_15px_rgba(255,85,0,0.3)]">
-                        <div className="flex items-center gap-2 overflow-hidden">
-                          <img className="w-7 h-7 rounded-none border border-[#FF5500] object-cover" src={playerAvatar} alt="Avatar" />
-                          <div>
-                            <span className="text-[10px] text-white font-black font-mono truncate block">{pendingPick.discordUser?.displayName || pendingPick.faceit_nickname}</span>
-                            <span className="text-[8px] text-[#FF5500] font-bold block uppercase">Confirmación pendiente</span>
-                          </div>
-                        </div>
-                        <span className="text-[8px] font-mono font-black bg-[#FF5500] text-black px-2 py-0.5 uppercase tracking-wider">SELECCIÓN</span>
+                      <div className="text-xs font-bold text-emerald-300 bg-black/60 px-4 py-2 border border-emerald-500/40 rounded-lg">
+                        ¡Veto completado exitosamente! El servidor CS2 cargará este mapa.
                       </div>
-                    );
-                    pendingRendered = true;
-                  } else {
-                    // Render empty slot
-                    let emptySlotContent = isThisTeamTurn ? (
-                      <div className="py-1 text-center animate-pulse">
-                        <span className="text-[10px] font-black text-[#FF5500] font-mono uppercase tracking-wider flex items-center justify-center gap-1.5">
-                          <span>👉</span> ELIGIENDO COMPAÑERO...
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-[9px] text-neutral-500 font-mono font-bold uppercase tracking-wider">RANURA VACÍA</span>
-                    );
-
-                    if (currentUser?.isAdmin) {
-                      const assignablePlayers: Player[] = [];
-                      ['S', 'A', 'B', 'C'].forEach(tier => {
-                        (availablePlayers[tier] || []).forEach(p => {
-                          if (pendingPick && pendingPick.discordId === p.discordId) return;
-                          assignablePlayers.push(p);
-                        });
-                      });
-
-                      emptySlotContent = (
-                        <select 
-                          className="w-full bg-[#141A28] border border-dashed border-white/20 hover:border-white text-[9px] font-mono text-neutral-300 hover:text-white px-2 py-1.5 focus:outline-none focus:border-[#FF5500] rounded-none cursor-pointer text-center"
-                          value=""
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              handleAssignPlayerToTeam(e.target.value, team.id);
-                            }
-                          }}
-                        >
-                          <option value="">+ ASIGNAR JUGADOR...</option>
-                          {assignablePlayers.map(p => (
-                            <option key={p.discordId} value={p.discordId}>
-                              {(p.discordUser?.displayName || p.faceit_nickname).toUpperCase()} ({p.faceit_level})
-                            </option>
-                          ))}
-                        </select>
-                      );
-                    }
-                    
-                    playerSlots.push(
-                      <div key={`empty-${i}`} className={`p-2.5 border flex items-center justify-center ${
-                        isThisTeamTurn 
-                          ? 'bg-[#FF5500]/10 border-dashed border-[#FF5500]/70' 
-                          : 'bg-[#0B0E14] border-dashed border-white/10'
-                      }`}>
-                        {emptySlotContent}
-                      </div>
-                    );
-                  }
+                    </div>
+                  );
                 }
 
-                // Team color styling with high-contrast esports theme
-                const teamBg = isCurrentTurn 
-                  ? 'bg-gradient-to-b from-[#22140E] via-[#0E121B] to-[#0A0D14] border-white ring-2 ring-[#FF5500] shadow-[0_0_35px_rgba(255,85,0,0.35)]' 
-                  : isTeamA 
-                    ? 'bg-gradient-to-b from-[#1E120D] via-[#0E121B] to-[#0A0D14] border-[#FF5500]/60 shadow-[0_0_20px_rgba(255,85,0,0.15)]' 
-                    : isTeamB 
-                      ? 'bg-gradient-to-b from-[#0D182A] via-[#0E121B] to-[#0A0D14] border-[#00A3FF]/60 shadow-[0_0_20px_rgba(0,163,255,0.15)]' 
-                      : 'bg-[#0E121B] border-white/10';
-
+                const teamInTurnName = veto.currentBanIndex % 2 === 0 ? 'EQUIPO FÉNIX' : 'EQUIPO KOBRA';
                 return (
-                  <div key={team.id} className={`p-4 sm:p-5 border-2 shadow-2xl rounded-none relative flex flex-col gap-3.5 transition-all ${teamBg}`}>
-                    {/* Turn Active Badge */}
-                    {isCurrentTurn && (
-                      <div className="bg-[#FF5500] text-black font-black font-mono text-[9px] px-3 py-1 uppercase tracking-widest animate-pulse flex items-center gap-1.5 self-start shadow-md -mt-1 mb-1">
-                        <Flame className="w-3.5 h-3.5 fill-current" />
-                        <span>TURNO DE ELECCIÓN // ELIGE JUGADOR</span>
+                  <div className="bg-gradient-to-r from-[#FF5500]/20 via-[#10141E] to-[#00A3FF]/20 border-2 border-[#FF5500]/70 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0_0_25px_rgba(255,85,0,0.25)]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-[#FF5500] text-black font-black flex items-center justify-center text-xl rounded-lg shadow-md animate-pulse">
+                        🎯
                       </div>
-                    )}
-
-                    <div className="flex justify-between items-center border-b border-white/10 pb-2.5 font-mono">
-                      <div className="flex items-center gap-2">
-                        <h4 className={`text-base font-black italic tracking-tighter uppercase ${
-                          isTeamA ? 'text-[#FF5500]' : isTeamB ? 'text-[#00A3FF]' : 'text-white'
-                        }`}>
-                          {getTeamName(team)}
-                        </h4>
-                        {team.players && team.players.length > 0 && (
-                          <button
-                            className="px-2 py-0.5 bg-black/60 border border-white/20 hover:border-white text-neutral-300 hover:text-white text-[8px] font-black uppercase transition-colors cursor-pointer rounded-none"
-                            onClick={() => {
-                              const nicks = (team.players || []).map(p => p.faceit_nickname).filter(Boolean).join(', ');
-                              navigator.clipboard.writeText(nicks);
-                              showToast(`Nicks copiados: ${nicks}`, 'info');
-                            }}
-                            title="Copiar nicks de los jugadores para invitarlos en Faceit"
-                          >
-                            📋 Nicks
-                          </button>
-                        )}
-                        {currentUser?.isAdmin && (team.captain || (team.players && team.players.length > 0)) && (
-                          <button
-                            className="px-2 py-0.5 bg-red-950/80 border border-red-500/80 hover:bg-red-900 text-red-300 hover:text-white text-[8px] font-black uppercase transition-colors cursor-pointer rounded-none"
-                            onClick={() => handleClearTeam(team.id, team.name)}
-                            title="Vaciar Equipo"
-                          >
-                            Vaciar
-                          </button>
-                        )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black uppercase text-[#FF5500] tracking-widest bg-[#FF5500]/20 border border-[#FF5500]/40 px-2 py-0.5 rounded">
+                            👉 TURNO DE BANEO: {teamInTurnName}
+                          </span>
+                          <span className="text-[10px] text-neutral-400 bg-black/60 px-2 py-0.5 rounded border border-white/10">
+                            BANEO {veto.currentBanIndex + 1} DE 6
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm font-bold text-white mt-1">
+                          Haz clic sobre el mapa que deseas descartar para esta partida
+                        </p>
                       </div>
-                      <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 border ${
-                        isTeamA 
-                          ? 'bg-[#FF5500]/15 text-[#FF5500] border-[#FF5500]/40' 
-                          : isTeamB 
-                            ? 'bg-[#00A3FF]/15 text-[#00A3FF] border-[#00A3FF]/40' 
-                            : 'bg-black/60 text-neutral-400 border-white/10'
-                      }`}>
-                        AVG ELO: {avgElo}
-                      </span>
                     </div>
-                    
-                    <div className="flex flex-col gap-3">
-                      {captainElement}
-                      
-                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-black text-neutral-400 font-mono uppercase tracking-wider">
-                          MIEMBROS ({team.players ? team.players.length : 0}/4)
-                        </span>
-                        <div className="flex-1 h-[1px] bg-white/10" />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {playerSlots}
-                      </div>
+                    <div className="text-xs font-mono font-bold text-neutral-300 bg-black/70 px-3.5 py-2 border border-white/10 rounded-lg">
+                      {7 - (veto.bannedMaps?.length || 0)} Mapas restantes
                     </div>
                   </div>
                 );
-              })}
-            </div>
+              })()}
 
-          </div>
+              {/* 7 Maps Grid */}
+              {(() => {
+                const veto = effectiveLobbyState.mapVeto || demoMapVeto;
+                const pool = (veto.pool && veto.pool.length > 0) ? veto.pool : DEMO_CONCEPT_MAP_VETO.pool;
+
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                    {pool.map(mapItem => {
+                      const isBanned = (veto.bannedMaps || []).includes(mapItem.id);
+                      const isChosen = veto.chosenMap?.id === mapItem.id || (veto.completed && !isBanned);
+                      const banEntry = (veto.banHistory || []).find(b => b.mapId === mapItem.id);
+                      const canBanThis = !veto.completed && !isBanned;
+
+                      return (
+                        <div
+                          key={mapItem.id}
+                          onClick={() => {
+                            if (canBanThis) {
+                              if (isConceptDemoMode) {
+                                handleDemoBanMap(mapItem.id);
+                              } else if (lobbyState.mapVeto?.active) {
+                                handleBanMap(mapItem.id);
+                              }
+                            }
+                          }}
+                          className={`relative group rounded-2xl overflow-hidden h-72 sm:h-80 lg:h-[340px] flex flex-col justify-between p-3 select-none transition-all duration-300 ${
+                            isChosen
+                              ? 'border-4 border-emerald-400 shadow-[0_0_35px_rgba(16,185,129,0.7)] ring-4 ring-emerald-400/40 scale-[1.03]'
+                              : isBanned
+                                ? 'border-2 border-red-950/80 opacity-60 cursor-not-allowed'
+                                : canBanThis
+                                  ? 'border-2 border-white/20 hover:border-[#FF5500] hover:scale-[1.03] hover:shadow-[0_0_25px_rgba(255,85,0,0.5)] cursor-pointer'
+                                  : 'border border-white/10 opacity-70'
+                          }`}
+                        >
+                          {/* Background Map Image */}
+                          <div 
+                            className={`absolute inset-0 bg-cover bg-center transition-transform duration-500 ${
+                              isChosen ? 'scale-110 filter saturate-125' : isBanned ? 'filter grayscale contrast-125' : 'group-hover:scale-105'
+                            }`}
+                            style={{ backgroundImage: `url(${mapItem.image})` }}
+                          />
+
+                          {/* Dark Overlay Gradient */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/70 pointer-events-none" />
+
+                          {/* Banned Diagonal Red Slash Overlay */}
+                          {isBanned && (
+                            <div className="absolute inset-0 bg-red-950/80 backdrop-blur-[2px] flex flex-col items-center justify-center p-2 text-center z-10 pointer-events-none border-2 border-red-600/70 rounded-2xl">
+                              <div className="w-12 h-12 rounded-full bg-red-600/30 border-2 border-red-500 flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(239,68,68,0.6)]">
+                                <X className="w-8 h-8 text-red-400" />
+                              </div>
+                              <span className="text-[11px] font-black text-red-300 uppercase tracking-widest bg-red-950/90 px-2 py-0.5 border border-red-500/50 rounded">
+                                BANEADO
+                              </span>
+                              {banEntry && (
+                                <span className="text-[9px] text-red-200 uppercase font-mono font-bold mt-1.5 px-1 bg-black/60 rounded">
+                                  POR {banEntry.teamName || 'RIVAL'}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Decider Trophy Badge */}
+                          {isChosen && (
+                            <div className="absolute top-3 left-3 right-3 bg-gradient-to-r from-emerald-500 to-teal-400 text-black font-black text-[10px] py-1 px-2 uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.8)] z-10 rounded-lg">
+                              <Trophy className="w-3.5 h-3.5 fill-current" />
+                              <span>MAPA DECIDIDO</span>
+                            </div>
+                          )}
+
+                          {/* Top Pin / Crest */}
+                          <div className="relative z-10 flex justify-end">
+                            {mapItem.icon ? (
+                              <img src={mapItem.icon} alt={mapItem.name} className="w-9 h-9 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]" />
+                            ) : (
+                              <span className="text-[10px] font-black text-white/60 bg-black/60 px-1.5 py-0.5 rounded border border-white/10">CS2</span>
+                            )}
+                          </div>
+
+                          {/* Bottom Card Footer */}
+                          <div className="relative z-10 flex flex-col gap-1.5">
+                            <h4 className="text-base sm:text-lg font-black italic tracking-tighter uppercase text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                              {mapItem.name}
+                            </h4>
+
+                            {canBanThis && (
+                              <button
+                                type="button"
+                                className="w-full py-1.5 bg-[#FF5500] hover:bg-[#FF7733] text-black font-black uppercase text-[10px] tracking-wider rounded-lg transition-all shadow-[0_0_15px_rgba(255,85,0,0.4)] flex items-center justify-center gap-1 cursor-pointer"
+                              >
+                                <span>✕</span> CLIC PARA BANEAR
+                              </button>
+                            )}
+
+                            {!isBanned && !isChosen && !canBanThis && (
+                              <span className="text-[9px] text-center uppercase tracking-widest text-emerald-400 font-bold bg-black/60 py-1 rounded border border-emerald-500/20">
+                                DISPONIBLE
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* Ban History Breadcrumb */}
+              {(() => {
+                const veto = effectiveLobbyState.mapVeto || demoMapVeto;
+                return (
+                  <div className="bg-[#090C12] border border-white/10 rounded-xl p-3 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-bold text-neutral-400 uppercase text-[10px] flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-[#FF5500]" /> HISTORIAL DE BANEOS:
+                    </span>
+                    {(veto.banHistory && veto.banHistory.length > 0) ? (
+                      veto.banHistory.map((h, idx) => (
+                        <span key={idx} className="flex items-center gap-1.5 bg-[#141824] px-2.5 py-1 rounded border border-white/10 text-[10px]">
+                          <span className="text-[#FF5500] font-black">{idx + 1}.</span>
+                          <span className="text-white font-bold">{h.mapName}</span>
+                          <span className="text-neutral-400">({h.teamName})</span>
+                          {idx < (veto.banHistory?.length || 0) - 1 && <span className="text-neutral-600">➔</span>}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-neutral-500 text-[10px]">Aún no se han realizado descartes de mapas</span>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          ) : (
+            <>
+              {/* Hero Live Action Status Card */}
+              {(() => {
+                const currentActiveTeamId = effectiveLobbyState.pickSequence?.[effectiveLobbyState.currentPickIndex] || effectiveLobbyState.pickOrder[effectiveLobbyState.currentPickIndex % (effectiveLobbyState.pickOrder.length || 1)];
+                const activeTeam = effectiveLobbyState.teams.find(t => t.id === currentActiveTeamId);
+                const isTeamTurn = effectiveLobbyState.draftStarted && !effectiveLobbyState.draftFinished && activeTeam;
+                const isVetoActive = effectiveLobbyState.mapVeto && (effectiveLobbyState.mapVeto.active || effectiveLobbyState.mapVeto.completed);
+
+                if (isVetoActive && !isTeamTurn) {
+                  return (
+                    <div className="p-4 bg-gradient-to-r from-purple-950/40 via-[#10141E] to-[#00A3FF]/20 border border-purple-500/40 rounded-2xl shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-purple-600 text-white flex items-center justify-center font-black text-xl rounded-xl shadow-md flex-shrink-0">
+                          🗺️
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black uppercase text-purple-400 tracking-widest bg-purple-500/20 border border-purple-500/40 px-2.5 py-0.5 rounded">
+                            FASE DE VETO DE MAPAS EN CURSO
+                          </span>
+                          <p className="text-xs sm:text-sm font-bold text-white mt-1">
+                            Los capitanes están descartando mapas competitivos de CS2
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setArenaStageTab('veto')}
+                        className="px-4 py-2 bg-[#00A3FF] hover:bg-[#33B5FF] text-black font-black uppercase text-xs rounded-xl shadow-[0_0_15px_rgba(0,163,255,0.4)] transition-all cursor-pointer"
+                      >
+                        Abrir Veto de Mapas ➔
+                      </button>
+                    </div>
+                  );
+                }
+
+                if (isTeamTurn) {
+                  const captainNick = activeTeam.captain?.discordUser?.displayName || activeTeam.captain?.faceit_nickname || 'Capitán';
+                  const isMyTurn = isConceptDemoMode || (activeTeam.captain && currentUser && activeTeam.captain.discordId === currentUser.userId);
+                  const totalPicks = effectiveLobbyState.pickSequence?.length || 8;
+                  const currentPickNum = (effectiveLobbyState.currentPickIndex || 0) + 1;
+
+                  return (
+                    <div className="p-4 sm:p-5 bg-gradient-to-r from-[#FF5500]/20 via-[#121622] to-[#00A3FF]/20 border-2 border-[#FF5500]/60 shadow-[0_0_30px_rgba(255,85,0,0.25)] rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 font-mono relative overflow-hidden">
+                      <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-[#FF5500]/10 to-transparent pointer-events-none" />
+                      <div className="flex items-center gap-3.5 relative z-10">
+                        <div className="w-12 h-12 bg-[#FF5500] text-black font-black flex items-center justify-center text-2xl shadow-[0_0_20px_rgba(255,85,0,0.6)] animate-pulse flex-shrink-0 rounded-xl">
+                          🔥
+                        </div>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] font-black uppercase text-[#FF5500] tracking-widest bg-[#FF5500]/20 border border-[#FF5500]/40 px-2.5 py-0.5 rounded-md">
+                              DRAFT EN VIVO // TURNO DE ELECCIÓN
+                            </span>
+                            <span className="text-[10px] font-bold text-neutral-400 bg-black/60 px-2.5 py-0.5 border border-white/10 rounded-md">
+                              ELECCIÓN {currentPickNum} DE {totalPicks}
+                            </span>
+                          </div>
+                          <h3 className="text-base sm:text-lg font-black text-white uppercase mt-1">
+                            Capitán <span className="text-[#FF5500]">{captainNick}</span> eligiendo para <span className="text-white underline">{getTeamName(activeTeam)}</span>
+                          </h3>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 relative z-10">
+                        {/* Countdown Badge */}
+                        <div className="flex items-center gap-2 bg-black/80 border border-amber-500/50 text-amber-400 px-3.5 py-2 text-xs font-mono font-bold rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.25)]">
+                          <Clock className="w-4 h-4 text-amber-400 animate-spin" />
+                          <span>00:45s</span>
+                        </div>
+
+                        {isMyTurn ? (
+                          <div className="flex items-center gap-2 bg-[#FF5500] text-black px-4 py-2 font-black text-xs uppercase tracking-wider animate-bounce shadow-lg rounded-xl">
+                            <span>👉</span>
+                            <span>¡ES TU TURNO! HAZ CLIC EN "ELEGIR"</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 bg-black/70 border border-white/20 text-neutral-300 px-3.5 py-2 text-xs font-bold rounded-xl">
+                            <span className="w-2.5 h-2.5 rounded-full bg-[#FF5500] animate-ping" />
+                            <span>Esperando selección de {captainNick}...</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (effectiveLobbyState.draftFinished) {
+                  return (
+                    <div className="p-4 bg-gradient-to-r from-emerald-950/40 via-[#10141E] to-emerald-950/40 border border-emerald-500/50 shadow-xl rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-emerald-500 text-black flex items-center justify-center font-black text-xl shadow-[0_0_15px_rgba(16,185,129,0.5)] flex-shrink-0 rounded-xl">
+                          ✓
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black uppercase text-emerald-400 tracking-widest bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded">
+                              DRAFT COMPLETADO
+                            </span>
+                            <span className="text-[10px] text-neutral-400">
+                              Equipos listos para el Sorteo de Enfrentamientos y Veto de Mapas
+                            </span>
+                          </div>
+                          <h3 className="text-sm sm:text-base font-black text-white uppercase mt-0.5">
+                            Todas las escuadras están completas con 5 jugadores
+                          </h3>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setArenaStageTab('veto')}
+                        className="px-4 py-2 bg-[#00A3FF] hover:bg-[#33B5FF] text-black font-black uppercase text-xs rounded-xl shadow-[0_0_15px_rgba(0,163,255,0.4)] transition-all cursor-pointer"
+                      >
+                        Ir a Veto de Mapas CS2 ➔
+                      </button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="p-4 bg-[#0D1017]/95 border border-white/10 shadow-lg rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-[#161C2C] border border-white/15 text-[#FF5500] flex items-center justify-center font-black text-base flex-shrink-0 rounded-xl">
+                        <Swords className="w-5 h-5 text-[#FF5500]" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black uppercase text-[#FF5500] tracking-widest bg-[#FF5500]/10 border border-[#FF5500]/30 px-2 py-0.5 rounded">
+                            SALA PRE-DRAFT
+                          </span>
+                          <span className="text-[10px] text-neutral-400">
+                            {totalReadyCountVal} / {numTeamsSelect * 5} JUGADORES LISTOS
+                          </span>
+                        </div>
+                        <span className="text-xs font-bold text-white block mt-0.5">
+                          {totalReadyCountVal >= numTeamsSelect * 5 
+                            ? '¡Convocatoria completa! Listo para configurar capitanes e iniciar el draft' 
+                            : `Faltan ${Math.max(0, numTeamsSelect * 5 - totalReadyCountVal)} jugadores para completar los equipos`}
+                        </span>
+                      </div>
+                    </div>
+                    {isConceptDemoMode && (
+                      <span className="text-xs font-bold text-amber-400 bg-amber-950/30 border border-amber-500/40 px-3 py-1.5 rounded-lg">
+                        ⚡ Mostrando Draft de Simulación (Fénix vs Kobra)
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+              
+              {/* Collapsible Admin Dashboard Section */}
+              {currentUser?.isAdmin && !isConceptDemoMode && (
+                <div className="bg-[#0D1017]/95 border border-white/10 shadow-2xl rounded-2xl overflow-hidden font-mono transition-all">
+                  <div 
+                    className="p-3.5 sm:p-4 bg-[#121622] flex items-center justify-between cursor-pointer hover:bg-[#161C2C] transition-colors border-b border-white/5"
+                    onClick={() => setIsAdminControlsOpen(!isAdminControlsOpen)}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <ShieldAlert className="w-4 h-4 text-[#FF5500]" />
+                      <h3 className="text-xs sm:text-sm font-black italic tracking-tighter uppercase text-white font-mono flex items-center gap-2">
+                        PANEL DE CONTROL DE ADMINISTRACIÓN
+                        <span className="text-[9px] not-italic font-bold bg-[#FF5500]/15 text-[#FF5500] border border-[#FF5500]/30 px-2 py-0.5 rounded">
+                          {isAdminControlsOpen ? 'DESPLEGADO' : 'OCULTO'}
+                        </span>
+                      </h3>
+                    </div>
+                    <button 
+                      type="button" 
+                      className="text-xs font-mono font-bold text-neutral-400 hover:text-white flex items-center gap-1.5 cursor-pointer bg-white/5 px-2.5 py-1 rounded border border-white/10"
+                    >
+                      {isAdminControlsOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      <span>{isAdminControlsOpen ? 'Plegar controles' : 'Desplegar panel admin'}</span>
+                    </button>
+                  </div>
+                  
+                  {isAdminControlsOpen && (
+                    <div className="p-4 sm:p-5 flex flex-col gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 font-mono text-xs">
+                        {/* 1. Setup Teams Count */}
+                        <div className="p-3 bg-[#161616] border border-[#222] rounded-xl flex flex-col justify-between gap-3">
+                          <div>
+                            <label className="text-[10px] font-black uppercase text-neutral-400 block mb-1">CANTIDAD DE EQUIPOS</label>
+                            <select 
+                              className="w-full bg-[#222] border border-[#333] text-xs font-mono text-white px-2 py-1 focus:outline-none focus:border-white rounded-lg cursor-pointer"
+                              value={numTeamsSelect}
+                              disabled={lobbyState.draftStarted || lobbyState.draftFinished}
+                              onChange={(e) => setNumTeamsSelect(parseInt(e.target.value))}
+                            >
+                              <option value="2">2 EQUIPOS (10 JUGADORES)</option>
+                              <option value="3">3 EQUIPOS (15 JUGADORES)</option>
+                              <option value="4">4 EQUIPOS (20 JUGADORES)</option>
+                              <option value="5">5 EQUIPOS (25 JUGADORES)</option>
+                              <option value="6">6 EQUIPOS (30 JUGADORES)</option>
+                            </select>
+                          </div>
+                          <button 
+                            className="w-full bg-white text-black font-bold uppercase py-1 border border-white hover:bg-neutral-200 transition-colors disabled:opacity-30 disabled:hover:bg-white rounded-lg"
+                            onClick={handleSetupTeams}
+                            disabled={lobbyState.draftStarted || lobbyState.draftFinished}
+                          >
+                            CONFIGURAR EQUIPOS
+                          </button>
+                        </div>
+
+                        {/* 2. Reorder Capitanes / Pick Order */}
+                        <div className="p-3 bg-[#161616] border border-[#222] rounded-xl flex flex-col gap-2">
+                          <label className="text-[10px] font-black uppercase text-neutral-400 block">ORDEN DE ELECCIÓN</label>
+                          <div className="border border-[#222] bg-[#111] max-h-24 overflow-y-auto p-1.5 space-y-1 rounded-lg">
+                            {!lobbyState.draftStarted && !lobbyState.draftFinished && teamsWithCaptains.length > 0 ? (
+                              localPickOrder.map((teamId, index) => {
+                                const team = lobbyState.teams.find(t => t.id === teamId);
+                                if (!team) return null;
+                                return (
+                                  <div 
+                                    key={teamId} 
+                                    className={`flex items-center justify-between text-[9px] p-1 border rounded transition-all duration-75 ${
+                                      isShuffling 
+                                        ? 'border-[#FF5500] bg-[#FF5500]/5 text-[#FF5500] scale-[0.98] blur-[0.2px] animate-pulse' 
+                                        : 'bg-[#181818] border-[#222] text-white'
+                                    }`}
+                                  >
+                                    <span className="font-bold">{index + 1}. {getTeamName(team).toUpperCase()}</span>
+                                    <div className="flex gap-1">
+                                      <button 
+                                        className="p-0.5 bg-[#252525] border border-[#333] hover:border-white text-neutral-400 hover:text-white disabled:opacity-20 rounded"
+                                        onClick={() => handleMoveOrder(index, -1)} 
+                                        disabled={index === 0 || isShuffling}
+                                      >
+                                        <ArrowUp className="w-2.5 h-2.5" />
+                                      </button>
+                                      <button 
+                                        className="p-0.5 bg-[#252525] border border-[#333] hover:border-white text-neutral-400 hover:text-white disabled:opacity-20 rounded"
+                                        onClick={() => handleMoveOrder(index, 1)} 
+                                        disabled={index === localPickOrder.length - 1 || isShuffling}
+                                      >
+                                        <ArrowDown className="w-2.5 h-2.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              (lobbyState.draftStarted || lobbyState.draftFinished) ? (
+                                lobbyState.pickOrder.map((teamId, index) => {
+                                  const team = lobbyState.teams.find(t => t.id === teamId);
+                                  if (!team) return null;
+                                  const currentActiveTeamId = lobbyState.pickSequence?.[lobbyState.currentPickIndex] || lobbyState.pickOrder[lobbyState.currentPickIndex % (lobbyState.pickOrder.length || 1)];
+                                  const isCurrent = lobbyState.draftStarted && currentActiveTeamId === teamId;
+                                  return (
+                                    <div key={teamId} className={`flex items-center justify-between text-[9px] p-1 border rounded ${
+                                      isCurrent ? 'border-[#FF5500] bg-[#FF5500]/5 text-[#FF5500]' : 'border-[#222] bg-[#151515] text-neutral-400'
+                                    }`}>
+                                      <span>{index + 1}. {getTeamName(team).toUpperCase()}</span>
+                                      {isCurrent && <span className="font-bold animate-pulse text-[8px] bg-[#FF5500] text-black px-1 rounded">TURNO</span>}
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <p className="text-[9px] text-neutral-600 text-center py-2">ASIGNA CAPITANES PRIMERO</p>
+                              )
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button 
+                              className="bg-transparent border border-neutral-600 hover:border-white text-white font-bold uppercase py-0.5 text-[10px] transition-colors disabled:opacity-30 rounded"
+                              onClick={handleSavePickOrder}
+                              disabled={lobbyState.draftStarted || lobbyState.draftFinished || !isSavingOrder || teamsWithCaptains.length === 0 || isShuffling}
+                            >
+                              GUARDAR ORDEN
+                            </button>
+                            <button 
+                              className="bg-transparent border border-neutral-600 hover:border-white text-white font-bold uppercase py-0.5 text-[10px] transition-colors disabled:opacity-30 rounded"
+                              onClick={handleRandomizeOrder}
+                              disabled={lobbyState.draftStarted || lobbyState.draftFinished || teamsWithCaptains.length === 0 || isShuffling}
+                            >
+                              MEZCLAR
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* 3. Actions (Start, Reset, Command Toggle) */}
+                        <div className="p-3 bg-[#161616] border border-[#222] rounded-xl flex flex-col justify-between gap-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <button 
+                              className="bg-white text-black font-bold uppercase text-[10px] py-1 border border-white hover:bg-neutral-200 transition-colors disabled:opacity-30 disabled:hover:bg-white flex items-center justify-center gap-1.5 rounded-lg"
+                              onClick={handleStartDraft}
+                              disabled={lobbyState.draftStarted || lobbyState.draftFinished || !hasCaptainsForAll}
+                            >
+                              <Play className="w-3 h-3 fill-current" />
+                              {lobbyState.draftStarted ? 'EN CURSO' : 'INICIAR DRAFT'}
+                            </button>
+                            <button 
+                              className="bg-red-950 border border-[#FF3E3E] text-[#FF3E3E] font-bold uppercase text-[10px] py-1 hover:bg-red-900 transition-colors flex items-center justify-center gap-1.5 rounded-lg"
+                              onClick={handleResetLobby}
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              REINICIAR
+                            </button>
+                          </div>
+
+                          {/* Botón de Asignación Automática y Balanceo */}
+                          <button 
+                            className="w-full bg-[#1B9AAA]/20 hover:bg-[#1B9AAA]/30 border border-[#1B9AAA] text-[#1B9AAA] font-bold uppercase text-[10px] py-1.5 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-30 cursor-pointer shadow-[0_0_10px_rgba(27,154,170,0.15)] rounded-lg"
+                            onClick={handleAutoAssignPlayers}
+                            disabled={!hasCaptainsForAll || lobbyState.draftFinished || isAutoAssigning}
+                            title="Asigna y balancea automáticamente a los jugadores disponibles por Tier / ELO (requiere capitanes asignados)"
+                          >
+                            <Zap className="w-3.5 h-3.5 fill-current" />
+                            {isAutoAssigning ? 'BALANCEANDO EQUIPOS...' : '⚡ AUTO-ASIGNAR JUGADORES'}
+                          </button>
+                          
+                          <button 
+                            className="w-full bg-transparent border border-yellow-600 hover:border-yellow-500 text-yellow-500 font-bold uppercase text-[10px] py-0.5 transition-colors rounded-lg"
+                            onClick={handleResetPlayers}
+                          >
+                            VACIAR COLA (TODOS NO LISTO)
+                          </button>
+
+                          <div className="flex items-center justify-between border-t border-[#222] pt-2 mt-1">
+                            <span className="text-[10px] font-bold text-neutral-400">COMANDO /mixton_listo</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                className="sr-only peer"
+                                checked={commandEnabled}
+                                onChange={handleToggleMixtonCommand}
+                              />
+                              <div className="w-8 h-4 bg-[#2D2D2D] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-400 after:border-neutral-400 after:border after:h-3 after:w-3.5 after:transition-all peer-checked:bg-[#FF5500] peer-checked:after:bg-white peer-checked:after:border-white after:rounded-full" />
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* 4. Map Pool CS2 */}
+                        <div className="p-3 bg-[#161616] border border-[#222] rounded-xl flex flex-col justify-between gap-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[10px] font-black uppercase text-neutral-400 block">POOL DE MAPAS VETO</label>
+                              <span className="text-[9px] font-bold text-[#FF5500] bg-[#FF5500]/10 border border-[#FF5500]/30 px-1.5 py-0.5 rounded">
+                                {(localMapCatalog.length > 0 ? localMapCatalog : (lobbyState.mapCatalog || [])).filter(m => m.active).length} ACTIVOS
+                              </span>
+                            </div>
+                            <p className="text-[9px] text-neutral-500 uppercase leading-relaxed mb-2">
+                              Configura qué mapas y cuántos se jugarán en la fase de veto.
+                            </p>
+                            <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto p-1.5 bg-[#111] border border-[#222] rounded-lg">
+                              {(localMapCatalog.length > 0 ? localMapCatalog : (lobbyState.mapCatalog || [])).filter(m => m.active).map(m => (
+                                <span key={m.id} className="text-[8px] bg-neutral-800 text-neutral-300 border border-neutral-700 px-1.5 py-0.5 truncate max-w-[85px] rounded">
+                                  {m.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          <button 
+                            className="w-full bg-[#FF5500] text-black font-black uppercase text-[10px] py-1.5 hover:bg-[#e04c00] transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-[0_0_8px_rgba(255,85,0,0.2)] rounded-lg"
+                            onClick={() => {
+                              if (lobbyState.mapCatalog && Array.isArray(lobbyState.mapCatalog)) {
+                                setLocalMapCatalog(lobbyState.mapCatalog);
+                              }
+                              setIsMapManagerOpen(true);
+                            }}
+                          >
+                            <Map className="w-3.5 h-3.5" />
+                            CONFIGURAR MAPAS
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Launch Match Sub-panel */}
+                      <div className="border-t border-[#2D2D2D] pt-4 mt-2">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="flex-1 flex flex-col md:flex-row md:items-center gap-4 font-mono text-xs">
+                            <span className="text-[10px] font-black uppercase text-neutral-400 flex-shrink-0 flex items-center gap-1.5">
+                              <Volume2 className="w-4 h-4 text-neutral-400 animate-pulse" /> CREAR PARTIDA DISCORD
+                            </span>
+                            <div className="flex items-center gap-2 w-full max-w-lg">
+                              <select 
+                                className="flex-1 bg-[#1A1A1A] border border-[#2D2D2D] text-xs font-mono text-white px-2 py-1.5 focus:outline-none focus:border-white rounded-lg cursor-pointer"
+                                value={matchTeamA}
+                                onChange={(e) => setMatchTeamA(e.target.value)}
+                              >
+                                <option value="">-- ELIGE EQUIPO A --</option>
+                                {completedTeams.map(t => (
+                                  <option key={t.id} value={t.id}>{getTeamName(t).toUpperCase()} ({getAvgEloMatch(t)} ELO)</option>
+                                ))}
+                              </select>
+                              <span className="text-neutral-500 font-bold uppercase text-[9px]">VS</span>
+                              <select 
+                                className="flex-1 bg-[#1A1A1A] border border-[#2D2D2D] text-xs font-mono text-white px-2 py-1.5 focus:outline-none focus:border-white rounded-lg cursor-pointer"
+                                value={matchTeamB}
+                                onChange={(e) => setMatchTeamB(e.target.value)}
+                              >
+                                <option value="">-- ELIGE EQUIPO B --</option>
+                                {completedTeams.map(t => (
+                                  <option key={t.id} value={t.id}>{getTeamName(t).toUpperCase()} ({getAvgEloMatch(t)} ELO)</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button 
+                              className="bg-transparent border border-neutral-600 hover:border-white text-white font-bold uppercase text-[10px] py-1.5 px-4 rounded-lg transition-all disabled:opacity-30 cursor-pointer"
+                              disabled={completedTeams.length < 2 || isLaunchingMatch}
+                              onClick={handleOpenMatchupRoulette}
+                            >
+                              🎲 SORTEAR
+                            </button>
+                            <button 
+                              className="bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] hover:border-[#FF7733] text-white font-bold uppercase text-[10px] py-1.5 px-6 rounded-lg transition-all disabled:opacity-30 cursor-pointer flex items-center gap-1.5 shadow-[0_0_15px_rgba(255,85,0,0.3)]"
+                              disabled={!matchTeamA || !matchTeamB || matchTeamA === matchTeamB || isLaunchingMatch || isStartingVeto}
+                              onClick={handleLaunchEncounterClick}
+                            >
+                              <Coins className="w-3.5 h-3.5" />
+                              {isStartingVeto ? 'INICIANDO VETO...' : 'LANZAR ENCUENTRO'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Teams Grid Title & Head-to-Head Banner */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-1">
+                <div>
+                  <h2 className="text-xl font-black italic tracking-tighter uppercase text-white flex items-center gap-2 font-mono">
+                    <Award className="w-5 h-5 text-[#FF5500]" /> ESCUADRAS RIVALES
+                  </h2>
+                  <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest">
+                    {effectiveLobbyState.teams.length === 2 ? 'Enfrentamiento directo 5v5 CS2 // Fase de Draft' : `${effectiveLobbyState.teams.length} Equipos Participantes`}
+                  </span>
+                </div>
+
+                {/* VS Showdown Bar (If 2 Teams) */}
+                {effectiveLobbyState.teams.length === 2 && (
+                  <div className="flex items-center gap-2 bg-[#0D1017]/95 border border-white/10 px-3.5 py-1.5 font-mono shadow-md text-xs rounded-xl">
+                    <span className="text-[#FF5500] font-black tracking-wider">{getTeamName(effectiveLobbyState.teams[0]).toUpperCase()}</span>
+                    <span className="text-[10px] font-bold text-neutral-300 bg-black/60 px-2 py-0.5 border border-white/10 rounded">
+                      AVG {getAverageElo(effectiveLobbyState.teams[0])} ELO
+                    </span>
+                    <span className="text-white font-black text-[10px] px-1.5 py-0.5 bg-neutral-900 border border-neutral-700 rounded">
+                      VS
+                    </span>
+                    <span className="text-[10px] font-bold text-neutral-300 bg-black/60 px-2 py-0.5 border border-white/10 rounded">
+                      AVG {getAverageElo(effectiveLobbyState.teams[1])} ELO
+                    </span>
+                    <span className="text-[#00A3FF] font-black tracking-wider">{getTeamName(effectiveLobbyState.teams[1]).toUpperCase()}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Teams Grid */}
+              <div className="pb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {effectiveLobbyState.teams.map((team, tIdx) => {
+                    const currentActiveTeamId = effectiveLobbyState.pickSequence?.[effectiveLobbyState.currentPickIndex] || effectiveLobbyState.pickOrder[effectiveLobbyState.currentPickIndex % (effectiveLobbyState.pickOrder.length || 1)];
+                    const isCurrentTurn = effectiveLobbyState.draftStarted && !effectiveLobbyState.draftFinished && currentActiveTeamId === team.id;
+                    const avgElo = getAverageElo(team);
+                    const isTeamA = tIdx === 0;
+                    const isTeamB = tIdx === 1;
+
+                    // Render Captain Slot
+                    let captainElement;
+                    if (team.captain) {
+                      const capAvatar = team.captain.discordUser?.avatarURL || 'https://cdn.discordapp.com/embed/avatars/0.png';
+                      captainElement = (
+                        <div className={`p-3 bg-[#131722]/90 border-2 rounded-xl flex items-center justify-between gap-3 relative overflow-hidden transition-all shadow-md ${
+                          isTeamA 
+                            ? 'border-amber-400/80 bg-gradient-to-r from-amber-950/25 to-[#131722]' 
+                            : 'border-cyan-400/80 bg-gradient-to-r from-cyan-950/25 to-[#131722]'
+                        }`}>
+                          {/* Top corner Captain Badge */}
+                          <div className={`absolute right-0 top-0 text-[8px] font-black px-2.5 py-0.5 uppercase tracking-wider font-mono flex items-center gap-1 shadow-sm rounded-bl-lg ${
+                            isTeamA ? 'bg-amber-400 text-black' : 'bg-cyan-400 text-black'
+                          }`}>
+                            <Crown className="w-3 h-3 fill-current" />
+                            <span>CAPITÁN</span>
+                          </div>
+
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            <div className="relative flex-shrink-0">
+                              <img 
+                                className={`w-9 h-9 rounded-full border-2 object-cover ${
+                                  isTeamA ? 'border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]' : 'border-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)]'
+                                }`} 
+                                src={capAvatar} 
+                                alt="Capitán" 
+                              />
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-black absolute -bottom-0.5 -right-0.5" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-black text-white leading-tight truncate">
+                                {team.captain.discordUser?.displayName || team.captain.faceit_nickname}
+                              </p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <a 
+                                  href={`https://www.faceit.com/es/players/${team.captain.faceit_nickname}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[9px] text-neutral-400 hover:text-[#FF5500] hover:underline block leading-none font-mono truncate"
+                                  title="Abrir perfil de Faceit"
+                                >
+                                  {team.captain.faceit_nickname} ↗
+                                </a>
+                                {team.captain.faceit_elo && (
+                                  <span className="text-[8px] text-neutral-400 bg-black/60 px-1 py-0.2 rounded border border-white/10">
+                                    {team.captain.faceit_elo} ELO
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className={`text-[10px] font-black px-2 py-0.5 border font-mono rounded ${
+                              team.captain.faceit_level === 10
+                                ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white border-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
+                                : team.captain.faceit_level >= 8
+                                  ? 'bg-gradient-to-r from-[#FF5500] to-amber-600 text-white border-orange-500 shadow-[0_0_6px_rgba(255,85,0,0.4)]'
+                                  : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white border-blue-500'
+                            }`}>
+                              LVL {team.captain.faceit_level}
+                            </span>
+                            {currentUser?.isAdmin && !isConceptDemoMode && (
+                              <button 
+                                className="p-1 bg-red-950/80 border border-red-500/80 hover:bg-red-900 text-red-300 hover:text-white transition-colors cursor-pointer rounded"
+                                onClick={() => handleRemoveCaptain(team.id)}
+                                title="Remover Capitán"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      captainElement = (
+                        <div className="p-3 bg-[#10141E]/60 border-2 border-dashed border-white/15 rounded-xl flex items-center justify-between gap-3">
+                          <span className="text-[10px] text-neutral-500 font-mono font-black uppercase tracking-wider flex items-center gap-1.5">
+                            <span>👑</span> ESPERANDO CAPITÁN // {isTeamA ? 'EQUIPO FÉNIX' : 'EQUIPO KOBRA'}
+                          </span>
+                          {currentUser?.isAdmin && !isConceptDemoMode && (
+                            <button 
+                              className="bg-white hover:bg-neutral-200 text-black font-mono text-[9px] font-black uppercase tracking-widest px-3 py-1.5 transition-colors cursor-pointer shadow-md rounded-lg"
+                              onClick={() => handleOpenCaptainModal(team.id, team.name)}
+                            >
+                              + ASIGNAR
+                            </button>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    // Render Players Slots (4 slots)
+                    const playerSlots = [];
+                    let pendingRendered = false;
+                    const isThisTeamTurn = isCurrentTurn;
+
+                    for (let i = 0; i < 4; i++) {
+                      const player = team.players ? team.players[i] : null;
+                      if (player) {
+                        const avatar = player.discordUser?.avatarURL || 'https://cdn.discordapp.com/embed/avatars/0.png';
+                        playerSlots.push(
+                          <div key={player.discordId || `player-${i}`} className="p-2.5 bg-[#121622]/90 border border-white/10 hover:border-white/25 rounded-xl flex items-center justify-between gap-2.5 text-xs relative overflow-hidden transition-all group">
+                            <div className="flex items-center gap-2 overflow-hidden">
+                              <div className="relative flex-shrink-0">
+                                <img className="w-8 h-8 rounded-full border border-white/20 object-cover" src={avatar} alt="Avatar" />
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 absolute -bottom-0.5 -right-0.5 border border-black" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-[11px] text-white font-bold font-mono truncate block leading-tight group-hover:text-[#FF5500] transition-colors">
+                                  {player.discordUser?.displayName || player.faceit_nickname}
+                                </span>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <a 
+                                    href={`https://www.faceit.com/es/players/${player.faceit_nickname}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[8px] text-neutral-400 hover:text-[#FF5500] hover:underline font-mono truncate leading-none"
+                                    title="Ver perfil de Faceit"
+                                  >
+                                    {player.faceit_nickname} ↗
+                                  </a>
+                                  {player.faceit_elo && (
+                                    <span className="text-[8px] text-neutral-400 bg-black/60 px-1 py-0.2 rounded border border-white/10">
+                                      {player.faceit_elo} ELO
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <span className={`text-[9px] font-mono font-black px-1.5 py-0.5 border rounded ${
+                                player.faceit_level === 10
+                                  ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white border-red-500/80 shadow-[0_0_6px_rgba(239,68,68,0.4)]'
+                                  : player.faceit_level >= 8
+                                    ? 'bg-gradient-to-r from-[#FF5500] to-amber-600 text-white border-orange-500/80'
+                                    : player.faceit_level >= 5
+                                      ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white border-blue-500/80'
+                                      : 'bg-neutral-800 text-neutral-300 border-neutral-700'
+                              }`}>
+                                LVL {player.faceit_level}
+                              </span>
+                              {currentUser?.isAdmin && !isConceptDemoMode && (
+                                <button 
+                                  className="p-1 bg-neutral-900 border border-white/10 hover:border-red-500 text-neutral-400 hover:text-red-400 transition-colors cursor-pointer rounded"
+                                  onClick={() => handleRemovePlayerFromTeam(team.id, player.discordId)}
+                                  title="Remover Jugador"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      } else if (isThisTeamTurn && pendingPick && !pendingRendered) {
+                        const playerAvatar = pendingPick.discordUser?.avatarURL || 'https://cdn.discordapp.com/embed/avatars/0.png';
+                        playerSlots.push(
+                          <div key="pending-slot" className="p-2.5 bg-[#FF5500]/15 border-2 border-dashed border-[#FF5500] rounded-xl flex items-center justify-between gap-2.5 text-xs animate-pulse shadow-[0_0_15px_rgba(255,85,0,0.3)]">
+                            <div className="flex items-center gap-2 overflow-hidden">
+                              <img className="w-8 h-8 rounded-full border border-[#FF5500] object-cover" src={playerAvatar} alt="Avatar" />
+                              <div>
+                                <span className="text-[10px] text-white font-black font-mono truncate block">{pendingPick.discordUser?.displayName || pendingPick.faceit_nickname}</span>
+                                <span className="text-[8px] text-[#FF5500] font-bold block uppercase">Confirmación pendiente</span>
+                              </div>
+                            </div>
+                            <span className="text-[8px] font-mono font-black bg-[#FF5500] text-black px-2 py-0.5 uppercase tracking-wider rounded">SELECCIÓN</span>
+                          </div>
+                        );
+                        pendingRendered = true;
+                      } else if (isThisTeamTurn && !pendingRendered) {
+                        // The active picking slot with pulsing animation
+                        playerSlots.push(
+                          <div key={`active-picking-${i}`} className="p-3 bg-[#FF5500]/15 border-2 border-dashed border-[#FF5500] rounded-xl flex items-center justify-between gap-2 text-xs animate-pulse shadow-[0_0_20px_rgba(255,85,0,0.3)]">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-[#FF5500]/30 border border-[#FF5500] flex items-center justify-center text-sm font-black text-[#FF5500]">
+                                🔥
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-white font-black font-mono block">TURNO ACTUAL // ELIGIENDO COMPAÑERO</span>
+                                <span className="text-[8px] text-[#FF5500] font-bold uppercase block">Selecciona un jugador disponible de la izquierda</span>
+                              </div>
+                            </div>
+                            <span className="text-[8px] font-mono font-black bg-[#FF5500] text-black px-2 py-0.5 rounded uppercase tracking-wider">
+                              TURNO
+                            </span>
+                          </div>
+                        );
+                        pendingRendered = true;
+                      } else {
+                        // Tactical empty slot
+                        let emptySlotContent = (
+                          <span className="text-[9px] text-neutral-500 font-mono font-bold uppercase tracking-wider">
+                            [ SL-0{i + 1} ] EN ESPERA DE TURNO
+                          </span>
+                        );
+
+                        if (currentUser?.isAdmin && !isConceptDemoMode) {
+                          const assignablePlayers: Player[] = [];
+                          ['S', 'A', 'B', 'C'].forEach(tier => {
+                            (effectiveAvailablePlayers[tier] || []).forEach(p => {
+                              if (pendingPick && pendingPick.discordId === p.discordId) return;
+                              assignablePlayers.push(p);
+                            });
+                          });
+
+                          emptySlotContent = (
+                            <select 
+                              className="w-full bg-[#141A28] border border-dashed border-white/20 hover:border-white text-[9px] font-mono text-neutral-300 hover:text-white px-2 py-1.5 focus:outline-none focus:border-[#FF5500] rounded-lg cursor-pointer text-center"
+                              value=""
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  handleAssignPlayerToTeam(e.target.value, team.id);
+                                }
+                              }}
+                            >
+                              <option value="">+ ASIGNAR JUGADOR...</option>
+                              {assignablePlayers.map(p => (
+                                <option key={p.discordId} value={p.discordId}>
+                                  {(p.discordUser?.displayName || p.faceit_nickname).toUpperCase()} ({p.faceit_level})
+                                </option>
+                              ))}
+                            </select>
+                          );
+                        }
+                        
+                        playerSlots.push(
+                          <div key={`empty-${i}`} className="p-2.5 bg-[#0B0E14] border border-dashed border-white/10 rounded-xl flex items-center justify-center">
+                            {emptySlotContent}
+                          </div>
+                        );
+                      }
+                    }
+
+                    // Team color styling with high-contrast esports theme
+                    const teamBg = isCurrentTurn 
+                      ? 'bg-gradient-to-b from-[#22140E] via-[#0E121B] to-[#0A0D14] border-[#FF5500] ring-2 ring-[#FF5500]/50 shadow-[0_0_35px_rgba(255,85,0,0.35)]' 
+                      : isTeamA 
+                        ? 'bg-gradient-to-b from-[#1E120D] via-[#0E121B] to-[#0A0D14] border-[#FF5500]/60 shadow-[0_0_25px_rgba(255,85,0,0.2)]' 
+                        : isTeamB 
+                          ? 'bg-gradient-to-b from-[#0D182A] via-[#0E121B] to-[#0A0D14] border-[#00A3FF]/60 shadow-[0_0_25px_rgba(0,163,255,0.2)]' 
+                          : 'bg-[#0E121B] border-white/10';
+
+                    return (
+                      <div key={team.id} className={`p-4 sm:p-5 border-2 shadow-2xl rounded-2xl relative flex flex-col gap-3.5 transition-all ${teamBg}`}>
+                        {/* Turn Active Badge */}
+                        {isCurrentTurn && (
+                          <div className="bg-[#FF5500] text-black font-black font-mono text-[9px] px-3 py-1 uppercase tracking-widest animate-pulse flex items-center gap-1.5 self-start shadow-md -mt-1 mb-1 rounded-md">
+                            <Flame className="w-3.5 h-3.5 fill-current" />
+                            <span>TURNO DE ELECCIÓN // ELIGE JUGADOR</span>
+                          </div>
+                        )}
+
+                        <div className="flex justify-between items-center border-b border-white/10 pb-2.5 font-mono">
+                          <div className="flex items-center gap-2">
+                            <h4 className={`text-base font-black italic tracking-tighter uppercase ${
+                              isTeamA ? 'text-[#FF5500]' : isTeamB ? 'text-[#00A3FF]' : 'text-white'
+                            }`}>
+                              {getTeamName(team)}
+                            </h4>
+                            {team.players && team.players.length > 0 && (
+                              <button
+                                className="px-2 py-0.5 bg-black/60 border border-white/20 hover:border-white text-neutral-300 hover:text-white text-[8px] font-black uppercase transition-colors cursor-pointer rounded"
+                                onClick={() => {
+                                  const nicks = (team.players || []).map(p => p.faceit_nickname).filter(Boolean).join(', ');
+                                  navigator.clipboard.writeText(nicks);
+                                  showToast(`Nicks copiados: ${nicks}`, 'info');
+                                }}
+                                title="Copiar nicks de los jugadores para invitarlos en Faceit"
+                              >
+                                📋 Nicks
+                              </button>
+                            )}
+                            {currentUser?.isAdmin && !isConceptDemoMode && (team.captain || (team.players && team.players.length > 0)) && (
+                              <button
+                                className="px-2 py-0.5 bg-red-950/80 border border-red-500/80 hover:bg-red-900 text-red-300 hover:text-white text-[8px] font-black uppercase transition-colors cursor-pointer rounded"
+                                onClick={() => handleClearTeam(team.id, team.name)}
+                                title="Vaciar Equipo"
+                              >
+                                Vaciar
+                              </button>
+                            )}
+                          </div>
+                          <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 border rounded-lg ${
+                            isTeamA 
+                              ? 'bg-[#FF5500]/15 text-[#FF5500] border-[#FF5500]/40' 
+                              : isTeamB 
+                                ? 'bg-[#00A3FF]/15 text-[#00A3FF] border-[#00A3FF]/40' 
+                                : 'bg-black/60 text-neutral-400 border-white/10'
+                          }`}>
+                            AVG ELO: {avgElo}
+                          </span>
+                        </div>
+                        
+                        <div className="flex flex-col gap-3">
+                          {captainElement}
+                          
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-black text-neutral-400 font-mono uppercase tracking-wider">
+                              MIEMBROS ({team.players ? team.players.length : 0}/4)
+                            </span>
+                            <div className="flex-1 h-[1px] bg-white/10" />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {playerSlots}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
 
         </section>
       </main>

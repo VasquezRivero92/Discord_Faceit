@@ -1,5 +1,5 @@
 export interface DiscordUser {
-  username: string;
+  username?: string;
   displayName: string;
   avatarURL: string;
 }
@@ -9,7 +9,8 @@ export interface Player {
   faceit_nickname: string;
   faceit_level: number;
   faceit_elo: number;
-  mixton_guild_id: string;
+  mixton_guild_id?: string;
+  mixton_tier?: string;
   mixton_tier_override?: string | null;
   discordUser?: DiscordUser | null;
 }

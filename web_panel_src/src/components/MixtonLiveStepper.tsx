@@ -116,7 +116,7 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
   return (
     <div className="w-full space-y-4 mb-2">
       {/* 1. Tactical Visual Pipeline Stepper */}
-      <div className="bg-[#0D1017]/90 border border-white/10 p-3 sm:p-4 rounded-none backdrop-blur-md shadow-xl relative overflow-hidden">
+      <div className="bg-[#0D1017]/90 border border-white/10 p-3 sm:p-4 rounded-2xl backdrop-blur-md shadow-xl relative overflow-hidden">
         {/* Ambient Top Glow Line */}
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#FF5500] to-transparent opacity-80" />
         
@@ -132,7 +132,7 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
             <button
               type="button"
               onClick={() => setShowHowItWorks(!showHowItWorks)}
-              className="text-neutral-400 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer bg-white/5 hover:bg-white/10 px-2.5 py-1 border border-white/10"
+              className="text-neutral-400 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer bg-white/5 hover:bg-white/10 px-2.5 py-1 border border-white/10 rounded-lg"
             >
               <HelpCircle className="w-3.5 h-3.5 text-[#FF5500]" />
               <span>¿Cómo funciona el Mixtón?</span>
@@ -141,7 +141,7 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
               <button
                 type="button"
                 onClick={onOpenGuide}
-                className="text-neutral-400 hover:text-sky-400 flex items-center gap-1.5 transition-colors cursor-pointer bg-white/5 hover:bg-white/10 px-2.5 py-1 border border-white/10"
+                className="text-neutral-400 hover:text-sky-400 flex items-center gap-1.5 transition-colors cursor-pointer bg-white/5 hover:bg-white/10 px-2.5 py-1 border border-white/10 rounded-lg"
               >
                 <Zap className="w-3.5 h-3.5 text-sky-400" />
                 <span>Guía Faceit & Steam</span>
@@ -157,7 +157,7 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
             return (
               <div
                 key={s.num}
-                className={`p-2.5 sm:p-3 border transition-all flex flex-col justify-between relative overflow-hidden ${
+                className={`p-2.5 sm:p-3 border rounded-xl transition-all flex flex-col justify-between relative overflow-hidden ${
                   s.isActive
                     ? 'bg-[#FF5500]/15 border-[#FF5500] shadow-[0_0_15px_rgba(255,85,0,0.25)]'
                     : s.isCompleted
@@ -167,18 +167,18 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
               >
                 {/* Active Indicator Top Tag */}
                 {s.isActive && (
-                  <div className="absolute top-0 right-0 bg-[#FF5500] text-black font-black text-[8px] font-mono px-1.5 py-0.2 uppercase tracking-widest animate-pulse">
+                  <div className="absolute top-0 right-0 bg-[#FF5500] text-black font-black text-[8px] font-mono px-2 py-0.5 uppercase tracking-widest animate-pulse rounded-bl-md">
                     EN CURSO
                   </div>
                 )}
                 {s.isCompleted && !s.isActive && (
-                  <div className="absolute top-0 right-0 bg-emerald-500 text-black font-black text-[8px] font-mono px-1.5 py-0.2 uppercase tracking-widest">
+                  <div className="absolute top-0 right-0 bg-emerald-500 text-black font-black text-[8px] font-mono px-2 py-0.5 uppercase tracking-widest rounded-bl-md">
                     LISTO
                   </div>
                 )}
 
                 <div className="flex items-center gap-2 mb-1.5">
-                  <div className={`w-6 h-6 rounded-none flex items-center justify-center font-bold text-xs ${
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs ${
                     s.isActive
                       ? 'bg-[#FF5500] text-black'
                       : s.isCompleted
@@ -211,7 +211,7 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
 
         {/* Explain collapsible box */}
         {showHowItWorks && (
-          <div className="mt-3 p-3 bg-[#111622] border border-[#FF5500]/30 text-xs font-mono text-neutral-300 animate-fade-in space-y-2">
+          <div className="mt-3 p-3 bg-[#111622] border border-[#FF5500]/30 text-xs font-mono text-neutral-300 animate-fade-in space-y-2 rounded-xl">
             <div className="flex items-center justify-between border-b border-white/10 pb-1.5">
               <span className="font-bold text-white uppercase text-[11px] flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-[#FF5500]" /> ¿CÓMO PARTICIPAR EN EL MIXTON DE MACHUPEEK?
@@ -225,19 +225,19 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-[11px] leading-relaxed">
-              <div className="p-2 bg-black/40 border border-white/5">
+              <div className="p-2 bg-black/40 border border-white/5 rounded-lg">
                 <strong className="text-white block mb-0.5">1. Ponte Listo:</strong>
-                Escribe <code className="text-[#FF5500] bg-black px-1">/mixton_listo</code> en Discord o mantén tu perfil conectado. Se necesitan 10 jugadores.
+                Escribe <code className="text-[#FF5500] bg-black px-1 rounded">/mixton_listo</code> en Discord o mantén tu perfil conectado. Se necesitan 10 jugadores.
               </div>
-              <div className="p-2 bg-black/40 border border-white/5">
+              <div className="p-2 bg-black/40 border border-white/5 rounded-lg">
                 <strong className="text-white block mb-0.5">2. Elección / Draft:</strong>
                 Dos capitanes (Tier S/A) eligen a sus 4 compañeros en vivo o el admin balancea automáticamente.
               </div>
-              <div className="p-2 bg-black/40 border border-white/5">
+              <div className="p-2 bg-black/40 border border-white/5 rounded-lg">
                 <strong className="text-white block mb-0.5">3. Veto de Mapas:</strong>
                 Los capitanes descartan mapas oficiales de CS2 (Mirage, Inferno, Nuke, etc.) hasta que quede 1 mapa.
               </div>
-              <div className="p-2 bg-black/40 border border-white/5">
+              <div className="p-2 bg-black/40 border border-white/5 rounded-lg">
                 <strong className="text-white block mb-0.5">4. A Jugar:</strong>
                 Se lanza el servidor de CS2 o la cola de Faceit. La IP de conexión se envía automáticamente por Discord.
               </div>
@@ -247,7 +247,7 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
       </div>
 
       {/* 2. Live Action Narrative Hero Card */}
-      <div className={`p-4 border transition-all rounded-none backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg ${
+      <div className={`p-4 border transition-all rounded-2xl backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg ${
         isDraftActive
           ? isMyTurn
             ? 'bg-gradient-to-r from-[#FF5500]/20 via-[#161B26] to-[#FF5500]/10 border-[#FF5500] shadow-[0_0_20px_rgba(255,85,0,0.2)]'
@@ -259,7 +259,7 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
               : 'bg-gradient-to-r from-[#0C0F17] to-[#121622] border-white/10'
       }`}>
         <div className="flex items-center gap-3.5">
-          <div className={`w-11 h-11 rounded-none flex items-center justify-center font-bold flex-shrink-0 shadow-md ${
+          <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold flex-shrink-0 shadow-md ${
             isDraftActive 
               ? 'bg-[#FF5500] text-black animate-pulse' 
               : isVetoActive 
@@ -273,7 +273,7 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
 
           <div>
             <div className="flex items-center gap-2 mb-0.5">
-              <span className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 border ${
+              <span className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 border rounded ${
                 isDraftActive 
                   ? 'bg-[#FF5500]/20 border-[#FF5500] text-[#FF5500]' 
                   : isVetoActive 
@@ -331,7 +331,7 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
           <button
             type="button"
             onClick={copyDiscordCommand}
-            className="px-3.5 py-2 bg-[#FF5500]/15 hover:bg-[#FF5500] text-[#FF5500] hover:text-black border border-[#FF5500]/50 hover:border-[#FF5500] font-mono text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
+            className="px-3.5 py-2 bg-[#FF5500]/15 hover:bg-[#FF5500] text-[#FF5500] hover:text-black border border-[#FF5500]/50 hover:border-[#FF5500] font-mono text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-md rounded-xl"
             title="Copiar comando de Discord"
           >
             <Copy className="w-3.5 h-3.5" />
@@ -342,7 +342,7 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
             href="https://discord.gg/machupeek"
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3.5 py-2 bg-[#5865F2]/20 hover:bg-[#5865F2] text-white border border-[#5865F2]/60 font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-2 bg-[#5865F2]/20 hover:bg-[#5865F2] text-white border border-[#5865F2]/60 font-mono text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer rounded-xl"
           >
             <ExternalLink className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Discord</span>
