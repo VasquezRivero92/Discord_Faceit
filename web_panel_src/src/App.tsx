@@ -39,7 +39,8 @@ import {
   Swords,
   ChevronDown,
   ChevronUp,
-  Clock
+  Clock,
+  Copy
 } from 'lucide-react';
 import {
   Player, 
@@ -69,235 +70,16 @@ import { GuiaFaceitView } from './components/GuiaFaceitView';
 import { MatchHistoryView } from './components/MatchHistoryView';
 import { MixtonLiveStepper } from './components/MixtonLiveStepper';
 
-// Interactive High-Fidelity Simulation Dataset matching the Approved CS2 Concept Mockup
-const DEMO_CONCEPT_PLAYERS: Player[] = [
-  {
-    discordId: 'demo_1',
-    faceit_nickname: 'm0NESY_pe',
-    faceit_level: 10,
-    faceit_elo: 2600,
-    mixton_tier: 'S',
-    discordUser: {
-      displayName: 'm0NESY_pe',
-      avatarURL: 'https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=120&auto=format&fit=crop&q=80'
-    }
-  },
-  {
-    discordId: 'demo_2',
-    faceit_nickname: 'SimpleCS',
-    faceit_level: 10,
-    faceit_elo: 2520,
-    mixton_tier: 'S',
-    discordUser: {
-      displayName: 'SimpleCS',
-      avatarURL: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80'
-    }
-  },
-  {
-    discordId: 'demo_3',
-    faceit_nickname: 'b1t_latam',
-    faceit_level: 9,
-    faceit_elo: 2180,
-    mixton_tier: 'A',
-    discordUser: {
-      displayName: 'b1t_latam',
-      avatarURL: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=120&auto=format&fit=crop&q=80'
-    }
-  },
-  {
-    discordId: 'demo_4',
-    faceit_nickname: 'FalleN_fan',
-    faceit_level: 8,
-    faceit_elo: 1950,
-    mixton_tier: 'A',
-    discordUser: {
-      displayName: 'FalleN_fan',
-      avatarURL: 'https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=120&auto=format&fit=crop&q=80'
-    }
-  },
-  {
-    discordId: 'demo_5',
-    faceit_nickname: 'arT_rush',
-    faceit_level: 8,
-    faceit_elo: 1910,
-    mixton_tier: 'A',
-    discordUser: {
-      displayName: 'arT_rush',
-      avatarURL: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=120&auto=format&fit=crop&q=80'
-    }
-  },
-  {
-    discordId: 'demo_6',
-    faceit_nickname: 'coldzera_99',
-    faceit_level: 7,
-    faceit_elo: 1720,
-    mixton_tier: 'B',
-    discordUser: {
-      displayName: 'coldzera_99',
-      avatarURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80'
-    }
-  },
-  {
-    discordId: 'demo_7',
-    faceit_nickname: 'KSCERATO_jr',
-    faceit_level: 7,
-    faceit_elo: 1680,
-    mixton_tier: 'B',
-    discordUser: {
-      displayName: 'KSCERATO_jr',
-      avatarURL: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80'
-    }
-  },
-  {
-    discordId: 'demo_8',
-    faceit_nickname: 'yuurih_pe',
-    faceit_level: 6,
-    faceit_elo: 1540,
-    mixton_tier: 'B',
-    discordUser: {
-      displayName: 'yuurih_pe',
-      avatarURL: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=120&auto=format&fit=crop&q=80'
-    }
-  },
-  {
-    discordId: 'demo_9',
-    faceit_nickname: 'drop_pe',
-    faceit_level: 5,
-    faceit_elo: 1420,
-    mixton_tier: 'B',
-    discordUser: {
-      displayName: 'drop_pe',
-      avatarURL: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=120&auto=format&fit=crop&q=80'
-    }
-  },
-  {
-    discordId: 'demo_10',
-    faceit_nickname: 'chelo_cs',
-    faceit_level: 4,
-    faceit_elo: 1250,
-    mixton_tier: 'C',
-    discordUser: {
-      displayName: 'chelo_cs',
-      avatarURL: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=120&auto=format&fit=crop&q=80'
-    }
-  }
+// CS2 Active Duty Official Tournament Maps
+const CS2_OFFICIAL_MAPS = [
+  { id: 'de_mirage', name: 'Mirage', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_mirage.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_mirage.png' },
+  { id: 'de_inferno', name: 'Inferno', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_inferno.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_inferno.png' },
+  { id: 'de_nuke', name: 'Nuke', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_nuke.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_nuke.png' },
+  { id: 'de_anubis', name: 'Anubis', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_anubis.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_anubis.png' },
+  { id: 'de_ancient', name: 'Ancient', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_ancient.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_ancient.png' },
+  { id: 'de_dust2', name: 'Dust II', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_dust2.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_dust2.png' },
+  { id: 'de_vertigo', name: 'Vertigo', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_vertigo.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_vertigo.png' }
 ];
-
-const DEMO_CONCEPT_TEAM_A: Team = {
-  id: 'demo_team_1',
-  name: 'EQUIPO FÉNIX',
-  captain: {
-    discordId: 'demo_cap_1',
-    faceit_nickname: 's4vitar',
-    faceit_level: 10,
-    faceit_elo: 2540,
-    mixton_tier: 'S',
-    discordUser: {
-      displayName: 's4vitar',
-      avatarURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80'
-    }
-  },
-  players: [
-    {
-      discordId: 'demo_p_1',
-      faceit_nickname: 'EliGE_pe',
-      faceit_level: 10,
-      faceit_elo: 2480,
-      mixton_tier: 'S',
-      discordUser: {
-        displayName: 'EliGE_pe',
-        avatarURL: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=120&auto=format&fit=crop&q=80'
-      }
-    },
-    {
-      discordId: 'demo_p_2',
-      faceit_nickname: 'twistzz_latam',
-      faceit_level: 9,
-      faceit_elo: 2240,
-      mixton_tier: 'A',
-      discordUser: {
-        displayName: 'twistzz_latam',
-        avatarURL: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=120&auto=format&fit=crop&q=80'
-      }
-    },
-    {
-      discordId: 'demo_p_3',
-      faceit_nickname: 'rain_cs2',
-      faceit_level: 8,
-      faceit_elo: 1980,
-      mixton_tier: 'A',
-      discordUser: {
-        displayName: 'rain_cs2',
-        avatarURL: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80'
-      }
-    }
-  ]
-};
-
-const DEMO_CONCEPT_TEAM_B: Team = {
-  id: 'demo_team_2',
-  name: 'EQUIPO KOBRA',
-  captain: {
-    discordId: 'demo_cap_2',
-    faceit_nickname: 'shadow',
-    faceit_level: 10,
-    faceit_elo: 2420,
-    mixton_tier: 'S',
-    discordUser: {
-      displayName: 'shadow',
-      avatarURL: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=120&auto=format&fit=crop&q=80'
-    }
-  },
-  players: [
-    {
-      discordId: 'demo_p_4',
-      faceit_nickname: 'broky_fan',
-      faceit_level: 9,
-      faceit_elo: 2290,
-      mixton_tier: 'A',
-      discordUser: {
-        displayName: 'broky_fan',
-        avatarURL: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120&auto=format&fit=crop&q=80'
-      }
-    },
-    {
-      discordId: 'demo_p_5',
-      faceit_nickname: 'ropz_pe',
-      faceit_level: 9,
-      faceit_elo: 2210,
-      mixton_tier: 'A',
-      discordUser: {
-        displayName: 'ropz_pe',
-        avatarURL: 'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=120&auto=format&fit=crop&q=80'
-      }
-    }
-  ]
-};
-
-const DEMO_CONCEPT_MAP_VETO: MapVetoState = {
-  active: true,
-  completed: false,
-  teamIdA: 'demo_team_1',
-  teamIdB: 'demo_team_2',
-  pool: [
-    { id: 'de_mirage', name: 'Mirage', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_mirage.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_mirage.png' },
-    { id: 'de_inferno', name: 'Inferno', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_inferno.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_inferno.png' },
-    { id: 'de_nuke', name: 'Nuke', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_nuke.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_nuke.png' },
-    { id: 'de_anubis', name: 'Anubis', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_anubis.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_anubis.png' },
-    { id: 'de_ancient', name: 'Ancient', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_ancient.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_ancient.png' },
-    { id: 'de_dust2', name: 'Dust II', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_dust2.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_dust2.png' },
-    { id: 'de_vertigo', name: 'Vertigo', image: 'https://raw.githubusercontent.com/ggMartinez/CS2-Maps-Images/main/maps/de_vertigo.png', icon: 'https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/de_vertigo.png' }
-  ],
-  bannedMaps: ['de_mirage', 'de_nuke', 'de_dust2'],
-  banHistory: [
-    { mapId: 'de_mirage', mapName: 'Mirage', teamId: 'demo_team_2', teamName: 'EQUIPO KOBRA', timestamp: Date.now() - 60000 },
-    { mapId: 'de_nuke', mapName: 'Nuke', teamId: 'demo_team_1', teamName: 'EQUIPO FÉNIX', timestamp: Date.now() - 40000 },
-    { mapId: 'de_dust2', mapName: 'Dust II', teamId: 'demo_team_2', teamName: 'EQUIPO KOBRA', timestamp: Date.now() - 20000 }
-  ],
-  banSequence: ['demo_team_1', 'demo_team_2', 'demo_team_1', 'demo_team_2', 'demo_team_1', 'demo_team_2'],
-  currentBanIndex: 3,
-  chosenMap: null
-};
 
 export default function App() {
   // Authentication & Loading states
@@ -452,39 +234,16 @@ export default function App() {
   // Toast stack state
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Concept Mockup Preview Modal & Interactive Concept Demo Mode
-  const [showMockupModal, setShowMockupModal] = useState<boolean>(false);
-  const [selectedMockupTab, setSelectedMockupTab] = useState<'draft' | 'veto'>('draft');
+  // Arena Stage Tab: 'draft' | 'veto'
   const [arenaStageTab, setArenaStageTab] = useState<'draft' | 'veto'>('draft');
-  const [isConceptDemoMode, setIsConceptDemoMode] = useState<boolean>(true);
   const [isAdminControlsOpen, setIsAdminControlsOpen] = useState<boolean>(false);
-  const [demoMapVeto, setDemoMapVeto] = useState<MapVetoState>(DEMO_CONCEPT_MAP_VETO);
 
-  const handleDemoBanMap = (mapId: string) => {
-    setDemoMapVeto(prev => {
-      if (prev.bannedMaps.includes(mapId)) return prev;
-      const map = (prev.pool || []).find(m => m.id === mapId);
-      const mapName = map ? map.name : mapId;
-      const teamName = prev.currentBanIndex % 2 === 0 ? 'EQUIPO FÉNIX' : 'EQUIPO KOBRA';
-      const newBanned = [...prev.bannedMaps, mapId];
-      const newHistory: MapVetoHistoryItem[] = [
-        ...(prev.banHistory || []), 
-        { mapId, mapName, teamId: 'demo', teamName, timestamp: Date.now() }
-      ];
-      
-      const remaining = (prev.pool || []).filter(m => !newBanned.includes(m.id));
-      const isDone = remaining.length === 1;
-      showToast(`🎯 [Simulación] Mapa ${mapName} descartado por ${teamName}`, 'info');
-      return {
-        ...prev,
-        bannedMaps: newBanned,
-        banHistory: newHistory,
-        currentBanIndex: prev.currentBanIndex + 1,
-        completed: isDone,
-        chosenMap: isDone ? remaining[0] : null
-      };
-    });
-  };
+  // Auto-switch to veto tab when map veto is active or completed in the real lobby
+  useEffect(() => {
+    if (lobbyState.mapVeto && (lobbyState.mapVeto.active || lobbyState.mapVeto.completed)) {
+      setArenaStageTab('veto');
+    }
+  }, [lobbyState.mapVeto?.active, lobbyState.mapVeto?.completed]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const wsReconnectTimerRef = useRef<number | null>(null);
@@ -2380,33 +2139,9 @@ export default function App() {
 
   const statusInfo = getDraftStatusInfo();
 
-  // Concept Demo Mode Data vs Live Discord Database
-  const effectiveAvailablePlayers = useMemo(() => {
-    if (isConceptDemoMode) {
-      return {
-        S: DEMO_CONCEPT_PLAYERS.filter(p => p.mixton_tier === 'S'),
-        A: DEMO_CONCEPT_PLAYERS.filter(p => p.mixton_tier === 'A'),
-        B: DEMO_CONCEPT_PLAYERS.filter(p => p.mixton_tier === 'B'),
-        C: DEMO_CONCEPT_PLAYERS.filter(p => p.mixton_tier === 'C'),
-      };
-    }
-    return availablePlayers;
-  }, [isConceptDemoMode, availablePlayers]);
-
-  const effectiveLobbyState = useMemo<LobbyState>(() => {
-    if (isConceptDemoMode) {
-      return {
-        teams: [DEMO_CONCEPT_TEAM_A, DEMO_CONCEPT_TEAM_B],
-        pickOrder: ['demo_team_1', 'demo_team_2'],
-        currentPickIndex: 5,
-        pickSequence: ['demo_team_1', 'demo_team_2', 'demo_team_2', 'demo_team_1', 'demo_team_1', 'demo_team_1', 'demo_team_2', 'demo_team_2'],
-        draftStarted: true,
-        draftFinished: false,
-        mapVeto: demoMapVeto
-      };
-    }
-    return lobbyState;
-  }, [isConceptDemoMode, lobbyState, demoMapVeto]);
+  // Live Discord Database State
+  const effectiveAvailablePlayers = availablePlayers;
+  const effectiveLobbyState = lobbyState;
 
   // Filter ready players by search query and tier
   const getFilteredPlayers = () => {
@@ -2439,7 +2174,6 @@ export default function App() {
 
   // Check if current user is captain and it's their turn
   const checkIsMyTurn = () => {
-    if (isConceptDemoMode) return true; // Allows testing interactive pick/ban
     if (!lobbyState.draftStarted || lobbyState.draftFinished) return false;
     const currentTeamId = lobbyState.pickSequence?.[lobbyState.currentPickIndex] || lobbyState.pickOrder[lobbyState.currentPickIndex % (lobbyState.pickOrder.length || 1)];
     const currentTeam = lobbyState.teams.find(t => t.id === currentTeamId);
@@ -2447,7 +2181,7 @@ export default function App() {
   };
 
   const isMyTurn = checkIsMyTurn();
-  const canInteract = isConceptDemoMode || (lobbyState.draftStarted && !lobbyState.draftFinished && (isMyTurn || currentUser?.isAdmin));
+  const canInteract = Boolean(lobbyState.draftStarted && !lobbyState.draftFinished && (isMyTurn || currentUser?.isAdmin));
 
   // Teams with captains for the pick order list editor
   const teamsWithCaptains = effectiveLobbyState.teams.filter(t => t.captain !== null);
@@ -2553,127 +2287,8 @@ export default function App() {
             </div>
           )}
 
-          {/* Arena Subheader Bar with Live Stepper */}
-          <div className="border-b border-white/10 bg-[#0B0E14] px-4 sm:px-6 py-3 flex flex-col md:flex-row justify-between items-center gap-3 relative z-10 shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#FF5500] text-black flex items-center justify-center font-black rounded-xl shadow-[0_0_15px_rgba(255,85,0,0.4)] flex-shrink-0">
-                <Gamepad2 className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-base sm:text-lg font-black italic tracking-tighter uppercase leading-none text-white font-mono flex items-center gap-2">
-                  SALA MIXTON: <span className="text-[#FF5500]">MACHUPEEK</span>
-                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-mono font-bold uppercase not-italic tracking-wider animate-pulse">
-                    ● EN VIVO
-                  </span>
-                </h2>
-                <p className="text-[10px] text-neutral-400 uppercase tracking-widest font-mono font-bold mt-0.5">
-                  MATCHMAKING & CS2 COMPETITIVE ARENA
-                </p>
-              </div>
-            </div>
-
-            {/* Arena Stage Switcher (Draft vs Veto) and Mode Controls */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Quick Tab Switcher: Draft Lobby vs Map Veto */}
-              <div className="flex items-center gap-1 bg-[#121622] p-1 border border-white/10 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setArenaStageTab('draft')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                    arenaStageTab === 'draft'
-                      ? 'bg-[#FF5500] text-black shadow-[0_0_15px_rgba(255,85,0,0.4)]'
-                      : 'text-neutral-400 hover:text-white hover:bg-white/5'
-                  }`}
-                  title="Ver sala de selección de jugadores (Draft)"
-                >
-                  <Swords className="w-3.5 h-3.5" />
-                  <span>1. Draft Lobby</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setArenaStageTab('veto')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                    arenaStageTab === 'veto'
-                      ? 'bg-[#00A3FF] text-black shadow-[0_0_15px_rgba(0,163,255,0.4)]'
-                      : 'text-neutral-400 hover:text-white hover:bg-white/5'
-                  }`}
-                  title="Ver fase de descarte de mapas de torneo (Veto)"
-                >
-                  <Map className="w-3.5 h-3.5" />
-                  <span>2. Veto Mapas</span>
-                  <span className="text-[9px] bg-white/20 px-1.5 py-0.2 rounded font-black">CS2</span>
-                </button>
-              </div>
-
-              {/* Concept Simulation Mode Toggle */}
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !isConceptDemoMode;
-                  setIsConceptDemoMode(next);
-                  showToast(next ? '⚡ Simulación del Concepto activada (Fénix vs Kobra)' : '🔴 Cambiado a datos en tiempo real de Discord', 'info');
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                  isConceptDemoMode
-                    ? 'bg-gradient-to-r from-amber-500/20 to-[#FF5500]/20 border-[#FF5500]/60 text-[#FF5500] shadow-[0_0_15px_rgba(255,85,0,0.25)]'
-                    : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white'
-                }`}
-                title="Alternar entre la simulación visual idéntica al concepto y la cola real de Discord"
-              >
-                <span className={`w-2 h-2 rounded-full ${isConceptDemoMode ? 'bg-[#FF5500] animate-pulse' : 'bg-neutral-500'}`} />
-                <span>{isConceptDemoMode ? '⚡ Concepto Mockup: ON' : '🔴 Datos Discord: LIVE'}</span>
-              </button>
-
-              {/* View Mockup Modal */}
-              <button
-                type="button"
-                onClick={() => setShowMockupModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-[#FF5500]/15 to-purple-600/15 border border-[#FF5500]/40 hover:border-[#FF5500] text-white hover:text-white transition-all text-xs font-mono font-bold uppercase tracking-wider cursor-pointer rounded-xl shadow-md"
-                title="Ver vista previa gráfica de la mejora visual del Mixtón"
-              >
-                <span>🎨</span>
-                <span>Ver Mockups</span>
-              </button>
-
-              <a 
-                href="https://www.faceit.com/es/hub/52a88f17-1660-42ae-8322-76592f0c6f23/Mixtones"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5500]/10 border border-[#FF5500]/40 text-[#FF5500] hover:bg-[#FF5500] hover:text-black transition-all text-xs font-mono font-bold uppercase tracking-wider rounded-xl"
-                title="Abrir Hub de Faceit en una pestaña nueva"
-              >
-                <span className="w-2 h-2 rounded-full bg-[#FF5500] animate-pulse" />
-                Hub Faceit
-              </a>
-            </div>
-          </div>
-
-          {/* Concept Mode Notification Banner */}
-          {isConceptDemoMode && (
-            <div className="bg-gradient-to-r from-amber-950/40 via-[#10141E] to-[#FF5500]/15 border-b border-[#FF5500]/30 px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#FF5500] animate-ping" />
-                <span className="text-white font-bold">
-                  <strong className="text-[#FF5500]">VISTA PREVIA ACTIVA DEL CONCEPTO GRÁFICO:</strong> Mostrando el enfrentamiento <strong>EQUIPO FÉNIX VS EQUIPO KOBRA</strong> con 10 jugadores y veto interactivo idéntico al mockup aprobado.
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsConceptDemoMode(false);
-                    showToast('🔴 Mostrando cola real del bot de Discord', 'info');
-                  }}
-                  className="px-2.5 py-1 bg-black/60 hover:bg-neutral-800 border border-white/20 text-neutral-300 hover:text-white text-[10px] uppercase font-bold rounded-lg transition-colors cursor-pointer"
-                >
-                  Ver datos Discord ({availablePlayers.S?.length || 0} listos)
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Stepper Banner Container */}
-          <div className="px-4 sm:px-6 pt-4 pb-0 bg-[#08090C]">
+          <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 pt-4 pb-0">
             <MixtonLiveStepper
               lobbyState={effectiveLobbyState}
               totalReadyCount={totalReadyCountVal}
@@ -2686,10 +2301,10 @@ export default function App() {
           </div>
 
           {/* Main Content Grid */}
-          <main className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 p-4 sm:p-6 relative z-10 lg:overflow-hidden overflow-y-auto lg:max-h-[calc(100vh-140px)]">
+          <main className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 p-4 sm:p-6 relative z-10 w-full max-w-[1600px] mx-auto">
         
         {/* Left Panel: Available Players */}
-        <section className="lg:col-span-1 p-4 sm:p-5 bg-[#0D1017]/95 border border-white/10 shadow-2xl flex flex-col lg:max-h-[calc(100vh-140px)] rounded-2xl backdrop-blur-md">
+        <section className="lg:col-span-1 p-4 sm:p-5 bg-[#0D1017]/95 border border-white/10 shadow-2xl flex flex-col rounded-2xl backdrop-blur-md h-fit">
           <div className="mb-3.5 pb-3 border-b border-white/10">
             <div className="flex items-center justify-between">
               <h2 className="text-base sm:text-lg font-black italic tracking-tighter uppercase text-white flex items-center gap-2">
@@ -2812,7 +2427,7 @@ export default function App() {
                                 LVL {player.faceit_level}
                               </span>
 
-                              {currentUser?.isAdmin && !isConceptDemoMode && (
+                              {currentUser?.isAdmin && (
                                 <div className="flex gap-1">
                                   {/* Admin override select */}
                                   <select 
@@ -2872,13 +2487,7 @@ export default function App() {
                                 ) : (
                                   <button 
                                     className="bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] text-black font-mono text-[9px] font-black tracking-wider px-2.5 py-1 transition-all shadow-[0_0_10px_rgba(255,85,0,0.3)] hover:scale-105 active:scale-95 cursor-pointer rounded-lg"
-                                    onClick={() => {
-                                      if (isConceptDemoMode) {
-                                        showToast(`🎯 [Simulación] Seleccionaste a ${player.faceit_nickname} (Nivel ${player.faceit_level}) para EQUIPO FÉNIX`, 'success');
-                                      } else {
-                                        handleSelectPendingPlayer(player);
-                                      }
-                                    }}
+                                    onClick={() => handleSelectPendingPlayer(player)}
                                     title="Elegir para tu equipo"
                                   >
                                     ELEGIR
@@ -2897,13 +2506,17 @@ export default function App() {
               <div className="text-center py-10 border border-dashed border-white/10 bg-[#121622]/40 rounded-xl p-4">
                 <Users className="w-8 h-8 text-neutral-600 mx-auto mb-2" />
                 <p className="text-xs text-neutral-400 font-mono uppercase font-bold">SIN JUGADORES EN COLA</p>
-                <p className="text-[10px] text-neutral-500 font-mono mt-1">Usa /mixton_listo en Discord para sumarte</p>
+                <p className="text-[10px] text-neutral-500 font-mono mt-1">Escribe <code className="text-[#FF5500]">/mixton_listo</code> en Discord para sumarte</p>
                 <button
                   type="button"
-                  onClick={() => setIsConceptDemoMode(true)}
-                  className="mt-3 px-3 py-1.5 bg-[#FF5500]/20 hover:bg-[#FF5500]/30 border border-[#FF5500]/50 text-[#FF5500] text-[10px] font-mono font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
+                  onClick={() => {
+                    navigator.clipboard.writeText('/mixton_listo');
+                    showToast('Comando "/mixton_listo" copiado al portapapeles', 'success');
+                  }}
+                  className="mt-3 px-3 py-1.5 bg-[#FF5500]/15 hover:bg-[#FF5500] text-[#FF5500] hover:text-black border border-[#FF5500]/40 text-[10px] font-mono font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center gap-1.5 mx-auto"
                 >
-                  ⚡ Activar Simulación Mockup
+                  <Copy className="w-3 h-3" />
+                  <span>Copiar /mixton_listo</span>
                 </button>
               </div>
             )}
@@ -2911,7 +2524,7 @@ export default function App() {
         </section>
 
         {/* Center & Right Panel */}
-        <section className="lg:col-span-3 flex flex-col gap-5 lg:overflow-y-auto lg:max-h-[calc(100vh-140px)] pr-2">
+        <section className="lg:col-span-3 flex flex-col gap-6">
           
           {/* TOURNAMENT BROADCAST CS2 MAP VETO STAGE */}
           {arenaStageTab === 'veto' ? (
@@ -2933,31 +2546,40 @@ export default function App() {
                 </div>
 
                 {/* Matchup Badges */}
-                <div className="flex items-center gap-2 bg-[#090C12] px-4 py-2 border border-white/15 rounded-xl shadow-md text-xs">
-                  <span className="font-black text-[#FF5500] tracking-wider">
-                    EQUIPO FÉNIX <span className="text-[9px] font-normal text-neutral-400">(Cap. s4vitar)</span>
-                  </span>
-                  <span className="text-white font-black text-[10px] px-2 py-0.5 bg-neutral-800 border border-neutral-700 rounded">
-                    VS
-                  </span>
-                  <span className="font-black text-[#00A3FF] tracking-wider">
-                    EQUIPO KOBRA <span className="text-[9px] font-normal text-neutral-400">(Cap. shadow)</span>
-                  </span>
-                </div>
+                {(() => {
+                  const veto = lobbyState.mapVeto;
+                  const teamA = lobbyState.teams.find(t => t.id === veto?.teamIdA) || lobbyState.teams[0];
+                  const teamB = lobbyState.teams.find(t => t.id === veto?.teamIdB) || lobbyState.teams[1];
+                  const nameA = teamA ? getTeamName(teamA) : 'EQUIPO A';
+                  const nameB = teamB ? getTeamName(teamB) : 'EQUIPO B';
+                  const capA = teamA?.captain?.discordUser?.displayName || teamA?.captain?.faceit_nickname;
+                  const capB = teamB?.captain?.discordUser?.displayName || teamB?.captain?.faceit_nickname;
+
+                  return (
+                    <div className="flex items-center gap-2 bg-[#090C12] px-4 py-2 border border-white/15 rounded-xl shadow-md text-xs">
+                      <span className="font-black text-[#FF5500] tracking-wider">
+                        {nameA} {capA && <span className="text-[9px] font-normal text-neutral-400">(Cap. {capA})</span>}
+                      </span>
+                      <span className="text-white font-black text-[10px] px-2 py-0.5 bg-neutral-800 border border-neutral-700 rounded">
+                        VS
+                      </span>
+                      <span className="font-black text-[#00A3FF] tracking-wider">
+                        {nameB} {capB && <span className="text-[9px] font-normal text-neutral-400">(Cap. {capB})</span>}
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 {/* Veto controls */}
                 <div className="flex items-center gap-2">
-                  {isConceptDemoMode && (
+                  {currentUser?.isAdmin && lobbyState.mapVeto?.active && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setDemoMapVeto(DEMO_CONCEPT_MAP_VETO);
-                        showToast('↺ Simulación de Veto de Mapas reiniciada', 'info');
-                      }}
-                      className="text-xs text-neutral-300 hover:text-white border border-white/15 hover:border-white/40 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer bg-white/5"
+                      onClick={handleCancelVeto}
+                      className="text-xs text-neutral-300 hover:text-red-400 border border-white/15 hover:border-red-500/50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer bg-white/5"
                     >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Reiniciar Veto</span>
+                      <X className="w-3.5 h-3.5" />
+                      <span>Cancelar Veto</span>
                     </button>
                   )}
                   <button
@@ -2973,7 +2595,34 @@ export default function App() {
 
               {/* Status Banner */}
               {(() => {
-                const veto = effectiveLobbyState.mapVeto || demoMapVeto;
+                const veto = lobbyState.mapVeto;
+                if (!veto || (!veto.active && !veto.completed)) {
+                  return (
+                    <div className="bg-[#121622] border border-white/10 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-white/10 text-neutral-300 flex items-center justify-center font-black rounded-lg">
+                          🗺️
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black uppercase text-neutral-400 tracking-widest bg-white/5 px-2 py-0.5 rounded border border-white/10">
+                            FASE DE VETO DE MAPAS CS2 // EN ESPERA
+                          </span>
+                          <p className="text-xs sm:text-sm font-bold text-white mt-1">
+                            El descarte de mapas iniciará automáticamente cuando finalice la selección de jugadores.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setArenaStageTab('draft')}
+                        className="px-3.5 py-1.5 bg-[#FF5500] text-black font-bold text-xs uppercase rounded-lg hover:bg-[#FF7733] transition-colors cursor-pointer"
+                      >
+                        Ir al Draft de Jugadores
+                      </button>
+                    </div>
+                  );
+                }
+
                 if (veto.completed && veto.chosenMap) {
                   return (
                     <div className="bg-gradient-to-r from-emerald-950/80 via-emerald-900/40 to-emerald-950/80 border-2 border-emerald-400 rounded-xl p-4 sm:p-5 text-center flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
@@ -2990,18 +2639,48 @@ export default function App() {
                           </span>
                         </div>
                       </div>
-                      <div className="text-xs font-bold text-emerald-300 bg-black/60 px-4 py-2 border border-emerald-500/40 rounded-lg">
-                        ¡Veto completado exitosamente! El servidor CS2 cargará este mapa.
+                      <div className="flex items-center gap-2">
+                        {currentUser?.isAdmin ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setChosenMapForMatch(veto.chosenMap);
+                              setMatchTeamA(veto.teamIdA);
+                              setMatchTeamB(veto.teamIdB);
+                              setIsBetModalOpen(true);
+                              fetchQueues();
+                              fetchBetStatus(effectiveBetAmount);
+                            }}
+                            className="bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase text-xs px-5 py-2.5 transition-all cursor-pointer shadow-[0_0_20px_rgba(16,185,129,0.5)] rounded-xl"
+                          >
+                            ➡️ CONTINUAR A SALDOS Y LANZAR PARTIDA
+                          </button>
+                        ) : (
+                          <div className="text-xs font-bold text-emerald-300 bg-black/60 px-4 py-2 border border-emerald-500/40 rounded-lg">
+                            ¡Veto completado exitosamente! El servidor CS2 cargará este mapa.
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
                 }
 
-                const teamInTurnName = veto.currentBanIndex % 2 === 0 ? 'EQUIPO FÉNIX' : 'EQUIPO KOBRA';
+                const currentTurnTeamId = veto.banSequence?.[veto.currentBanIndex];
+                const teamInTurn = lobbyState.teams.find(t => t.id === currentTurnTeamId);
+                const teamInTurnName = teamInTurn ? getTeamName(teamInTurn) : `EQUIPO ${(veto.currentBanIndex % 2) + 1}`;
+                const isMyVetoTurn = Boolean(teamInTurn?.captain && currentUser && teamInTurn.captain.discordId === currentUser.userId);
+                const totalBans = veto.banSequence?.length || 6;
+                const currentBanNum = (veto.currentBanIndex || 0) + 1;
+                const remainingMapsCount = (veto.pool?.length || 7) - (veto.bannedMaps?.length || 0);
+
                 return (
-                  <div className="bg-gradient-to-r from-[#FF5500]/20 via-[#10141E] to-[#00A3FF]/20 border-2 border-[#FF5500]/70 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0_0_25px_rgba(255,85,0,0.25)]">
+                  <div className={`p-4 rounded-xl border-2 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0_0_25px_rgba(255,85,0,0.25)] ${
+                    isMyVetoTurn 
+                      ? 'bg-gradient-to-r from-[#FF5500]/25 via-[#10141E] to-[#FF5500]/15 border-[#FF5500] animate-pulse' 
+                      : 'bg-gradient-to-r from-[#FF5500]/15 via-[#10141E] to-[#00A3FF]/15 border-white/20'
+                  }`}>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-[#FF5500] text-black font-black flex items-center justify-center text-xl rounded-lg shadow-md animate-pulse">
+                      <div className="w-10 h-10 bg-[#FF5500] text-black font-black flex items-center justify-center text-xl rounded-lg shadow-md">
                         🎯
                       </div>
                       <div>
@@ -3009,17 +2688,19 @@ export default function App() {
                           <span className="text-[10px] font-black uppercase text-[#FF5500] tracking-widest bg-[#FF5500]/20 border border-[#FF5500]/40 px-2 py-0.5 rounded">
                             👉 TURNO DE BANEO: {teamInTurnName}
                           </span>
-                          <span className="text-[10px] text-neutral-400 bg-black/60 px-2 py-0.5 rounded border border-white/10">
-                            BANEO {veto.currentBanIndex + 1} DE 6
+                          <span className="text-[10px] text-neutral-400 bg-black/60 px-2 py-0.5 rounded border border-white/10 font-mono">
+                            BANEO {currentBanNum} DE {totalBans}
                           </span>
                         </div>
                         <p className="text-xs sm:text-sm font-bold text-white mt-1">
-                          Haz clic sobre el mapa que deseas descartar para esta partida
+                          {isMyVetoTurn 
+                            ? '¡ES TU TURNO! Haz clic sobre el mapa que deseas descartar' 
+                            : `Esperando el baneo de ${teamInTurn?.captain?.faceit_nickname || teamInTurnName}...`}
                         </p>
                       </div>
                     </div>
                     <div className="text-xs font-mono font-bold text-neutral-300 bg-black/70 px-3.5 py-2 border border-white/10 rounded-lg">
-                      {7 - (veto.bannedMaps?.length || 0)} Mapas restantes
+                      {remainingMapsCount} Mapas restantes
                     </div>
                   </div>
                 );
@@ -3027,27 +2708,26 @@ export default function App() {
 
               {/* 7 Maps Grid */}
               {(() => {
-                const veto = effectiveLobbyState.mapVeto || demoMapVeto;
-                const pool = (veto.pool && veto.pool.length > 0) ? veto.pool : DEMO_CONCEPT_MAP_VETO.pool;
+                const veto = lobbyState.mapVeto;
+                const pool = (veto && veto.pool && veto.pool.length > 0) ? veto.pool : CS2_OFFICIAL_MAPS;
+                const currentTurnTeamId = veto?.banSequence?.[veto?.currentBanIndex || 0];
+                const teamInTurn = lobbyState.teams.find(t => t.id === currentTurnTeamId);
+                const isMyVetoTurn = Boolean(teamInTurn?.captain && currentUser && teamInTurn.captain.discordId === currentUser.userId);
 
                 return (
                   <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
                     {pool.map(mapItem => {
-                      const isBanned = (veto.bannedMaps || []).includes(mapItem.id);
-                      const isChosen = veto.chosenMap?.id === mapItem.id || (veto.completed && !isBanned);
-                      const banEntry = (veto.banHistory || []).find(b => b.mapId === mapItem.id);
-                      const canBanThis = !veto.completed && !isBanned;
+                      const isBanned = (veto?.bannedMaps || []).includes(mapItem.id);
+                      const isChosen = veto?.chosenMap?.id === mapItem.id || (veto?.completed && !isBanned);
+                      const banEntry = (veto?.banHistory || []).find(b => b.mapId === mapItem.id);
+                      const canBanThis = Boolean(veto?.active && !veto?.completed && !isBanned && (isMyVetoTurn || currentUser?.isAdmin));
 
                       return (
                         <div
                           key={mapItem.id}
                           onClick={() => {
-                            if (canBanThis) {
-                              if (isConceptDemoMode) {
-                                handleDemoBanMap(mapItem.id);
-                              } else if (lobbyState.mapVeto?.active) {
-                                handleBanMap(mapItem.id);
-                              }
+                            if (canBanThis && !isBanningMap) {
+                              handleBanMap(mapItem.id);
                             }
                           }}
                           className={`relative group rounded-2xl overflow-hidden h-72 sm:h-80 lg:h-[340px] flex flex-col justify-between p-3 select-none transition-all duration-300 ${
@@ -3135,19 +2815,20 @@ export default function App() {
 
               {/* Ban History Breadcrumb */}
               {(() => {
-                const veto = effectiveLobbyState.mapVeto || demoMapVeto;
+                const veto = effectiveLobbyState.mapVeto;
+                const history = veto?.banHistory || [];
                 return (
                   <div className="bg-[#090C12] border border-white/10 rounded-xl p-3 flex flex-wrap items-center gap-2 text-xs">
                     <span className="font-bold text-neutral-400 uppercase text-[10px] flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-[#FF5500]" /> HISTORIAL DE BANEOS:
                     </span>
-                    {(veto.banHistory && veto.banHistory.length > 0) ? (
-                      veto.banHistory.map((h, idx) => (
+                    {history.length > 0 ? (
+                      history.map((h, idx) => (
                         <span key={idx} className="flex items-center gap-1.5 bg-[#141824] px-2.5 py-1 rounded border border-white/10 text-[10px]">
                           <span className="text-[#FF5500] font-black">{idx + 1}.</span>
                           <span className="text-white font-bold">{h.mapName}</span>
                           <span className="text-neutral-400">({h.teamName})</span>
-                          {idx < (veto.banHistory?.length || 0) - 1 && <span className="text-neutral-600">➔</span>}
+                          {idx < history.length - 1 && <span className="text-neutral-600">➔</span>}
                         </span>
                       ))
                     ) : (
@@ -3195,7 +2876,7 @@ export default function App() {
 
                 if (isTeamTurn) {
                   const captainNick = activeTeam.captain?.discordUser?.displayName || activeTeam.captain?.faceit_nickname || 'Capitán';
-                  const isMyTurn = isConceptDemoMode || (activeTeam.captain && currentUser && activeTeam.captain.discordId === currentUser.userId);
+                  const isMyTurn = Boolean(activeTeam.captain && currentUser && activeTeam.captain.discordId === currentUser.userId);
                   const totalPicks = effectiveLobbyState.pickSequence?.length || 8;
                   const currentPickNum = (effectiveLobbyState.currentPickIndex || 0) + 1;
 
@@ -3298,17 +2979,12 @@ export default function App() {
                         </span>
                       </div>
                     </div>
-                    {isConceptDemoMode && (
-                      <span className="text-xs font-bold text-amber-400 bg-amber-950/30 border border-amber-500/40 px-3 py-1.5 rounded-lg">
-                        ⚡ Mostrando Draft de Simulación (Fénix vs Kobra)
-                      </span>
-                    )}
                   </div>
                 );
               })()}
               
               {/* Collapsible Admin Dashboard Section */}
-              {currentUser?.isAdmin && !isConceptDemoMode && (
+              {currentUser?.isAdmin && (
                 <div className="bg-[#0D1017]/95 border border-white/10 shadow-2xl rounded-2xl overflow-hidden font-mono transition-all">
                   <div 
                     className="p-3.5 sm:p-4 bg-[#121622] flex items-center justify-between cursor-pointer hover:bg-[#161C2C] transition-colors border-b border-white/5"
@@ -3681,7 +3357,7 @@ export default function App() {
                             }`}>
                               LVL {team.captain.faceit_level}
                             </span>
-                            {currentUser?.isAdmin && !isConceptDemoMode && (
+                            {currentUser?.isAdmin && (
                               <button 
                                 className="p-1 bg-red-950/80 border border-red-500/80 hover:bg-red-900 text-red-300 hover:text-white transition-colors cursor-pointer rounded"
                                 onClick={() => handleRemoveCaptain(team.id)}
@@ -3699,7 +3375,7 @@ export default function App() {
                           <span className="text-[10px] text-neutral-500 font-mono font-black uppercase tracking-wider flex items-center gap-1.5">
                             <span>👑</span> ESPERANDO CAPITÁN // {isTeamA ? 'EQUIPO FÉNIX' : 'EQUIPO KOBRA'}
                           </span>
-                          {currentUser?.isAdmin && !isConceptDemoMode && (
+                          {currentUser?.isAdmin && (
                             <button 
                               className="bg-white hover:bg-neutral-200 text-black font-mono text-[9px] font-black uppercase tracking-widest px-3 py-1.5 transition-colors cursor-pointer shadow-md rounded-lg"
                               onClick={() => handleOpenCaptainModal(team.id, team.name)}
@@ -3761,7 +3437,7 @@ export default function App() {
                               }`}>
                                 LVL {player.faceit_level}
                               </span>
-                              {currentUser?.isAdmin && !isConceptDemoMode && (
+                              {currentUser?.isAdmin && (
                                 <button 
                                   className="p-1 bg-neutral-900 border border-white/10 hover:border-red-500 text-neutral-400 hover:text-red-400 transition-colors cursor-pointer rounded"
                                   onClick={() => handleRemovePlayerFromTeam(team.id, player.discordId)}
@@ -3815,7 +3491,7 @@ export default function App() {
                           </span>
                         );
 
-                        if (currentUser?.isAdmin && !isConceptDemoMode) {
+                        if (currentUser?.isAdmin) {
                           const assignablePlayers: Player[] = [];
                           ['S', 'A', 'B', 'C'].forEach(tier => {
                             (effectiveAvailablePlayers[tier] || []).forEach(p => {
@@ -3891,7 +3567,7 @@ export default function App() {
                                 📋 Nicks
                               </button>
                             )}
-                            {currentUser?.isAdmin && !isConceptDemoMode && (team.captain || (team.players && team.players.length > 0)) && (
+                            {currentUser?.isAdmin && (team.captain || (team.players && team.players.length > 0)) && (
                               <button
                                 className="px-2 py-0.5 bg-red-950/80 border border-red-500/80 hover:bg-red-900 text-red-300 hover:text-white text-[8px] font-black uppercase transition-colors cursor-pointer rounded"
                                 onClick={() => handleClearTeam(team.id, team.name)}
@@ -4239,292 +3915,6 @@ export default function App() {
         </div>
       )}
 
-      {/* MAP VETO MODAL (CS2 Competitive Map Ban Phase) */}
-      {lobbyState.mapVeto && (lobbyState.mapVeto.active || lobbyState.mapVeto.completed) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/92 backdrop-blur-md overflow-y-auto font-mono">
-          <div className="bg-[#0D1017] border-2 border-white/15 w-full max-w-[96vw] 2xl:max-w-[1550px] max-h-[96vh] my-auto flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.9)] rounded-none text-white animate-fade-in overflow-hidden">
-            {/* Veto Header */}
-            <div className="bg-[#121622] border-b border-white/10 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#FF5500] text-black flex items-center justify-center font-black shadow-[0_0_15px_rgba(255,85,0,0.5)] flex-shrink-0">
-                  <Flame className="w-5 h-5 animate-pulse" />
-                </div>
-                <div>
-                  <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-white flex items-center gap-2">
-                    FASE DE VETO DE MAPAS CS2 // TOURNAMENT BROADCAST
-                  </h3>
-                  <p className="text-[10px] text-neutral-400">
-                    Baneo alternado por turnos hasta definir el mapa competitivo oficial
-                  </p>
-                </div>
-              </div>
-
-              {/* Matchup Badges */}
-              {(() => {
-                const teamA = lobbyState.teams.find(t => t.id === lobbyState.mapVeto?.teamIdA);
-                const teamB = lobbyState.teams.find(t => t.id === lobbyState.mapVeto?.teamIdB);
-                return (
-                  <div className="flex items-center gap-2 bg-[#090C12] px-3.5 py-1.5 border border-white/15 text-xs shadow-md">
-                    <span className="font-black text-[#FF5500] tracking-wider">
-                      {teamA ? getTeamName(teamA).toUpperCase() : 'EQUIPO A'}
-                      <span className="text-[9px] font-normal text-neutral-400 ml-1">
-                        ({teamA?.captain?.faceit_nickname || 'Capitán'})
-                      </span>
-                    </span>
-                    <span className="text-white font-black text-[10px] px-1.5 py-0.5 bg-neutral-800 border border-neutral-700">
-                      VS
-                    </span>
-                    <span className="font-black text-[#00A3FF] tracking-wider">
-                      {teamB ? getTeamName(teamB).toUpperCase() : 'EQUIPO B'}
-                      <span className="text-[9px] font-normal text-neutral-400 ml-1">
-                        ({teamB?.captain?.faceit_nickname || 'Capitán'})
-                      </span>
-                    </span>
-                  </div>
-                );
-              })()}
-
-              {currentUser?.isAdmin && (
-                <button 
-                  onClick={handleCancelVeto}
-                  className="text-neutral-400 hover:text-red-400 text-[10px] uppercase font-bold border border-white/10 hover:border-red-900 px-3 py-1.5 transition-colors cursor-pointer"
-                >
-                  ✕ CANCELAR VETO
-                </button>
-              )}
-            </div>
-
-            {/* Turn & Status Banner */}
-            {(() => {
-              const veto = lobbyState.mapVeto!;
-              if (veto.completed && veto.chosenMap) {
-                return (
-                  <div className="bg-gradient-to-r from-emerald-950/60 via-emerald-900/30 to-emerald-950/60 border-b-2 border-emerald-400 p-4 sm:p-5 text-center flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0_0_25px_rgba(16,185,129,0.25)]">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-emerald-500 text-black font-black flex items-center justify-center text-2xl shadow-[0_0_20px_rgba(16,185,129,0.6)]">
-                        <Trophy className="w-6 h-6 text-black fill-current" />
-                      </div>
-                      <div className="text-left">
-                        <span className="text-xs uppercase text-emerald-400 font-black tracking-widest block">
-                          MAPA FINAL DECIDIDO
-                        </span>
-                        <span className="text-xl font-black text-white uppercase tracking-wider">
-                          {veto.chosenMap.name}
-                        </span>
-                      </div>
-                    </div>
-                    {currentUser?.isAdmin ? (
-                      <button 
-                        onClick={() => {
-                          setChosenMapForMatch(veto.chosenMap);
-                          setMatchTeamA(veto.teamIdA);
-                          setMatchTeamB(veto.teamIdB);
-                          setIsBetModalOpen(true);
-                          fetchQueues();
-                          fetchBetStatus(effectiveBetAmount);
-                        }}
-                        className="bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase text-xs px-6 py-2.5 transition-all cursor-pointer shadow-[0_0_20px_rgba(21,194,83,0.5)] hover:scale-105 active:scale-95"
-                      >
-                        ➡️ CONTINUAR A SALDOS Y LANZAR PARTIDA
-                      </button>
-                    ) : (
-                      <span className="text-xs text-neutral-300 animate-pulse font-bold bg-black/60 px-3 py-1.5 border border-white/10">
-                        Esperando a que el Administrador confirme saldos y lance la partida...
-                      </span>
-                    )}
-                  </div>
-                );
-              }
-
-              const currentTurnTeamId = veto.banSequence[veto.currentBanIndex];
-              const teamInTurn = lobbyState.teams.find(t => t.id === currentTurnTeamId);
-              const isMyTurn = (teamInTurn?.captain && currentUser && teamInTurn.captain.discordId === currentUser.userId);
-
-              // Compute bans in current block
-              let start = veto.currentBanIndex;
-              while (start > 0 && veto.banSequence[start - 1] === veto.banSequence[veto.currentBanIndex]) start--;
-              let end = veto.currentBanIndex;
-              while (end < veto.banSequence.length - 1 && veto.banSequence[end + 1] === veto.banSequence[veto.currentBanIndex]) end++;
-              const blockTotal = end - start + 1;
-              const pickInBlock = veto.currentBanIndex - start + 1;
-              const blockLabel = blockTotal > 1 ? `(BANEO ${pickInBlock} DE ${blockTotal})` : `(1 BANEO)`;
-
-              return (
-                <div className={`p-4 border-b text-center flex flex-col sm:flex-row items-center justify-between gap-3 ${
-                  isMyTurn 
-                    ? 'bg-gradient-to-r from-[#FF5500]/25 via-black/80 to-[#FF5500]/25 border-y-2 border-[#FF5500] shadow-[0_0_20px_rgba(255,85,0,0.35)]' 
-                    : 'bg-[#121622] border-white/10'
-                }`}>
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xs uppercase text-neutral-400 font-bold">TURNO DE BANEO:</span>
-                    <span className="text-xs font-black uppercase text-white bg-black/70 px-2.5 py-1 border border-white/20">
-                      {teamInTurn ? getTeamName(teamInTurn).toUpperCase() : 'EQUIPO'} {blockLabel}
-                    </span>
-                    <span className="text-[10px] text-neutral-400">
-                      (Capitán: {teamInTurn?.captain?.faceit_nickname || 'Desconocido'})
-                    </span>
-                  </div>
-
-                  <div>
-                    {isMyTurn ? (
-                      <span className="text-xs font-black uppercase text-[#FF5500] animate-pulse flex items-center gap-1.5">
-                        <span>👉</span> ¡ES TU TURNO! HAZ CLIC EN EL MAPA QUE DESEAS DESCARTAR
-                      </span>
-                    ) : (
-                      currentUser?.isAdmin ? (
-                        <span className="text-[11px] font-bold text-[#1B9AAA] flex items-center gap-1.5">
-                          <span>👑</span> Modo Administrador: Puedes banear en nombre del capitán si tarda
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-neutral-400 animate-pulse">
-                          ⏳ Esperando el baneo de {teamInTurn?.captain?.faceit_nickname || 'Capitán'}...
-                        </span>
-                      )
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Map Cards Grid */}
-            <div className="p-3 sm:p-5 md:p-6 overflow-y-auto max-h-[72vh]">
-              <div className={`grid gap-3 sm:gap-4 ${
-                (lobbyState.mapVeto?.pool?.length || 0) <= 3 
-                  ? 'grid-cols-1 sm:grid-cols-3 max-w-3xl mx-auto' 
-                  : (lobbyState.mapVeto?.pool?.length || 0) <= 5 
-                    ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5 max-w-5xl mx-auto' 
-                    : (lobbyState.mapVeto?.pool?.length || 0) <= 7
-                      ? 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-7'
-                      : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 xl:grid-cols-7'
-              }`}>
-                {((lobbyState.mapVeto?.pool && lobbyState.mapVeto.pool.length > 0) ? lobbyState.mapVeto.pool : []).map(mapItem => {
-                  const veto = lobbyState.mapVeto!;
-                  const isBanned = (veto.bannedMaps || []).includes(mapItem.id);
-                  const isChosen = veto.chosenMap?.id === mapItem.id;
-                  const banInfo = (veto.banHistory || []).find(b => b.mapId === mapItem.id);
-
-                  const currentTurnTeamId = veto.banSequence[veto.currentBanIndex];
-                  const teamInTurn = lobbyState.teams.find(t => t.id === currentTurnTeamId);
-                  const isMyTurn = (teamInTurn?.captain && currentUser && teamInTurn.captain.discordId === currentUser.userId);
-                  const canBan = veto.active && !veto.completed && !isBanned && (isMyTurn || currentUser?.isAdmin);
-
-                  return (
-                    <div
-                      key={mapItem.id}
-                      onClick={() => {
-                        if (canBan && !isBanningMap) {
-                          handleBanMap(mapItem.id);
-                        }
-                      }}
-                      className={`relative group rounded-none overflow-hidden h-64 sm:h-72 md:h-80 lg:h-[350px] flex flex-col justify-between p-3 select-none transition-all duration-300 ${
-                        isChosen
-                          ? 'border-4 border-emerald-400 shadow-[0_0_35px_rgba(16,185,129,0.6)] ring-2 ring-emerald-400/50 scale-[1.03]'
-                          : isBanned
-                            ? 'border-2 border-red-950 opacity-55 cursor-not-allowed'
-                            : canBan
-                              ? 'border-2 border-white/20 hover:border-[#FF5500] hover:scale-[1.03] hover:shadow-[0_0_25px_rgba(255,85,0,0.5)] cursor-pointer'
-                              : 'border-2 border-white/10 opacity-80 cursor-default'
-                      }`}
-                    >
-                      {/* Background Map Screenshot */}
-                      <img 
-                        src={mapItem.image} 
-                        alt={mapItem.name} 
-                        className={`absolute inset-0 w-full h-full object-cover transition-transform duration-500 ${
-                          canBan ? 'group-hover:scale-110' : ''
-                        } ${isBanned ? 'grayscale contrast-125' : ''}`}
-                      />
-
-                      {/* Dark Gradient Overlay */}
-                      <div className={`absolute inset-0 ${
-                        isChosen
-                          ? 'bg-gradient-to-t from-emerald-950/90 via-emerald-950/20 to-black/70'
-                          : isBanned
-                            ? 'bg-red-950/75 backdrop-grayscale'
-                            : 'bg-gradient-to-t from-black/95 via-black/40 to-black/60'
-                      }`} />
-
-                      {/* Top Bar: CS2 tag & status badge */}
-                      <div className="relative z-10 flex items-center justify-between">
-                        <span className="text-[9px] font-black uppercase tracking-wider bg-black/80 px-2 py-0.5 border border-white/20 text-neutral-300">
-                          CS2
-                        </span>
-                        {isChosen && (
-                          <span className="text-[8px] font-black uppercase tracking-wider bg-emerald-500 text-black px-2 py-0.5 animate-pulse font-bold shadow-md flex items-center gap-1">
-                            <Trophy className="w-3 h-3 fill-current" />
-                            <span>MAPA ELEGIDO</span>
-                          </span>
-                        )}
-                        {isBanned && (
-                          <span className="text-[8px] font-black uppercase tracking-wider bg-red-600 text-white px-2 py-0.5 shadow-md">
-                            BANEADO
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Diagonal Banned Banner Overlay (Matches Mockup) */}
-                      {isBanned && (
-                        <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none px-2">
-                          <div className="w-[125%] bg-gradient-to-r from-red-700 via-red-600 to-rose-700 text-white font-black uppercase text-[10px] sm:text-xs tracking-widest py-1.5 shadow-[0_0_20px_rgba(220,38,38,0.85)] rotate-[-12deg] border-y-2 border-white/50 text-center">
-                            ✖ BANEADO POR {banInfo?.teamName?.toUpperCase() || 'EQUIPO'}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Center: Official CS2 Pin / Crest Badge */}
-                      <div className="relative z-10 my-auto flex flex-col items-center justify-center">
-                        <img 
-                          src={mapItem.icon} 
-                          alt={mapItem.name} 
-                          className={`w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 object-contain drop-shadow-[0_12px_20px_rgba(0,0,0,0.9)] transition-transform duration-300 ${
-                            canBan ? 'group-hover:scale-115' : ''
-                          } ${isBanned ? 'opacity-30 grayscale' : ''} ${isChosen ? 'filter drop-shadow-[0_0_20px_rgba(16,185,129,0.8)]' : ''}`}
-                        />
-                      </div>
-
-                      {/* Bottom: Map Name & Ban Action Prompt */}
-                      <div className="relative z-10 text-center">
-                        <span className={`block font-black uppercase tracking-wider text-sm sm:text-base drop-shadow-md ${
-                          isChosen ? 'text-emerald-400 font-extrabold' : isBanned ? 'text-neutral-500 line-through' : 'text-white'
-                        }`}>
-                          {mapItem.name}
-                        </span>
-                        {canBan && !isBanned && (
-                          <span className="text-[9px] font-black uppercase text-black bg-[#FF5500] px-3 py-1 mt-1.5 inline-flex items-center gap-1.5 shadow-[0_0_12px_rgba(255,85,0,0.5)] opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Crosshair className="w-3 h-3" />
-                            <span>CLIC PARA BANEAR</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Ban History Footer */}
-            {lobbyState.mapVeto?.banHistory && lobbyState.mapVeto.banHistory.length > 0 && (
-              <div className="bg-[#0A0D14] border-t border-white/10 p-3.5 px-5 flex items-center gap-3 overflow-x-auto text-[10px]">
-                <span className="text-neutral-400 font-black uppercase flex-shrink-0 tracking-wider">
-                  Historial de Baneos:
-                </span>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {lobbyState.mapVeto.banHistory.map((item, idx) => (
-                    <span key={idx} className="bg-[#121622] border border-white/10 px-2.5 py-1 text-neutral-300 flex items-center gap-1.5 shadow-sm">
-                      <span className="text-neutral-500 font-bold">{idx + 1}.</span>
-                      <span className="text-red-400 line-through font-black">{item.mapName}</span>
-                      <span className="text-[9px] text-[#FF5500] font-bold">({item.teamName})</span>
-                      {idx < (lobbyState.mapVeto?.banHistory?.length || 0) - 1 && (
-                        <span className="text-neutral-600 font-bold ml-1">➔</span>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Map Manager Modal (Admin Lobby) */}
       {isMapManagerOpen && (
@@ -5632,159 +5022,6 @@ export default function App() {
         </div>
       )}
 
-        {/* Modal de Vista Previa Conceptual CS2 (Mockups de las 3 Skills) */}
-        {showMockupModal && (
-          <div 
-            className="fixed inset-0 z-[1200] flex items-center justify-center p-3 sm:p-6 bg-black/90 backdrop-blur-md overflow-y-auto animate-fade-in font-mono"
-            onClick={() => setShowMockupModal(false)}
-          >
-            <div 
-              className="bg-[#0B0E14] border-2 border-[#FF5500]/60 w-full max-w-6xl max-h-[94vh] flex flex-col shadow-[0_0_50px_rgba(255,85,0,0.25)] rounded-none text-white overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="bg-[#121622] border-b border-white/10 p-4 sm:p-5 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-[#FF5500] text-black flex items-center justify-center font-black">
-                    <Sparkles className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-white flex items-center gap-2">
-                      DISEÑO Y ARQUITECTURA DE EXPERIENCIA CS2 <span className="text-[#FF5500]">// MACHUPEEK</span>
-                    </h3>
-                    <p className="text-[10px] text-neutral-400">
-                      Concepto generado aplicando las directivas de Taste Skill, UI/UX Pro Max e Impeccable
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowMockupModal(false)}
-                  className="text-neutral-400 hover:text-white p-1 text-xl cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Tabs */}
-              <div className="bg-[#161B28] border-b border-white/10 px-4 py-2.5 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedMockupTab('draft')}
-                  className={`px-4 py-2 text-xs font-bold uppercase transition-all cursor-pointer flex items-center gap-2 ${
-                    selectedMockupTab === 'draft'
-                      ? 'bg-[#FF5500] text-black font-black shadow-md'
-                      : 'bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10 border border-white/5'
-                  }`}
-                >
-                  <Flame className="w-4 h-4" />
-                  <span>1. Lobby & Draft en Vivo (5 Fases)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedMockupTab('veto')}
-                  className={`px-4 py-2 text-xs font-bold uppercase transition-all cursor-pointer flex items-center gap-2 ${
-                    selectedMockupTab === 'veto'
-                      ? 'bg-[#FF5500] text-black font-black shadow-md'
-                      : 'bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10 border border-white/5'
-                  }`}
-                >
-                  <Map className="w-4 h-4" />
-                  <span>2. Veto de Mapas CS2 (BLAST Premier Style)</span>
-                </button>
-              </div>
-
-              {/* Image & Description View */}
-              <div className="p-4 sm:p-6 overflow-y-auto max-h-[75vh] space-y-4">
-                {selectedMockupTab === 'draft' ? (
-                  <div className="space-y-4">
-                    <div className="border-2 border-white/10 bg-black/80 overflow-hidden shadow-2xl relative group">
-                      <img 
-                        src="/mixton_draft_preview.jpg" 
-                        alt="Mockup Draft Lobby CS2 MachuPeek" 
-                        className="w-full h-auto object-contain max-h-[60vh] mx-auto"
-                      />
-                      <div className="absolute bottom-2 right-2 bg-black/80 border border-white/20 px-2.5 py-1 text-[10px] text-neutral-300">
-                        HD Concept Preview // Mixton Draft Arena
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                      <div className="p-3 bg-[#111622] border border-white/10">
-                        <span className="text-[#FF5500] font-bold block mb-1">1. Pipeline de 5 Fases:</span>
-                        <p className="text-neutral-400 text-[11px] leading-relaxed">
-                          El usuario sabe exactamente en qué paso está la partida: Convocatoria → Sorteo → Draft → Veto → Servidor en Vivo.
-                        </p>
-                      </div>
-                      <div className="p-3 bg-[#111622] border border-white/10">
-                        <span className="text-sky-400 font-bold block mb-1">2. Rivalidad Visual Fénix vs Kobra:</span>
-                        <p className="text-neutral-400 text-[11px] leading-relaxed">
-                          Colores de equipo de alta distinción (Fénix en Fuego / Naranja y Kobra en Cobalt / Azul), con corona dorada para el capitán.
-                        </p>
-                      </div>
-                      <div className="p-3 bg-[#111622] border border-white/10">
-                        <span className="text-emerald-400 font-bold block mb-1">3. Estado de Turno Inmediato:</span>
-                        <p className="text-neutral-400 text-[11px] leading-relaxed">
-                          El banner superior notifica en tiempo real quién debe elegir y cuánto tiempo queda en el reloj.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="border-2 border-white/10 bg-black/80 overflow-hidden shadow-2xl relative group">
-                      <img 
-                        src="/mixton_veto_preview.jpg" 
-                        alt="Mockup Veto de Mapas CS2 MachuPeek" 
-                        className="w-full h-auto object-contain max-h-[60vh] mx-auto"
-                      />
-                      <div className="absolute bottom-2 right-2 bg-black/80 border border-white/20 px-2.5 py-1 text-[10px] text-neutral-300">
-                        HD Concept Preview // CS2 Map Veto Phase
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                      <div className="p-3 bg-[#111622] border border-white/10">
-                        <span className="text-red-400 font-bold block mb-1">1. Mapas Baneados Claros:</span>
-                        <p className="text-neutral-400 text-[11px] leading-relaxed">
-                          Los mapas descartados quedan sellados con banda roja y el nombre del equipo que realizó el ban, evitando confusiones.
-                        </p>
-                      </div>
-                      <div className="p-3 bg-[#111622] border border-white/10">
-                        <span className="text-[#FF5500] font-bold block mb-1">2. Turno Activo Resaltado:</span>
-                        <p className="text-neutral-400 text-[11px] leading-relaxed">
-                          El mapa en hover muestra borde de neón ardiente con el llamado interactivo "CLIC PARA BANEAR".
-                        </p>
-                      </div>
-                      <div className="p-3 bg-[#111622] border border-white/10">
-                        <span className="text-emerald-400 font-bold block mb-1">3. Mapa Ganador con Trofeo:</span>
-                        <p className="text-neutral-400 text-[11px] leading-relaxed">
-                          El mapa decider se corona con resplandor verde esmeralda y trofeo dorado 🏆 listo para ser enviado al servidor de CS2.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="bg-[#121622] border-t border-white/10 p-3.5 px-6 flex items-center justify-between">
-                <span className="text-[10px] text-neutral-400">
-                  Concepto visual generado para MachuPeek Esports Perú
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowMockupModal(false)}
-                  className="px-5 py-1.5 bg-[#FF5500] text-black font-black uppercase text-xs hover:bg-[#e04c00] transition-colors cursor-pointer"
-                >
-                  Entendido
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         </>
       )}
