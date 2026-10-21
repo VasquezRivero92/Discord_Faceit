@@ -1397,6 +1397,7 @@ export const db = {
         faction1_roster: f1Roster,
         faction2_roster: f2Roster,
         guild_id: guildId || matchData.guild_id || null,
+        launch_mode: matchData.launch_mode || (matchId.startsWith('mixton_') || matchId.startsWith('manual_') ? 'steam' : null),
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       };
 
@@ -1426,20 +1427,26 @@ export const db = {
 
     const fetchHistory = (async () => {
       try {
-        let snapshot;
+        let history = [];
         try {
           let query = firestore.collection(MATCHES_HISTORY_COLLECTION);
           if (guildId) {
             query = query.where('guild_id', '==', guildId);
           }
-          snapshot = await query.orderBy('createdAt', 'desc').limit(safeLimit).get();
+          const snapshot = await query.orderBy('createdAt', 'desc').limit(safeLimit).get();
+          history = snapshot.docs.map(doc => doc.data());
         } catch (idxError) {
-          // Fallback seguro con límite si falta índice compuesto en Firestore
-          let fallbackQuery = firestore.collection(MATCHES_HISTORY_COLLECTION);
-          if (guildId) fallbackQuery = fallbackQuery.where('guild_id', '==', guildId);
-          snapshot = await fallbackQuery.limit(safeLimit).get();
+          // Fallback seguro usando el orden nativo de createdAt si falta o compila el índice compuesto
+          const fallbackSnap = await firestore.collection(MATCHES_HISTORY_COLLECTION)
+            .orderBy('createdAt', 'desc')
+            .limit(Math.max(safeLimit * 4, 60))
+            .get();
+          let docs = fallbackSnap.docs.map(doc => doc.data());
+          if (guildId) {
+            docs = docs.filter(doc => doc.guild_id === guildId);
+          }
+          history = docs.slice(0, safeLimit);
         }
-        const history = snapshot.docs.map(doc => doc.data());
         
         // Ordenar en memoria por createdAt descendente como verificación adicional
         history.sort((a, b) => {

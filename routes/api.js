@@ -27,10 +27,19 @@ export function createApiRouter(client, db, config) {
   });
 
   const resolveTargetGuildId = (req) => {
-    if (req.user?.role === 'admin') {
+    if (req.query?.guildId !== undefined) {
+      return req.query.guildId ? req.query.guildId : null;
+    }
+    if (req.body?.guildId !== undefined) {
+      return req.body.guildId ? req.body.guildId : null;
+    }
+    if (req.guildId !== undefined && req.guildId !== null) {
+      return req.guildId ? req.guildId : null;
+    }
+    if (req.user?.role === 'admin' && req.user.servidor) {
       return req.user.servidor;
     }
-    return req.guildId || null;
+    return null;
   };
 
   const getHistoryMatchById = async (matchId, guildId = null) => {
@@ -1432,7 +1441,32 @@ export function createApiRouter(client, db, config) {
     try {
       const limit = parseInt(req.query.limit) || 20;
       const targetGuildId = resolveTargetGuildId(req);
-      const history = await db.getMatchHistory(limit, targetGuildId);
+
+      let history;
+      if (!targetGuildId) {
+        // Historial global: partidas de FACEIT y Mixton ordenadas cronológicamente
+        history = await db.getMatchHistory(limit, null);
+      } else if (targetGuildId === '1472731390675255410') {
+        // En ArmyTrukiz (Faceit Hub): traer partidas del Hub y también los mixtones recientes para visibilidad completa del admin
+        const [hubMatches, mixtonMatches] = await Promise.all([
+          db.getMatchHistory(limit, '1472731390675255410'),
+          db.getMatchHistory(10, '1274598531759345674')
+        ]);
+        const combined = [...mixtonMatches, ...hubMatches];
+        combined.sort((a, b) => {
+          const timeA = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate().getTime() : (a.createdAt._seconds ? a.createdAt._seconds * 1000 : new Date(a.createdAt).getTime())) : 0;
+          const timeB = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate().getTime() : (b.createdAt._seconds ? b.createdAt._seconds * 1000 : new Date(b.createdAt).getTime())) : 0;
+          return timeB - timeA;
+        });
+        const seenIds = new Set();
+        history = combined.filter(m => {
+          if (!m.id || seenIds.has(m.id)) return false;
+          seenIds.add(m.id);
+          return true;
+        }).slice(0, limit);
+      } else {
+        history = await db.getMatchHistory(limit, targetGuildId);
+      }
       res.json({ history });
     } catch (err) {
       logger.error('Error en GET /matches/history:', err);

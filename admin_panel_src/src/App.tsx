@@ -2029,7 +2029,7 @@ export default function App() {
                 <div className="h-4 w-px bg-white/20" />
 
                 {/* Guild Selector / Status Label */}
-                {currentUser?.role === 'global_admin' ? (
+                {currentUser?.role === 'global_admin' || currentUser?.role === 'admin' ? (
                    <select
                      value={selectedGuildId}
                      onChange={(e) => {
@@ -5845,7 +5845,7 @@ export default function App() {
 
                 {/* Modal Footer */}
                 <div className="flex justify-between items-center border-t border-white/10 pt-4 text-xs font-mono">
-                  {!selectedMatchStatsModal.id.startsWith('mixton_') && !selectedMatchStatsModal.id.startsWith('manual_') && (
+                  {!selectedMatchStatsModal.id.startsWith('mixton_') && !selectedMatchStatsModal.id.startsWith('manual_') && selectedMatchStatsModal.launch_mode !== 'steam' && (
                     <a
                       href={`https://www.faceit.com/en/cs2/room/${selectedMatchStatsModal.id}`}
                       target="_blank"

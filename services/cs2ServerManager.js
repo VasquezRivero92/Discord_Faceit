@@ -563,6 +563,9 @@ export async function resolveMixtonMatchEnd({
       chosen_map: activeMatch.chosen_map || null,
       bet_amount_per_player: parsedBetAmount,
       total_pot: totalPot,
+      launch_mode: activeMatch.launch_mode || 'steam',
+      queue_id: activeMatch.queue_id || 'steam',
+      queue_name: activeMatch.queue_name || 'Lobby privado de Steam',
       stats: stats || null
     },
     winner,

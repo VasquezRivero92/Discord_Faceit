@@ -3003,7 +3003,7 @@ export function createLobbyRouter(client, db, config, wss) {
   router.get('/matches-history', optionalAuth, async (req, res) => {
     try {
       const limit = parseInt(req.query.limit) || 10;
-      const targetGuildId = req.guildId || DISCORD_GUILD_ID;
+      const targetGuildId = (req.guildId && req.guildId !== '1472731390675255410') ? req.guildId : MACHUPEEK_GUILD_ID;
       const history = await db.getMatchHistory(limit, targetGuildId);
       res.json({ history });
     } catch (err) {

@@ -505,7 +505,7 @@ export default function App() {
   // The history is intentionally isolated from the live draft. Its Firestore
   // read occurs only after the visitor navigates to this dedicated view.
   useEffect(() => {
-    if (activeView === 'historial' && currentGuildId) {
+    if (activeView === 'historial') {
       fetchHistory(currentGuildId);
     }
   }, [activeView, currentGuildId, fetchHistory]);
