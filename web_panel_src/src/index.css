@@ -7,7 +7,7 @@
 }
 
 :root {
-  --header-height: 98px;
+  --header-height: 64px;
 }
 
 /* Base smoothing and layout foundation */
@@ -17,7 +17,7 @@ html {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  scroll-padding-top: var(--header-height, 98px);
+  scroll-padding-top: var(--header-height, 64px);
 }
 
 /* Scroll Snap Architecture for the web experience */
@@ -114,7 +114,7 @@ p, .text-pretty {
 .snap-section {
   scroll-snap-align: start;
   scroll-snap-stop: normal;
-  scroll-margin-top: var(--header-height, 98px);
+  scroll-margin-top: var(--header-height, 64px);
 }
 
 .snap-footer {

@@ -125,7 +125,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
           ========================================================================= */}
       <section 
         id="hero"
-        className="snap-section min-h-[calc(100vh-98px)] flex flex-col justify-center relative overflow-hidden bg-[#08090C] border-b border-white/[0.08] py-12 sm:py-16 px-4 sm:px-6"
+        className="snap-section min-h-[calc(100vh-64px)] flex flex-col justify-center relative overflow-hidden bg-[#08090C] border-b border-white/[0.08] py-12 sm:py-16 px-4 sm:px-6"
       >
         {/* Layered Ambient Cones */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[480px] bg-gradient-to-b from-[#FF5500]/20 via-red-600/5 to-transparent rounded-full blur-[140px] pointer-events-none" />
@@ -254,7 +254,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
           ========================================================================= */}
       <section 
         id="mixton"
-        className="snap-section min-h-[calc(100vh-98px)] flex flex-col justify-center relative py-14 sm:py-20 px-4 sm:px-6 max-w-6xl mx-auto"
+        className="snap-section min-h-[calc(100vh-64px)] flex flex-col justify-center relative py-14 sm:py-20 px-4 sm:px-6 max-w-6xl mx-auto"
       >
         <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-12">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FF5500]/10 border border-[#FF5500]/30 text-[#FF5500] text-xs font-mono font-bold uppercase mb-3">
@@ -389,7 +389,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
           ========================================================================= */}
       <section 
         id="pasos"
-        className="snap-section min-h-[calc(100vh-98px)] flex flex-col justify-center relative py-14 sm:py-20 px-4 sm:px-6 bg-[#0B0C10] border-y border-white/[0.08]"
+        className="snap-section min-h-[calc(100vh-64px)] flex flex-col justify-center relative py-14 sm:py-20 px-4 sm:px-6 bg-[#0B0C10] border-y border-white/[0.08]"
       >
         <div className="max-w-5xl mx-auto w-full">
           <div className="text-center mb-10 sm:mb-12">
@@ -512,7 +512,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
           ========================================================================= */}
       <section 
         id="maps"
-        className="snap-section min-h-[calc(100vh-98px)] flex flex-col justify-center relative py-14 sm:py-20 px-4 sm:px-6 max-w-6xl mx-auto"
+        className="snap-section min-h-[calc(100vh-64px)] flex flex-col justify-center relative py-14 sm:py-20 px-4 sm:px-6 max-w-6xl mx-auto"
       >
         <div className="text-center max-w-3xl mx-auto mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FF5500]/10 border border-[#FF5500]/30 text-[#FF5500] text-xs font-mono font-bold uppercase mb-3">
@@ -591,7 +591,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
           ========================================================================= */}
       <section 
         id="seguridad"
-        className="snap-section min-h-[calc(100vh-98px)] flex flex-col justify-center relative py-14 sm:py-20 px-4 sm:px-6 bg-[#08090C] border-t border-white/[0.08]"
+        className="snap-section min-h-[calc(100vh-64px)] flex flex-col justify-center relative py-14 sm:py-20 px-4 sm:px-6 bg-[#08090C] border-t border-white/[0.08]"
       >
         <div className="max-w-5xl mx-auto w-full">
           
