@@ -5,6 +5,13 @@ import { fetchFaceitPlayerBySteamId, fetchCurrentHubSeason } from '../services/f
 import { getPlayerSkillLevel, syncMemberLevelRole, syncMemberNickname } from '../services/roles.js';
 import { getEffectiveConfigForGuild } from '../config/index.js';
 
+// Caché para IDs de capitanes activos (30 segundos) para evitar lecturas masivas a Firestore
+const captainIdsCache = {
+  ids: new Set(),
+  timestamp: 0
+};
+const CAPTAINS_CACHE_TTL = 30 * 1000;
+
 export function createAuthRouter(client, db, config) {
   const router = Router();
 
@@ -101,23 +108,30 @@ export function createAuthRouter(client, db, config) {
 
       const isAdmin = (rol === 'global_admin' || rol === 'admin');
 
-      // Verificar si es capitán en alguna de las salas de mixton
+      // Verificar si es capitán en alguna de las salas de mixton (con caché de 30s)
       let isCaptain = false;
       try {
-        const lobbySnapshot = await db._firestore.collection('faceit_config').get();
-        for (const doc of lobbySnapshot.docs) {
-          if (doc.id.startsWith('mixton_lobby')) {
-            const data = doc.data();
-            if (data.teams && Array.isArray(data.teams)) {
-              for (const team of data.teams) {
-                if (team.captain && team.captain.discordId === user.id) {
-                  isCaptain = true;
-                  break;
+        const now = Date.now();
+        if (now - captainIdsCache.timestamp < CAPTAINS_CACHE_TTL) {
+          isCaptain = captainIdsCache.ids.has(user.id);
+        } else {
+          const lobbySnapshot = await db._firestore.collection('faceit_config').get();
+          const newCaptainIds = new Set();
+          for (const doc of lobbySnapshot.docs) {
+            if (doc.id.startsWith('mixton_lobby')) {
+              const data = doc.data();
+              if (data.teams && Array.isArray(data.teams)) {
+                for (const team of data.teams) {
+                  if (team.captain && team.captain.discordId) {
+                    newCaptainIds.add(team.captain.discordId);
+                  }
                 }
               }
             }
           }
-          if (isCaptain) break;
+          captainIdsCache.ids = newCaptainIds;
+          captainIdsCache.timestamp = now;
+          isCaptain = newCaptainIds.has(user.id);
         }
       } catch (err) {
         logger.error('Error al verificar si el usuario es capitán:', err);

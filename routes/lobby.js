@@ -840,11 +840,21 @@ export function createLobbyRouter(client, db, config, wss) {
     }
   });
 
-  // --- Lista de todos los usuarios verificados (con datos de Discord) ---
+  // --- Lista de todos los usuarios verificados (con datos de Discord y caché de 30s) ---
+  const lobbyUsersCache = new Map();
+  const LOBBY_USERS_CACHE_TTL = 30 * 1000;
+
   router.get('/users', requireAuth, async (req, res) => {
     try {
-      const snapshot = await db._firestore.collection('faceit_users').get();
       const targetGuildId = (req.user?.role === 'admin') ? req.user.servidor : DISCORD_GUILD_ID;
+      const cacheKey = targetGuildId || 'global';
+      const cached = lobbyUsersCache.get(cacheKey);
+      const now = Date.now();
+      if (cached && (now - cached.timestamp < LOBBY_USERS_CACHE_TTL)) {
+        return res.json({ users: cached.users });
+      }
+
+      const snapshot = await db._firestore.collection('faceit_users').get();
       const guild = targetGuildId ? await client.guilds.fetch(targetGuildId).catch(() => null) : null;
       if (guild) {
         await guild.members.fetch().catch(() => null);
@@ -883,6 +893,7 @@ export function createLobbyRouter(client, db, config, wss) {
         });
       });
 
+      lobbyUsersCache.set(cacheKey, { users, timestamp: now });
       res.json({ users });
     } catch (err) {
       logger.error('Error al obtener usuarios para el lobby:', err);

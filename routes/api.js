@@ -218,34 +218,96 @@ export function createApiRouter(client, db, config) {
     }
   });
 
+  // --- Cachés en Memoria para optimizar lecturas de Firestore ---
+  const statsCache = new Map();
+  const STATS_CACHE_TTL = 60 * 1000; // 1 minuto
+
+  const usersListCache = new Map();
+  const USERS_LIST_CACHE_TTL = 30 * 1000; // 30 segundos
+
+  const nicknameToDiscordCache = {
+    map: null,
+    timestamp: 0
+  };
+  const NICKNAME_MAP_TTL = 5 * 60 * 1000; // 5 minutos
+
+  function invalidateAdminUsersCache() {
+    usersListCache.clear();
+    statsCache.clear();
+    nicknameToDiscordCache.map = null;
+    nicknameToDiscordCache.timestamp = 0;
+  }
+
+  // --- Métricas de Firestore en Tiempo Real ---
+  router.get('/firestore-metrics', requireAuth, (req, res) => {
+    try {
+      const metrics = db.getFirestoreMetrics ? db.getFirestoreMetrics() : { error: 'Profiler no disponible' };
+      res.json(metrics);
+    } catch (err) {
+      res.status(500).json({ error: 'Error al obtener métricas de Firestore' });
+    }
+  });
+
   // --- Estadísticas ---
   router.get('/stats', requireAuth, async (req, res) => {
     try {
       const targetGuildId = resolveTargetGuildId(req);
-      const usersSnapshot = await db._firestore.collection('faceit_users').get();
-      const matchesSnapshot = await db._firestore.collection('faceit_active_matches').get();
-      const settings = await getSettings();
+      const cacheKey = targetGuildId || 'global';
+      const cached = statsCache.get(cacheKey);
+      const now = Date.now();
 
+      if (cached && (now - cached.timestamp < STATS_CACHE_TTL)) {
+        return res.json(cached.data);
+      }
+
+      const settings = await getSettings();
       let totalUsers = 0;
       let totalMatches = 0;
 
-      if (targetGuildId) {
-        usersSnapshot.forEach(doc => {
-          const data = doc.data();
-          if ((data.servidor || data.mixton_guild_id) === targetGuildId) totalUsers++;
-        });
-        matchesSnapshot.forEach(doc => {
-          if (doc.data().guild_id === targetGuildId) totalMatches++;
-        });
+      if (!targetGuildId) {
+        // Uso de .count() nativo de Firestore (1 lectura por cada 1,000 docs)
+        try {
+          const [usersCountSnap, matchesCountSnap] = await Promise.all([
+            db._firestore.collection('faceit_users').count().get(),
+            db._firestore.collection('faceit_active_matches').count().get()
+          ]);
+          totalUsers = usersCountSnap?.data()?.count ?? 0;
+          totalMatches = matchesCountSnap?.data()?.count ?? 0;
+        } catch {
+          const [usersSnapshot, matchesSnapshot] = await Promise.all([
+            db._firestore.collection('faceit_users').get(),
+            db._firestore.collection('faceit_active_matches').get()
+          ]);
+          totalUsers = usersSnapshot.size;
+          totalMatches = matchesSnapshot.size;
+        }
       } else {
-        totalUsers = usersSnapshot.size;
-        totalMatches = matchesSnapshot.size;
+        try {
+          const [servidorSnap, matchesSnap] = await Promise.all([
+            db._firestore.collection('faceit_users').where('servidor', '==', targetGuildId).count().get(),
+            db._firestore.collection('faceit_active_matches').where('guild_id', '==', targetGuildId).count().get()
+          ]);
+          totalUsers = servidorSnap?.data()?.count ?? 0;
+          totalMatches = matchesSnap?.data()?.count ?? 0;
+        } catch {
+          const [usersSnapshot, matchesSnapshot] = await Promise.all([
+            db._firestore.collection('faceit_users').get(),
+            db._firestore.collection('faceit_active_matches').get()
+          ]);
+          usersSnapshot.forEach(doc => {
+            const data = doc.data();
+            if ((data.servidor || data.mixton_guild_id) === targetGuildId) totalUsers++;
+          });
+          matchesSnapshot.forEach(doc => {
+            if (doc.data().guild_id === targetGuildId) totalMatches++;
+          });
+        }
       }
 
       const levelDistribution = {};
       for (let i = 1; i <= 10; i++) levelDistribution[i] = 0;
 
-      res.json({
+      const responseData = {
         totalUsers,
         totalMatches,
         levelDistribution,
@@ -257,7 +319,10 @@ export function createApiRouter(client, db, config) {
           matchAnnouncements: settings.matchAnnouncements,
           liveMatchPanel: settings.liveMatchPanel,
         }
-      });
+      };
+
+      statsCache.set(cacheKey, { data: responseData, timestamp: now });
+      res.json(responseData);
     } catch (err) {
       logger.error('Error en /stats:', err);
       res.status(500).json({ error: 'Error al obtener estadísticas' });
@@ -267,9 +332,17 @@ export function createApiRouter(client, db, config) {
   // --- Lista de usuarios vinculados ---
   router.get('/users', requireAuth, async (req, res) => {
     try {
+      const targetGuildId = resolveTargetGuildId(req);
+      const cacheKey = targetGuildId || 'global';
+      const cached = usersListCache.get(cacheKey);
+      const now = Date.now();
+
+      if (cached && (now - cached.timestamp < USERS_LIST_CACHE_TTL)) {
+        return res.json({ users: cached.users });
+      }
+
       const snapshot = await db._firestore.collection('faceit_users').get();
       
-      const targetGuildId = resolveTargetGuildId(req);
       const guildIdToUse = targetGuildId || (env.DISCORD_GUILD_ID || DISCORD_GUILD_ID);
       const guild = guildIdToUse ? await client.guilds.fetch(guildIdToUse).catch(() => null) : null;
       if (guild) await guild.members.fetch().catch(() => null);
@@ -301,6 +374,8 @@ export function createApiRouter(client, db, config) {
           ...data
         });
       });
+
+      usersListCache.set(cacheKey, { users, timestamp: now });
       res.json({ users });
     } catch (err) {
       logger.error('Error en /users:', err);
@@ -339,6 +414,7 @@ export function createApiRouter(client, db, config) {
       }
 
       await db.unlinkAccount(discordId, targetGuildId || req.guildId);
+      invalidateAdminUsersCache();
       res.json({ success: true });
     } catch (err) {
       logger.error('Error en /users/:id/unlink:', err);
@@ -603,6 +679,7 @@ export function createApiRouter(client, db, config) {
       const effectiveConfig = await getEffectiveConfigForGuild(targetGuildId || req.guildId);
       const currentSeason = await fetchCurrentHubSeason(effectiveConfig.faceitLeaderboardId || effectiveConfig.faceitHubId).catch(() => null);
       await db.linkAccounts(discordId, player.player_id, player.nickname, skillLevel, elo, targetGuildId || req.guildId, currentSeason);
+      invalidateAdminUsersCache();
       
       // Asignar el servidor y rol por defecto 'usuario'
       await db.setUserRoleAndGuild(discordId, 'usuario', targetGuildId);
@@ -954,14 +1031,22 @@ export function createApiRouter(client, db, config) {
         return res.json({ leaderboard: [] });
       }
 
-      const snapshot = await db._firestore.collection('faceit_users').get();
-      const nicknameToDiscord = {};
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        if (data.faceit_nickname) {
-          nicknameToDiscord[data.faceit_nickname.toLowerCase()] = doc.id;
-        }
-      });
+      let nicknameToDiscord;
+      const now = Date.now();
+      if (nicknameToDiscordCache.map && (now - nicknameToDiscordCache.timestamp < NICKNAME_MAP_TTL)) {
+        nicknameToDiscord = nicknameToDiscordCache.map;
+      } else {
+        const snapshot = await db._firestore.collection('faceit_users').get();
+        nicknameToDiscord = {};
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.faceit_nickname) {
+            nicknameToDiscord[data.faceit_nickname.toLowerCase()] = doc.id;
+          }
+        });
+        nicknameToDiscordCache.map = nicknameToDiscord;
+        nicknameToDiscordCache.timestamp = now;
+      }
 
       const leaderboardData = await fetchLeaderboard(effectiveConfig.faceitLeaderboardId);
       if (!leaderboardData || !leaderboardData.items) {

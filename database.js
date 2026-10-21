@@ -347,6 +347,194 @@ try {
   firestore = admin.firestore();
 }
 
+// --- FIRESTORE PROFILER & USAGE METRICS ---
+const firestoreMetrics = {
+  reads: new Map(),   // collectionName -> { count: number, docs: number, callers: Map(caller, docs) }
+  writes: new Map(),  // collectionName -> { count: number, callers: Map(caller, count) }
+  deletes: new Map(), // collectionName -> { count: number, callers: Map(caller, count) }
+  totalReads: 0,
+  totalDocsRead: 0,
+  totalWrites: 0,
+  totalDeletes: 0,
+  startedAt: Date.now()
+};
+
+function getCallerInfo() {
+  try {
+    const err = new Error();
+    const stack = err.stack ? err.stack.split('\n') : [];
+    for (let i = 2; i < stack.length; i++) {
+      const line = stack[i];
+      if (
+        !line.includes('database.js') &&
+        !line.includes('node_modules') &&
+        !line.includes('node:')
+      ) {
+        const match = line.match(/\((.*?)\)/) || line.match(/at\s+(.*?)$/);
+        if (match) {
+          const raw = match[1].replace(/\\/g, '/');
+          const parts = raw.split('/');
+          return parts.slice(-2).join('/');
+        }
+      }
+    }
+  } catch {}
+  return 'unknown';
+}
+
+function recordRead(col, count, caller) {
+  firestoreMetrics.totalReads++;
+  firestoreMetrics.totalDocsRead += count;
+  if (!firestoreMetrics.reads.has(col)) {
+    firestoreMetrics.reads.set(col, { count: 0, docs: 0, callers: new Map() });
+  }
+  const entry = firestoreMetrics.reads.get(col);
+  entry.count++;
+  entry.docs += count;
+  entry.callers.set(caller, (entry.callers.get(caller) || 0) + count);
+
+  // Alerta en consola si se leen 10 o más documentos de golpe, o si DEBUG_FIRESTORE está activo
+  if (count >= 10 || process.env.DEBUG_FIRESTORE === 'true') {
+    logger.warn(`📊 [FIRESTORE READ] [${col}] docs: ${count} <- ${caller}`);
+  }
+}
+
+function recordWrite(col, caller) {
+  firestoreMetrics.totalWrites++;
+  if (!firestoreMetrics.writes.has(col)) {
+    firestoreMetrics.writes.set(col, { count: 0, callers: new Map() });
+  }
+  const entry = firestoreMetrics.writes.get(col);
+  entry.count++;
+  entry.callers.set(caller, (entry.callers.get(caller) || 0) + 1);
+  if (process.env.DEBUG_FIRESTORE === 'true') {
+    logger.info(`📝 [FIRESTORE WRITE] [${col}] <- ${caller}`);
+  }
+}
+
+function recordDelete(col, caller) {
+  firestoreMetrics.totalDeletes++;
+  if (!firestoreMetrics.deletes.has(col)) {
+    firestoreMetrics.deletes.set(col, { count: 0, callers: new Map() });
+  }
+  const entry = firestoreMetrics.deletes.get(col);
+  entry.count++;
+  entry.callers.set(caller, (entry.callers.get(caller) || 0) + 1);
+  if (process.env.DEBUG_FIRESTORE === 'true') {
+    logger.info(`🗑️ [FIRESTORE DELETE] [${col}] <- ${caller}`);
+  }
+}
+
+export function printFirestoreSummary() {
+  if (firestoreMetrics.totalReads === 0 && firestoreMetrics.totalWrites === 0 && firestoreMetrics.totalDeletes === 0) {
+    return;
+  }
+  const uptimeMinutes = Math.max(1, Math.round((Date.now() - firestoreMetrics.startedAt) / 60000));
+  logger.info(`\n📊 ========== RESUMEN DE USO FIRESTORE (${uptimeMinutes}m activo) ==========`);
+  logger.info(`Total consultas: ${firestoreMetrics.totalReads} | Docs leídos: ${firestoreMetrics.totalDocsRead} | Escrituras: ${firestoreMetrics.totalWrites} | Borrados: ${firestoreMetrics.totalDeletes}`);
+  logger.info('--- TOP LECTURAS POR COLECCIÓN ---');
+  
+  const sortedReads = Array.from(firestoreMetrics.reads.entries())
+    .sort((a, b) => b[1].docs - a[1].docs);
+
+  for (const [col, stats] of sortedReads) {
+    logger.info(`📁 [${col}]: ${stats.docs} docs (${stats.count} consultas)`);
+    const sortedCallers = Array.from(stats.callers.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+    for (const [caller, docs] of sortedCallers) {
+      logger.info(`   └─ ${caller}: ${docs} docs leídos`);
+    }
+  }
+  logger.info('=================================================================\n');
+}
+
+export function getFirestoreMetrics() {
+  const uptimeMinutes = Math.max(1, Math.round((Date.now() - firestoreMetrics.startedAt) / 60000));
+  const readsByCollection = {};
+  for (const [col, stats] of firestoreMetrics.reads.entries()) {
+    readsByCollection[col] = {
+      totalDocs: stats.docs,
+      queryCount: stats.count,
+      topCallers: Array.from(stats.callers.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([caller, docs]) => ({ caller, docs }))
+    };
+  }
+  return {
+    uptimeMinutes,
+    totalReads: firestoreMetrics.totalReads,
+    totalDocsRead: firestoreMetrics.totalDocsRead,
+    totalWrites: firestoreMetrics.totalWrites,
+    totalDeletes: firestoreMetrics.totalDeletes,
+    readsByCollection
+  };
+}
+
+// Configurar intervalo de resumen en consola cada 10 minutos
+setInterval(printFirestoreSummary, 10 * 60 * 1000).unref?.();
+
+// Instrumentar Firebase Admin Firestore para auditoría de lecturas y escrituras
+try {
+  if (admin.firestore?.DocumentReference?.prototype) {
+    const origDocGet = admin.firestore.DocumentReference.prototype.get;
+    admin.firestore.DocumentReference.prototype.get = async function(...args) {
+      const col = this.parent ? this.parent.id : (this.path ? this.path.split('/')[0] : 'unknown');
+      recordRead(col, 1, getCallerInfo());
+      return origDocGet.apply(this, args);
+    };
+
+    const origDocSet = admin.firestore.DocumentReference.prototype.set;
+    admin.firestore.DocumentReference.prototype.set = async function(...args) {
+      const col = this.parent ? this.parent.id : (this.path ? this.path.split('/')[0] : 'unknown');
+      recordWrite(col, getCallerInfo());
+      return origDocSet.apply(this, args);
+    };
+
+    const origDocUpdate = admin.firestore.DocumentReference.prototype.update;
+    admin.firestore.DocumentReference.prototype.update = async function(...args) {
+      const col = this.parent ? this.parent.id : (this.path ? this.path.split('/')[0] : 'unknown');
+      recordWrite(col, getCallerInfo());
+      return origDocUpdate.apply(this, args);
+    };
+
+    const origDocDelete = admin.firestore.DocumentReference.prototype.delete;
+    admin.firestore.DocumentReference.prototype.delete = async function(...args) {
+      const col = this.parent ? this.parent.id : (this.path ? this.path.split('/')[0] : 'unknown');
+      recordDelete(col, getCallerInfo());
+      return origDocDelete.apply(this, args);
+    };
+  }
+
+  if (admin.firestore?.Query?.prototype) {
+    const origQueryGet = admin.firestore.Query.prototype.get;
+    admin.firestore.Query.prototype.get = async function(...args) {
+      const col = this._queryOptions?.collectionId || (this.parent ? this.parent.id : 'unknown');
+      const caller = getCallerInfo();
+      const snapshot = await origQueryGet.apply(this, args);
+      const docsCount = snapshot && typeof snapshot.size === 'number' ? (snapshot.size || 1) : 1;
+      recordRead(col, docsCount, caller);
+      return snapshot;
+    };
+  }
+
+  try {
+    const sampleAgg = firestore.collection('__profiler_check__').count();
+    if (sampleAgg && sampleAgg.constructor && sampleAgg.constructor.prototype) {
+      const origAggGet = sampleAgg.constructor.prototype.get;
+      sampleAgg.constructor.prototype.get = async function(...args) {
+        const query = this.query;
+        const col = query?._queryOptions?.collectionId || (query?.parent ? query.parent.id : 'unknown');
+        recordRead(`${col} (count)`, 1, getCallerInfo());
+        return origAggGet.apply(this, args);
+      };
+    }
+  } catch {}
+} catch (profilerErr) {
+  logger.warn('No se pudo inicializar el profiler de Firestore:', profilerErr.message);
+}
+
 const USERS_COLLECTION = 'faceit_users';
 const PENDING_COLLECTION = 'faceit_pending_verifications';
 const ACTIVE_MATCHES_COLLECTION = 'faceit_active_matches';
@@ -500,6 +688,8 @@ const HUB_BANS_TTL = 10 * 60 * 1000; // 10 minutos
 
 export const db = {
   _firestore: firestore,
+  getFirestoreMetrics,
+  printFirestoreSummary,
 
   // --- Mapeo de Usuarios ---
   async setPendingVerification(discordId, faceitNickname, code) {
