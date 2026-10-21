@@ -14,6 +14,7 @@ import { syncMemberLevelRole, syncMemberNickname, getPlayerSkillLevel } from '..
 import { cs2ServerManager } from '../services/cs2ServerManager.js';
 import { playTTSCountdown } from '../utils/voiceAnnouncer.js';
 import { yapeTransactionService } from '../services/yapeTransactionService.js';
+import { enrichMatchWithSteamAvatars, fetchSteamAvatar, fetchMultipleSteamAvatars } from '../services/steamAvatarService.js';
 
 export const mixtonEvents = new EventEmitter();
 
@@ -3023,10 +3024,50 @@ export function createLobbyRouter(client, db, config, wss) {
       if (!stats && history.stats) {
         stats = history.stats;
       }
-      res.json({ history, stats });
+
+      // Enriquecer la partida con las fotos de perfil reales consultadas directamente de Steam
+      const enriched = await enrichMatchWithSteamAvatars(history, stats, db);
+
+      res.json({ history: enriched.history, stats: enriched.stats });
     } catch (err) {
       logger.error('Error al obtener detalle del historial:', err);
       res.status(500).json({ error: 'Error al obtener el detalle de la partida.' });
+    }
+  });
+
+  // --- Endpoint para consultar foto de perfil directamente de Steam por SteamID64 ---
+  router.get('/steam-avatar/:steamId', async (req, res) => {
+    try {
+      const steamId = req.params.steamId;
+      if (!steamId || !/^\d{17}$/.test(String(steamId).trim())) {
+        return res.status(400).json({ error: 'SteamID64 inválido.' });
+      }
+
+      const avatarUrl = await fetchSteamAvatar(steamId);
+      if (!avatarUrl) {
+        return res.redirect('https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_medium.jpg');
+      }
+
+      res.setHeader('Cache-Control', 'public, max-age=7200');
+      return res.redirect(avatarUrl);
+    } catch (err) {
+      logger.error('Error en steam-avatar endpoint:', err);
+      return res.redirect('https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_medium.jpg');
+    }
+  });
+
+  // --- Endpoint batch para consultar múltiples avatares de Steam ---
+  router.get('/steam-avatars', async (req, res) => {
+    try {
+      const idsParam = req.query.ids;
+      if (!idsParam) return res.json({ avatars: {} });
+      const ids = String(idsParam).split(',').map(s => s.trim()).filter(Boolean);
+      const avatars = await fetchMultipleSteamAvatars(ids);
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.json({ avatars });
+    } catch (err) {
+      logger.error('Error en steam-avatars batch endpoint:', err);
+      res.status(500).json({ error: 'Error al consultar avatares de Steam.' });
     }
   });
 

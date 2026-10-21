@@ -51,6 +51,57 @@ const formatDate = (value: any) => {
 
 const formatValue = (value: unknown, suffix = '') => value === null || value === undefined || value === '' ? '—' : `${value}${suffix}`;
 
+const PlayerAvatar: React.FC<{
+  nickname: string;
+  avatarUrl?: string | null;
+  steamId?: string | null;
+  size?: 'sm' | 'md';
+}> = ({ nickname, avatarUrl, steamId, size = 'sm' }) => {
+  const [hasError, setHasError] = useState(false);
+  const sizeClasses = size === 'md' ? 'h-7 w-7 text-xs' : 'h-6 w-6 text-[10px]';
+
+  const resolvedUrl = (!hasError && avatarUrl)
+    ? avatarUrl
+    : (!hasError && steamId && /^\d{17}$/.test(String(steamId).trim()))
+    ? `/api/lobby/steam-avatar/${String(steamId).trim()}`
+    : null;
+
+  const content = (
+    <div className={`relative ${sizeClasses} shrink-0 overflow-hidden rounded-full border border-white/20 bg-neutral-800 flex items-center justify-center`}>
+      {resolvedUrl ? (
+        <img
+          src={resolvedUrl}
+          alt={nickname}
+          className="h-full w-full object-cover"
+          loading="lazy"
+          onError={() => setHasError(true)}
+        />
+      ) : (
+        <span className="font-bold text-neutral-400">
+          {nickname?.[0]?.toUpperCase() || '?'}
+        </span>
+      )}
+    </div>
+  );
+
+  if (steamId && /^\d{17}$/.test(String(steamId).trim())) {
+    return (
+      <a
+        href={`https://steamcommunity.com/profiles/${String(steamId).trim()}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="transition-transform hover:scale-105 shrink-0"
+        title={`Ver perfil de Steam de ${nickname}`}
+        onClick={e => e.stopPropagation()}
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return content;
+};
+
 export const MatchHistoryView: React.FC<MatchHistoryViewProps> = ({
   history,
   isLoading,
@@ -230,32 +281,64 @@ export const MatchHistoryView: React.FC<MatchHistoryViewProps> = ({
                         <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-400">
                           <Award className="h-3.5 w-3.5" /> MVP del Partido
                         </div>
-                        <p className="mt-1 truncate text-sm font-black text-white">{matchHighlights.topMvp?.nickname || '—'}</p>
-                        <p className="font-mono text-[10px] text-neutral-400">{matchHighlights.topMvp?.numMvps || 0} MVPs · {matchHighlights.topMvp?.numKd || '0.00'} K/D</p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <PlayerAvatar
+                            nickname={matchHighlights.topMvp?.nickname || ''}
+                            avatarUrl={matchHighlights.topMvp?.avatar}
+                            steamId={matchHighlights.topMvp?.steam_id_64 || (/^\d{17}$/.test(String(matchHighlights.topMvp?.playerId)) ? String(matchHighlights.topMvp?.playerId) : null)}
+                            size="md"
+                          />
+                          <p className="truncate text-sm font-black text-white">{matchHighlights.topMvp?.nickname || '—'}</p>
+                        </div>
+                        <p className="mt-1 font-mono text-[10px] text-neutral-400">{matchHighlights.topMvp?.numMvps || 0} MVPs · {matchHighlights.topMvp?.numKd || '0.00'} K/D</p>
                       </div>
 
                       <div className="border border-white/5 bg-black/30 p-3">
                         <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#FF7733]">
                           <Flame className="h-3.5 w-3.5" /> Top Fragger
                         </div>
-                        <p className="mt-1 truncate text-sm font-black text-white">{matchHighlights.topFragger?.nickname || '—'}</p>
-                        <p className="font-mono text-[10px] text-neutral-400">{matchHighlights.topFragger?.numKills || 0} Kills</p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <PlayerAvatar
+                            nickname={matchHighlights.topFragger?.nickname || ''}
+                            avatarUrl={matchHighlights.topFragger?.avatar}
+                            steamId={matchHighlights.topFragger?.steam_id_64 || (/^\d{17}$/.test(String(matchHighlights.topFragger?.playerId)) ? String(matchHighlights.topFragger?.playerId) : null)}
+                            size="md"
+                          />
+                          <p className="truncate text-sm font-black text-white">{matchHighlights.topFragger?.nickname || '—'}</p>
+                        </div>
+                        <p className="mt-1 font-mono text-[10px] text-neutral-400">{matchHighlights.topFragger?.numKills || 0} Kills</p>
                       </div>
 
                       <div className="border border-white/5 bg-black/30 p-3">
                         <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
                           <TrendingUp className="h-3.5 w-3.5" /> Mayor Daño
                         </div>
-                        <p className="mt-1 truncate text-sm font-black text-white">{matchHighlights.topDamage?.nickname || '—'}</p>
-                        <p className="font-mono text-[10px] text-neutral-400">{matchHighlights.topDamage?.numDamage || 0} DMG {totalRounds > 0 && matchHighlights.topDamage?.numDamage ? `(${(matchHighlights.topDamage.numDamage / totalRounds).toFixed(1)} ADR)` : ''}</p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <PlayerAvatar
+                            nickname={matchHighlights.topDamage?.nickname || ''}
+                            avatarUrl={matchHighlights.topDamage?.avatar}
+                            steamId={matchHighlights.topDamage?.steam_id_64 || (/^\d{17}$/.test(String(matchHighlights.topDamage?.playerId)) ? String(matchHighlights.topDamage?.playerId) : null)}
+                            size="md"
+                          />
+                          <p className="truncate text-sm font-black text-white">{matchHighlights.topDamage?.nickname || '—'}</p>
+                        </div>
+                        <p className="mt-1 font-mono text-[10px] text-neutral-400">{matchHighlights.topDamage?.numDamage || 0} DMG {totalRounds > 0 && matchHighlights.topDamage?.numDamage ? `(${(matchHighlights.topDamage.numDamage / totalRounds).toFixed(1)} ADR)` : ''}</p>
                       </div>
 
                       <div className="border border-white/5 bg-black/30 p-3">
                         <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-400">
                           <Target className="h-3.5 w-3.5" /> Headshot Master
                         </div>
-                        <p className="mt-1 truncate text-sm font-black text-white">{matchHighlights.topHs?.nickname || '—'}</p>
-                        <p className="font-mono text-[10px] text-neutral-400">{matchHighlights.topHs?.numHs || 0}% Headshots</p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <PlayerAvatar
+                            nickname={matchHighlights.topHs?.nickname || ''}
+                            avatarUrl={matchHighlights.topHs?.avatar}
+                            steamId={matchHighlights.topHs?.steam_id_64 || (/^\d{17}$/.test(String(matchHighlights.topHs?.playerId)) ? String(matchHighlights.topHs?.playerId) : null)}
+                            size="md"
+                          />
+                          <p className="truncate text-sm font-black text-white">{matchHighlights.topHs?.nickname || '—'}</p>
+                        </div>
+                        <p className="mt-1 font-mono text-[10px] text-neutral-400">{matchHighlights.topHs?.numHs || 0}% Headshots</p>
                       </div>
                     </div>
                   )}
@@ -290,16 +373,24 @@ export const MatchHistoryView: React.FC<MatchHistoryViewProps> = ({
                           const damageVal = player.damage ?? player.dmg;
                           const adrVal = player.adr ?? (damageVal !== undefined && totalRounds > 0 ? (Number(damageVal) / totalRounds).toFixed(1) : null);
                           const kprVal = player.kpr ?? (totalRounds > 0 ? (kills / totalRounds).toFixed(2) : null);
-                          const isSteamPlayer = player.playerId && /^\d{17}$/.test(String(player.playerId));
+                          const resolvedSteamId = player.steam_id_64 || (/^\d{17}$/.test(String(player.playerId)) ? String(player.playerId) : null);
+                          const isSteamPlayer = Boolean(resolvedSteamId && /^\d{17}$/.test(String(resolvedSteamId)));
 
                           return (
                             <tr key={`${player.playerId}-${playerIndex}`} className="border-b border-white/[0.06] last:border-0 hover:bg-white/[0.03]">
                               <td className="px-4 py-3 font-bold text-white">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2.5">
+                                  {/* User profile picture directly queried from Steam / DB */}
+                                  <PlayerAvatar
+                                    nickname={player.nickname}
+                                    avatarUrl={player.avatar}
+                                    steamId={resolvedSteamId}
+                                    size="sm"
+                                  />
                                   <span className="truncate">{player.nickname}</span>
                                   {isSteamPlayer && (
                                     <a
-                                      href={`https://steamcommunity.com/profiles/${player.playerId}`}
+                                      href={`https://steamcommunity.com/profiles/${resolvedSteamId}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="text-neutral-500 hover:text-sky-400 transition-colors shrink-0"
