@@ -52,7 +52,7 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
   let currentPhase = 1;
   if (activeStageTab === 'veto' || (isDraftFinished && isVetoActive)) {
     currentPhase = 4;
-  } else if (isDraftActive || activeStageTab === 'draft') {
+  } else if (isDraftActive) {
     currentPhase = 3;
   } else if (hasCaptains || isDraftFinished) {
     currentPhase = isDraftFinished ? 4 : 2;
@@ -304,11 +304,11 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
               {isDraftActive ? (
                 isMyTurn ? (
                   <span className="text-[#FF5500] animate-pulse">
-                    🌟 ¡ES TU TURNO! Elige a tu próximo compañero para {currentTeam?.name.toUpperCase()} en la lista izquierda.
+                    🌟 ¡ES TU TURNO! Elige a tu próximo compañero para {((currentTeam?.name) || 'EQUIPO').toUpperCase()} en la lista izquierda.
                   </span>
                 ) : (
                   <span>
-                    ⏳ Esperando elección: Turno del equipo <strong className="text-[#FF5500]">{currentTeam?.name.toUpperCase()}</strong> (Capitán: {currentTeam?.captain?.faceit_nickname || 'Desconocido'}).
+                    ⏳ Esperando elección: Turno del equipo <strong className="text-[#FF5500]">{((currentTeam?.name) || 'EQUIPO').toUpperCase()}</strong> (Capitán: {currentTeam?.captain?.faceit_nickname || 'Desconocido'}).
                   </span>
                 )
               ) : isVetoActive ? (

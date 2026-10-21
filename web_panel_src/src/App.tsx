@@ -342,7 +342,7 @@ export default function App() {
       return team.name;
     }
     if (team && team.captain) {
-      const capName = team.captain.discordUser?.displayName || team.captain.faceit_nickname;
+      const capName = team.captain.discordUser?.displayName || team.captain.faceit_nickname || 'CAPITÁN';
       return `EQUIPO ${capName.toUpperCase()}`;
     }
     return team ? team.name : '';
