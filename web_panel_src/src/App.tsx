@@ -106,11 +106,14 @@ export default function App() {
   useEffect(() => {
     if (activeView === 'inicio') {
       document.documentElement.classList.add('has-scroll-snap');
+      document.body.classList.add('has-scroll-snap');
     } else {
       document.documentElement.classList.remove('has-scroll-snap');
+      document.body.classList.remove('has-scroll-snap');
     }
     return () => {
       document.documentElement.classList.remove('has-scroll-snap');
+      document.body.classList.remove('has-scroll-snap');
     };
   }, [activeView]);
 

@@ -254,7 +254,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
           ========================================================================= */}
       <section 
         id="mixton"
-        className="snap-section min-h-[calc(100vh-64px)] flex flex-col justify-center relative py-14 sm:py-20 px-4 sm:px-6 max-w-6xl mx-auto"
+        className="snap-section min-h-[calc(100vh-64px)] flex flex-col justify-center relative py-14 sm:py-20 px-4 sm:px-6 w-full"
       >
         <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-12">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FF5500]/10 border border-[#FF5500]/30 text-[#FF5500] text-xs font-mono font-bold uppercase mb-3">
@@ -512,7 +512,7 @@ export const LandingHomeView: React.FC<LandingHomeViewProps> = ({
           ========================================================================= */}
       <section 
         id="maps"
-        className="snap-section min-h-[calc(100vh-64px)] flex flex-col justify-center relative py-14 sm:py-20 px-4 sm:px-6 max-w-6xl mx-auto"
+        className="snap-section min-h-[calc(100vh-64px)] flex flex-col justify-center relative py-14 sm:py-20 px-4 sm:px-6 w-full"
       >
         <div className="text-center max-w-3xl mx-auto mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FF5500]/10 border border-[#FF5500]/30 text-[#FF5500] text-xs font-mono font-bold uppercase mb-3">

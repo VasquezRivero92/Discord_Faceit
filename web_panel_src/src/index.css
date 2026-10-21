@@ -18,15 +18,19 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   scroll-padding-top: var(--header-height, 64px);
+  overflow-x: clip;
 }
 
 /* Scroll Snap Architecture for the web experience */
-html.has-scroll-snap {
+html.has-scroll-snap,
+body.has-scroll-snap {
   scroll-snap-type: y proximity;
+  scroll-padding-top: var(--header-height, 64px);
 }
 
 @media (min-width: 1024px) {
-  html.has-scroll-snap {
+  html.has-scroll-snap,
+  body.has-scroll-snap {
     scroll-snap-type: y mandatory;
   }
 }
@@ -34,7 +38,7 @@ html.has-scroll-snap {
 body {
   background-color: #08090C;
   color: #F3F4F6;
-  overflow-x: hidden;
+  overflow-x: clip;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
@@ -110,15 +114,15 @@ p, .text-pretty {
   transform: translateY(-3px);
 }
 
-/* Scroll Snap section markers */
+/* Scroll Snap section markers - precisely aligned with the 64px snapport */
 .snap-section {
   scroll-snap-align: start;
   scroll-snap-stop: normal;
-  scroll-margin-top: var(--header-height, 64px);
 }
 
 .snap-footer {
   scroll-snap-align: end;
+  scroll-snap-stop: normal;
 }
 
 /* Micro-font scale legibility safeguards */
