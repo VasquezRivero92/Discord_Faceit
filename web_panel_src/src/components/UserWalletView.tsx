@@ -297,7 +297,7 @@ export const UserWalletView: React.FC<UserWalletViewProps> = ({
                 className="w-full py-3.5 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-black uppercase tracking-wider text-center flex items-center justify-center gap-2.5 shadow-[0_4px_20px_rgba(88,101,242,0.35)] transition-all cursor-pointer active:scale-[0.98]"
               >
                 <DiscordLogo className="w-4 h-4 text-white" />
-                <span>Conectar con Discord</span>
+                <span>Login Discord</span>
                 <ArrowRight className="w-4 h-4" />
               </a>
             </div>

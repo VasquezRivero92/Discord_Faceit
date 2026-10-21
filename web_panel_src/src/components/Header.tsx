@@ -303,11 +303,11 @@ export const Header: React.FC<HeaderProps> = ({
 
               <a
                 href="/auth/discord"
-                className="hidden min-[420px]:flex px-3 py-1.5 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] border border-[#5865F2]/50 text-white text-xs font-mono font-bold uppercase transition-all items-center gap-1.5 shadow-[0_0_12px_rgba(88,101,242,0.3)] active:scale-[0.98] shrink-0"
-                title="Conectar Discord"
+                className="flex px-3 py-1.5 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] border border-[#5865F2]/50 text-white text-xs font-mono font-bold uppercase transition-all items-center gap-1.5 shadow-[0_0_12px_rgba(88,101,242,0.3)] active:scale-[0.98] shrink-0"
+                title="Login Discord"
               >
-                <DiscordLogo className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Discord</span>
+                <DiscordLogo className="w-3.5 h-3.5 shrink-0" />
+                <span className="whitespace-nowrap">Login Discord</span>
               </a>
             </div>
           )}
@@ -327,6 +327,17 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Mobile Navigation Drawer */}
       {mobileMenuOpen && (
         <div className="lg:hidden bg-[#0A0C12]/95 backdrop-blur-2xl border-b border-white/[0.1] px-4 py-3.5 space-y-1.5 font-mono text-xs uppercase font-semibold animate-fade-in shadow-2xl">
+          {!currentUser && (
+            <div className="pb-1.5">
+              <a
+                href="/auth/discord"
+                className="w-full text-center px-3.5 py-2.5 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] text-white flex items-center justify-center gap-2 font-mono font-bold uppercase shadow-md transition-all active:scale-[0.98]"
+              >
+                <DiscordLogo className="w-4 h-4 text-white shrink-0" />
+                <span>Login Discord</span>
+              </a>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => handleNavClick('inicio')}
