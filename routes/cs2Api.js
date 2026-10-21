@@ -125,7 +125,8 @@ export function createCs2ApiRouter(client, db) {
         scoreB: team2_score ?? null,
         client,
         db,
-        reason: 'Partida finalizada por servidor CS2 local'
+        reason: 'Partida finalizada por servidor CS2 local',
+        stats: stats || null
       });
 
       // Asegurar que la API quede completamente limpia de la información

@@ -453,7 +453,8 @@ export async function resolveMixtonMatchEnd({
   scoreB = null,
   client,
   db,
-  reason = 'Partida finalizada'
+  reason = 'Partida finalizada',
+  stats = null
 }) {
   logger.info(`[resolveMixtonMatchEnd] Procesando finalización de match ${matchId} (Acción: ${action})...`);
   const activeMatch = await db.getActiveMatch(matchId);
@@ -561,7 +562,8 @@ export async function resolveMixtonMatchEnd({
       teams: { faction1: { name: activeMatch.faction1_name || 'Equipo 1' }, faction2: { name: activeMatch.faction2_name || 'Equipo 2' } },
       chosen_map: activeMatch.chosen_map || null,
       bet_amount_per_player: parsedBetAmount,
-      total_pot: totalPot
+      total_pot: totalPot,
+      stats: stats || null
     },
     winner,
     finalScoreA,
@@ -569,7 +571,8 @@ export async function resolveMixtonMatchEnd({
     rosterA,
     rosterB,
     guildId,
-    status
+    status,
+    stats || null
   ).catch(err => logger.error('Error al guardar historial de partida:', err));
 
   // 6. Actualizar mensaje de anuncio en Discord

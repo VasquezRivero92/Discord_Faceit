@@ -63,6 +63,9 @@ class MockFirestore {
   batch() {
     return new MockBatch(this);
   }
+  async getAll(...docRefs) {
+    return Promise.all(docRefs.map(docRef => docRef.get()));
+  }
   async runTransaction(callback) {
     // Serializa las transacciones de la base en memoria para que el entorno de
     // desarrollo mantenga la misma garantía de exclusión que Firestore.
@@ -124,6 +127,7 @@ class MockDocument {
     this.id = id;
     this.collectionName = collectionName;
     this.firestoreInstance = firestoreInstance;
+    this.path = `${collectionName}/${id}`;
   }
   async get() {
     const exists = this.dataStore[this.id] !== undefined;
@@ -131,6 +135,7 @@ class MockDocument {
     return {
       exists,
       id: this.id,
+      ref: this,
       data: () => (data ? { ...data } : undefined)
     };
   }
@@ -1161,7 +1166,7 @@ export const db = {
   },
 
   // --- Historial de Partidas ---
-  async addMatchToHistory(matchId, matchData, winner, scoreA, scoreB, faction1Roster = [], faction2Roster = [], guildId = null, status = 'finished') {
+  async addMatchToHistory(matchId, matchData, winner, scoreA, scoreB, faction1Roster = [], faction2Roster = [], guildId = null, status = 'finished', stats = null) {
     if (!matchId || typeof matchId !== 'string') {
       logger.warn('addMatchToHistory ignorado: matchId no es válido o está vacío.');
       return;
@@ -1204,6 +1209,11 @@ export const db = {
         guild_id: guildId || matchData.guild_id || null,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       };
+
+      const finalStats = stats || matchData.stats;
+      if (finalStats) {
+        matchObj.stats = finalStats;
+      }
 
       if (!existingDoc.exists) {
         matchObj.createdAt = admin.firestore.FieldValue.serverTimestamp();
@@ -1275,6 +1285,18 @@ export const db = {
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
       cacheValue(matchStatsCache, matchId, { matchId, ...stats });
+
+      // También guardar / incrustar stats en faceit_matches_history para que sea visible directamente en la consola de Firestore
+      try {
+        await firestore.collection(MATCHES_HISTORY_COLLECTION).doc(matchId).set({
+          stats: { matchId, ...stats },
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        invalidateMatchHistoryCache();
+      } catch (e) {
+        logger.warn(`No se pudo incrustar stats en ${MATCHES_HISTORY_COLLECTION}: ${e.message}`);
+      }
+
       return true;
     } catch (error) {
       logger.error(`Error al guardar estadísticas FACEIT de ${matchId}:`, error);
@@ -2034,6 +2056,95 @@ export const db = {
     })();
     fullUserFetches.set(docId, fetchUser);
     return fetchUser;
+  },
+
+  async getFullUsersMap(discordIds, guildId = null) {
+    if (!Array.isArray(discordIds) || discordIds.length === 0) return {};
+    const uniqueIds = Array.from(new Set(discordIds.filter(id => id && typeof id === 'string')));
+    if (uniqueIds.length === 0) return {};
+
+    const resultMap = {};
+    const idsToFetch = [];
+
+    // 1. Revisar caché local en memoria primero
+    for (const discordId of uniqueIds) {
+      const docId = guildId ? `${guildId}_${discordId}` : discordId;
+      const cached = getCachedUserByDiscordId(docId) || (guildId ? getCachedUserByDiscordId(discordId) : null);
+      if (cached && typeof cached === 'object') {
+        resultMap[discordId] = cached;
+      } else {
+        idsToFetch.push(discordId);
+      }
+    }
+
+    if (idsToFetch.length === 0) {
+      return resultMap;
+    }
+
+    // 2. Traer todos los documentos faltantes en una SOLA consulta mediante getAll
+    try {
+      const docRefs = [];
+      const refMeta = new Map();
+
+      for (const discordId of idsToFetch) {
+        if (guildId) {
+          const gRef = firestore.collection(USERS_COLLECTION).doc(`${guildId}_${discordId}`);
+          docRefs.push(gRef);
+          refMeta.set(gRef.path, { discordId, isGuild: true });
+        }
+        const globRef = firestore.collection(USERS_COLLECTION).doc(discordId);
+        docRefs.push(globRef);
+        refMeta.set(globRef.path, { discordId, isGuild: false });
+      }
+
+      const snapshots = docRefs.length > 0 && typeof firestore.getAll === 'function'
+        ? await firestore.getAll(...docRefs)
+        : await Promise.all(docRefs.map(ref => ref.get()));
+
+      const rawUserData = {};
+
+      for (const snap of snapshots) {
+        const path = snap.ref?.path || (snap.id ? `${USERS_COLLECTION}/${snap.id}` : null);
+        const meta = refMeta.get(path);
+        if (!meta) continue;
+
+        if (!rawUserData[meta.discordId]) {
+          rawUserData[meta.discordId] = { guildData: null, globalData: null };
+        }
+        if (snap.exists) {
+          const data = typeof snap.data === 'function' ? snap.data() : snap.data;
+          if (meta.isGuild) {
+            rawUserData[meta.discordId].guildData = data;
+          } else {
+            rawUserData[meta.discordId].globalData = data;
+          }
+        }
+      }
+
+      for (const discordId of idsToFetch) {
+        const item = rawUserData[discordId] || { guildData: null, globalData: null };
+        let combined = { ...(item.globalData || {}), ...(item.guildData || {}) };
+
+        if (Object.keys(combined).length > 0) {
+          if (!combined.discordId) combined.discordId = discordId;
+          const docId = guildId ? `${guildId}_${discordId}` : discordId;
+          cacheUser(docId, combined);
+          if (guildId && docId !== discordId) {
+            cacheUser(discordId, combined);
+          }
+          resultMap[discordId] = combined;
+        } else {
+          resultMap[discordId] = await this.getFullUser(discordId, guildId).catch(() => null);
+        }
+      }
+    } catch (err) {
+      logger.error('Error al consultar usuarios en lote (getFullUsersMap):', err);
+      await Promise.all(idsToFetch.map(async (id) => {
+        resultMap[id] = await this.getFullUser(id, guildId).catch(() => null);
+      }));
+    }
+
+    return resultMap;
   },
 
   async setUserRoleAndGuild(discordId, role, guildId) {

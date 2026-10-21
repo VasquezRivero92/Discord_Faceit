@@ -1741,28 +1741,26 @@ export function createLobbyRouter(client, db, config, wss) {
       if (matchMode === 'steam') {
         const rosterA = [teamA.captain, ...teamA.players];
         const rosterB = [teamB.captain, ...teamB.players];
+        const allPlayerIds = [...rosterA, ...rosterB].map(p => p.discordId).filter(Boolean);
+        const usersDataMap = await db.getFullUsersMap(allPlayerIds, req.guildId);
         const missingSteam = [];
 
         for (const p of [...rosterA, ...rosterB]) {
-          let s64 = String(p.steam_id_64 || '').trim();
-          if (!/^\d{17}$/.test(s64)) {
-            const uData = await db.getFullUser(p.discordId, req.guildId).catch(() => null);
-            if (uData?.steam_id_64 && /^\d{17}$/.test(String(uData.steam_id_64).trim())) {
-              p.steam_id_64 = String(uData.steam_id_64).trim();
-              s64 = p.steam_id_64;
-            } else if (p.faceit_player_id || p.faceit_nickname) {
-              try {
-                const fcPlayer = p.faceit_player_id
-                  ? await fetchFaceitPlayerById(p.faceit_player_id).catch(() => null)
-                  : await fetchFaceitPlayer(p.faceit_nickname).catch(() => null);
-                const foundS64 = fcPlayer?.games?.cs2?.game_player_id || fcPlayer?.games?.csgo?.game_player_id || fcPlayer?.steam_id_64;
-                if (foundS64 && /^\d{17}$/.test(String(foundS64).trim())) {
-                  p.steam_id_64 = String(foundS64).trim();
-                  s64 = p.steam_id_64;
-                  await db.saveUser(p.discordId, { steam_id_64: p.steam_id_64 }, req.guildId).catch(() => {});
-                }
-              } catch {}
-            }
+          let s64 = String(p.steam_id_64 || usersDataMap[p.discordId]?.steam_id_64 || '').trim();
+          if (!/^\d{17}$/.test(s64) && (p.faceit_player_id || p.faceit_nickname)) {
+            try {
+              const fcPlayer = p.faceit_player_id
+                ? await fetchFaceitPlayerById(p.faceit_player_id).catch(() => null)
+                : await fetchFaceitPlayer(p.faceit_nickname).catch(() => null);
+              const foundS64 = fcPlayer?.games?.cs2?.game_player_id || fcPlayer?.games?.csgo?.game_player_id || fcPlayer?.steam_id_64;
+              if (foundS64 && /^\d{17}$/.test(String(foundS64).trim())) {
+                s64 = String(foundS64).trim();
+                p.steam_id_64 = s64;
+                await db.saveUser(p.discordId, { steam_id_64: s64 }, req.guildId).catch(() => {});
+              }
+            } catch {}
+          } else if (/^\d{17}$/.test(s64)) {
+            p.steam_id_64 = s64;
           }
 
           if (!s64 || !/^\d{17}$/.test(s64)) {
@@ -1968,19 +1966,15 @@ export function createLobbyRouter(client, db, config, wss) {
       }
       const guildIdToUse = targetGuildId || req.guildId || DISCORD_GUILD_ID;
 
-      const playerStatusList = [];
+      // Realizar una sola consulta a la base de datos por los 10 jugadores
+      const allPlayerIds = [...rosterA, ...rosterB].map(p => p.discordId).filter(Boolean);
+      const usersDataMap = await db.getFullUsersMap(allPlayerIds, guildIdToUse);
 
-      for (const p of rosterA) {
-        const balance = await db.getUserBalance(p.discordId, guildIdToUse);
-        let hasSavedPhone = false;
-        let steam_id_64 = String(p.steam_id_64 || '').trim();
-        try {
-          const u = await db.getFullUser(p.discordId, guildIdToUse);
-          if (u?.phoneNumber) hasSavedPhone = true;
-          if (!steam_id_64 && u?.steam_id_64) {
-            steam_id_64 = String(u.steam_id_64).trim();
-          }
-        } catch (_) {}
+      const buildPlayerStatus = async (p, teamLetter, teamObj) => {
+        const u = usersDataMap[p.discordId] || {};
+        const balance = Number(u.wallet_balance || 0);
+        const hasSavedPhone = Boolean(u.phoneNumber);
+        let steam_id_64 = String(p.steam_id_64 || u.steam_id_64 || '').trim();
 
         if (!steam_id_64 && (p.faceit_player_id || p.faceit_nickname)) {
           try {
@@ -1994,11 +1988,13 @@ export function createLobbyRouter(client, db, config, wss) {
               await db.saveUser(p.discordId, { steam_id_64 }, guildIdToUse).catch(() => {});
             }
           } catch (_) {}
+        } else if (/^\d{17}$/.test(steam_id_64)) {
+          p.steam_id_64 = steam_id_64;
         }
 
         const hasSteam = Boolean(steam_id_64 && /^\d{17}$/.test(steam_id_64));
 
-        playerStatusList.push({
+        return {
           discordId: p.discordId,
           faceit_nickname: p.faceit_nickname,
           displayName: p.discordUser?.displayName || p.discordUser?.username || p.faceit_nickname,
@@ -2006,59 +2002,19 @@ export function createLobbyRouter(client, db, config, wss) {
           hasSavedPhone,
           hasSteam,
           steam_id_64: hasSteam ? steam_id_64 : null,
-          team: 'A',
-          teamName: teamA.name,
-          isCaptain: p.discordId === teamA.captain.discordId,
+          team: teamLetter,
+          teamName: teamObj.name,
+          isCaptain: p.discordId === teamObj.captain?.discordId,
           balance,
           hasEnough: parsedBetAmount === 0 || balance >= parsedBetAmount,
           deficit: Math.max(0, parseFloat((parsedBetAmount - balance).toFixed(2)))
-        });
-      }
+        };
+      };
 
-      for (const p of rosterB) {
-        const balance = await db.getUserBalance(p.discordId, guildIdToUse);
-        let hasSavedPhone = false;
-        let steam_id_64 = String(p.steam_id_64 || '').trim();
-        try {
-          const u = await db.getFullUser(p.discordId, guildIdToUse);
-          if (u?.phoneNumber) hasSavedPhone = true;
-          if (!steam_id_64 && u?.steam_id_64) {
-            steam_id_64 = String(u.steam_id_64).trim();
-          }
-        } catch (_) {}
-
-        if (!steam_id_64 && (p.faceit_player_id || p.faceit_nickname)) {
-          try {
-            const fc = p.faceit_player_id
-              ? await fetchFaceitPlayerById(p.faceit_player_id).catch(() => null)
-              : await fetchFaceitPlayer(p.faceit_nickname).catch(() => null);
-            const found = fc?.games?.cs2?.game_player_id || fc?.games?.csgo?.game_player_id || fc?.steam_id_64;
-            if (found && /^\d{17}$/.test(String(found).trim())) {
-              steam_id_64 = String(found).trim();
-              p.steam_id_64 = steam_id_64;
-              await db.saveUser(p.discordId, { steam_id_64 }, guildIdToUse).catch(() => {});
-            }
-          } catch (_) {}
-        }
-
-        const hasSteam = Boolean(steam_id_64 && /^\d{17}$/.test(steam_id_64));
-
-        playerStatusList.push({
-          discordId: p.discordId,
-          faceit_nickname: p.faceit_nickname,
-          displayName: p.discordUser?.displayName || p.discordUser?.username || p.faceit_nickname,
-          avatarURL: p.discordUser?.avatarURL || null,
-          hasSavedPhone,
-          hasSteam,
-          steam_id_64: hasSteam ? steam_id_64 : null,
-          team: 'B',
-          teamName: teamB.name,
-          isCaptain: p.discordId === teamB.captain.discordId,
-          balance,
-          hasEnough: parsedBetAmount === 0 || balance >= parsedBetAmount,
-          deficit: Math.max(0, parseFloat((parsedBetAmount - balance).toFixed(2)))
-        });
-      }
+      const playerStatusList = await Promise.all([
+        ...rosterA.map(p => buildPlayerStatus(p, 'A', teamA)),
+        ...rosterB.map(p => buildPlayerStatus(p, 'B', teamB))
+      ]);
 
       const totalPot = parseFloat((parsedBetAmount * 10).toFixed(2));
       const allReady = playerStatusList.every(p => p.hasEnough);
@@ -2102,10 +2058,34 @@ export function createLobbyRouter(client, db, config, wss) {
         reason || `Recarga manual por admin ${req.user.username}`
       );
 
+      // Notificar a los paneles web en tiempo real sobre la recarga de este jugador específico
+      if (wss) {
+        const payload = JSON.stringify({
+          type: 'player_balance_update',
+          data: { discordId, newBalance, guildId: req.guildId }
+        });
+        wss.clients.forEach(c => {
+          if (c.readyState === 1) c.send(payload);
+        });
+      }
+
       res.json({ success: true, discordId, newBalance });
     } catch (err) {
       logger.error('Error al recargar saldo manual:', err);
       res.status(500).json({ error: 'Error al recargar saldo.' });
+    }
+  });
+
+  // 7.6.1. Consultar únicamente el saldo de un jugador individual en la base de datos
+  router.get('/player-balance/:discordId', requireAuth, verifyGuildAccess, async (req, res) => {
+    try {
+      const { discordId } = req.params;
+      const targetGuildId = req.guildId || DISCORD_GUILD_ID;
+      const balance = await db.getUserBalance(discordId, targetGuildId);
+      res.json({ success: true, discordId, balance });
+    } catch (err) {
+      logger.error(`Error al consultar saldo de jugador ${req.params.discordId}:`, err);
+      res.status(500).json({ error: 'Error al consultar saldo.' });
     }
   });
 
@@ -2180,6 +2160,17 @@ export function createLobbyRouter(client, db, config, wss) {
       }
 
       mixtonEvents.emit('update', req.guildId);
+
+      // Notificar a los paneles web en tiempo real sobre la recarga Yape de este jugador
+      if (wss) {
+        const payload = JSON.stringify({
+          type: 'player_balance_update',
+          data: { discordId, newBalance: result.newBalance, guildId: req.guildId }
+        });
+        wss.clients.forEach(c => {
+          if (c.readyState === 1) c.send(payload);
+        });
+      }
 
       res.json({
         success: true,
@@ -2348,35 +2339,33 @@ export function createLobbyRouter(client, db, config, wss) {
 
       const guildIdToUse = targetGuildId || req.guildId || DISCORD_GUILD_ID;
 
+      // Realizar una sola consulta a la base de datos por los 10 jugadores
+      const allPlayerIds = [...rosterA, ...rosterB].map(p => p.discordId).filter(Boolean);
+      const usersDataMap = await db.getFullUsersMap(allPlayerIds, guildIdToUse);
+
       if (matchMode === 'steam') {
-        // Enriquecer SteamID64 para todos los 10 jugadores (desde BD o directamente desde FACEIT API)
-        for (const p of [...rosterA, ...rosterB]) {
-          if (!p.steam_id_64) {
-            const uData = await db.getFullUser(p.discordId, guildIdToUse);
-            if (uData?.steam_id_64) {
-              p.steam_id_64 = uData.steam_id_64;
-            } else if (p.faceit_player_id || p.faceit_nickname) {
-              try {
-                const fcPlayer = p.faceit_player_id
-                  ? await fetchFaceitPlayerById(p.faceit_player_id).catch(() => null)
-                  : await fetchFaceitPlayer(p.faceit_nickname).catch(() => null);
-                const s64 = fcPlayer?.games?.cs2?.game_player_id || fcPlayer?.games?.csgo?.game_player_id || fcPlayer?.steam_id_64;
-                if (s64) {
-                  p.steam_id_64 = String(s64).trim();
-                  // Guardar en la base de datos para tenerlo en caché
-                  await db.saveUser(p.discordId, { steam_id_64: p.steam_id_64 }, guildIdToUse).catch(() => {});
-                }
-              } catch (fcErr) {
-                logger.warn(`No se pudo obtener SteamID64 desde FACEIT para ${p.faceit_nickname}: ${fcErr.message}`);
-              }
-            }
-          }
-        }
-        // Validación estricta: Los 10 jugadores deben tener su SteamID64 vinculado para ingresar al servidor CS2
         const missingSteam = [];
         for (const p of [...rosterA, ...rosterB]) {
-          const s64 = String(p.steam_id_64 || '').trim();
-          if (!/^\d{17}$/.test(s64)) {
+          let s64 = String(p.steam_id_64 || usersDataMap[p.discordId]?.steam_id_64 || '').trim();
+          if (!/^\d{17}$/.test(s64) && (p.faceit_player_id || p.faceit_nickname)) {
+            try {
+              const fcPlayer = p.faceit_player_id
+                ? await fetchFaceitPlayerById(p.faceit_player_id).catch(() => null)
+                : await fetchFaceitPlayer(p.faceit_nickname).catch(() => null);
+              const foundS64 = fcPlayer?.games?.cs2?.game_player_id || fcPlayer?.games?.csgo?.game_player_id || fcPlayer?.steam_id_64;
+              if (foundS64 && /^\d{17}$/.test(String(foundS64).trim())) {
+                s64 = String(foundS64).trim();
+                p.steam_id_64 = s64;
+                await db.saveUser(p.discordId, { steam_id_64: s64 }, guildIdToUse).catch(() => {});
+              }
+            } catch (fcErr) {
+              logger.warn(`No se pudo obtener SteamID64 desde FACEIT para ${p.faceit_nickname}: ${fcErr.message}`);
+            }
+          } else if (/^\d{17}$/.test(s64)) {
+            p.steam_id_64 = s64;
+          }
+
+          if (!s64 || !/^\d{17}$/.test(s64)) {
             missingSteam.push(p.faceit_nickname || p.discordUser?.displayName || p.nickname || p.discordId);
           }
         }
@@ -2389,7 +2378,7 @@ export function createLobbyRouter(client, db, config, wss) {
         }
       }
 
-      // Validación estricta de saldo/cuota si hay apuesta
+      // Validación estricta de saldo/cuota si hay apuesta usando la misma consulta previa
       const unpaidPlayers = [];
       const playersToDeduct = [];
 
@@ -2398,7 +2387,8 @@ export function createLobbyRouter(client, db, config, wss) {
           const isManual = manualPaidSet.has(p.discordId);
           if (isManual) continue;
 
-          const balance = await db.getUserBalance(p.discordId, guildIdToUse);
+          const uData = usersDataMap[p.discordId];
+          const balance = Number(uData?.wallet_balance || 0);
           if (balance < parsedBetAmount) {
             unpaidPlayers.push({
               discordId: p.discordId,
@@ -2561,7 +2551,6 @@ export function createLobbyRouter(client, db, config, wss) {
       }
 
       // Pre-cargar miembros en caché para evitar errores de Discord.js
-      const allPlayerIds = [...rosterA, ...rosterB].map(p => p.discordId).filter(id => id && typeof id === 'string');
       await Promise.all(allPlayerIds.map(id => guild.members.fetch(id).catch(() => null)));
 
       for (const p of rosterA) {
@@ -3019,7 +3008,10 @@ export function createLobbyRouter(client, db, config, wss) {
     try {
       const history = await db.getMatchHistoryById(req.params.matchId);
       if (!history) return res.status(404).json({ error: 'Partida no encontrada.' });
-      const stats = await db.getMatchStats(req.params.matchId);
+      let stats = await db.getMatchStats(req.params.matchId);
+      if (!stats && history.stats) {
+        stats = history.stats;
+      }
       res.json({ history, stats });
     } catch (err) {
       logger.error('Error al obtener detalle del historial:', err);

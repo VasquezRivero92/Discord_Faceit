@@ -403,6 +403,18 @@ export default function App() {
               return prev;
             });
           }
+        } else if (message.type === 'player_balance_update' && message.data) {
+          const { discordId, newBalance } = message.data;
+          const bal = Number(newBalance || 0);
+          setBetPlayers(prev => prev.map(p => {
+            if (p.discordId !== discordId) return p;
+            return {
+              ...p,
+              balance: bal,
+              hasEnough: effectiveBetAmount === 0 || bal >= effectiveBetAmount,
+              deficit: Math.max(0, parseFloat((effectiveBetAmount - bal).toFixed(2)))
+            };
+          }));
         }
       } catch (err) {
         console.error('Error al procesar mensaje de WebSocket:', err);
@@ -1818,14 +1830,11 @@ export default function App() {
   const handleSelectBetAmount = (amount: number) => {
     setIsCustomBet(false);
     setSelectedBetAmount(amount);
-    fetchBetStatus(amount);
   };
 
   // Change custom bet amount
   const handleCustomBetChange = (val: string) => {
     setCustomBetInput(val);
-    const num = Math.max(0, parseFloat(val) || 0);
-    fetchBetStatus(num);
   };
 
   // Toggle manual paid override
@@ -1834,6 +1843,27 @@ export default function App() {
       ...prev,
       [discordId]: !prev[discordId]
     }));
+  };
+
+  // Consultar el saldo actualizado de un solo jugador en la base de datos
+  const refreshSinglePlayerBalance = async (discordId: string) => {
+    try {
+      const res = await apiFetch(`/api/lobby/player-balance/${discordId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const bal = Number(data.balance ?? 0);
+        setBetPlayers(prev => prev.map(p => {
+          if (p.discordId !== discordId) return p;
+          return {
+            ...p,
+            balance: bal,
+            hasEnough: effectiveBetAmount === 0 || bal >= effectiveBetAmount,
+            deficit: Math.max(0, parseFloat((effectiveBetAmount - bal).toFixed(2)))
+          };
+        }));
+        showToast('Saldo actualizado desde la base de datos.', 'info');
+      }
+    } catch (_) {}
   };
 
   // Quick top-up submit
@@ -1858,8 +1888,19 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al recargar saldo.');
       showToast(`¡Recargado S/ ${amount.toFixed(2)} a ${quickTopUpUser.nickname}!`, 'success');
+      const targetId = quickTopUpUser.discordId;
+      const newBal = Number(data.newBalance ?? ((betPlayers.find(p => p.discordId === targetId)?.balance || 0) + amount));
       setQuickTopUpUser(null);
-      await fetchBetStatus(effectiveBetAmount);
+      // Actualizar solo el saldo de este jugador sin reconsultar a los otros 9
+      setBetPlayers(prev => prev.map(p => {
+        if (p.discordId !== targetId) return p;
+        return {
+          ...p,
+          balance: newBal,
+          hasEnough: effectiveBetAmount === 0 || newBal >= effectiveBetAmount,
+          deficit: Math.max(0, parseFloat((effectiveBetAmount - newBal).toFixed(2)))
+        };
+      }));
     } catch (err: any) {
       showToast(err.message, 'error');
     } finally {
@@ -1906,10 +1947,21 @@ export default function App() {
       }
 
       showToast(`¡Depósito de S/ ${Number(data.amount || 0).toFixed(2)} acreditado con éxito!`, 'success');
+      const targetId = quickTopUpUser.discordId;
+      const newBal = Number(data.newBalance ?? ((betPlayers.find(p => p.discordId === targetId)?.balance || 0) + amount));
       setQuickTopUpUser(null);
       setYapePhoneInput('');
       setYapeOperationInput('');
-      await fetchBetStatus(effectiveBetAmount);
+      // Actualizar solo el saldo de este jugador sin reconsultar a los otros 9
+      setBetPlayers(prev => prev.map(p => {
+        if (p.discordId !== targetId) return p;
+        return {
+          ...p,
+          balance: newBal,
+          hasEnough: effectiveBetAmount === 0 || newBal >= effectiveBetAmount,
+          deficit: Math.max(0, parseFloat((effectiveBetAmount - newBal).toFixed(2)))
+        };
+      }));
     } catch (err: any) {
       showToast(err.message, 'error');
     } finally {
@@ -4136,6 +4188,14 @@ export default function App() {
                                     <Wallet className="w-2.5 h-2.5 text-neutral-400" />
                                     Saldo: <strong className="text-white">S/ {p.balance.toFixed(2)}</strong>
                                   </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => refreshSinglePlayerBalance(p.discordId)}
+                                    title="Consultar saldo en base de datos si este jugador recargó"
+                                    className="text-neutral-500 hover:text-white transition-colors cursor-pointer p-0.5"
+                                  >
+                                    <RefreshCw className="w-2.5 h-2.5" />
+                                  </button>
                                 </div>
                                 {matchMode === 'steam' && (
                                   <div className="mt-1 flex items-center gap-1 font-mono text-[9px]">
@@ -4170,7 +4230,7 @@ export default function App() {
                                 </span>
                               ) : (
                                 <span className="px-2 py-0.5 text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/40">
-                                  FALTA S/ {p.deficit.toFixed(2)}
+                                  FALTA S/ {Math.max(0, parseFloat((effectiveBetAmount - p.balance).toFixed(2))).toFixed(2)}
                                 </span>
                               )}
 
@@ -4278,6 +4338,14 @@ export default function App() {
                                     <Wallet className="w-2.5 h-2.5 text-neutral-400" />
                                     Saldo: <strong className="text-white">S/ {p.balance.toFixed(2)}</strong>
                                   </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => refreshSinglePlayerBalance(p.discordId)}
+                                    title="Consultar saldo en base de datos si este jugador recargó"
+                                    className="text-neutral-500 hover:text-white transition-colors cursor-pointer p-0.5"
+                                  >
+                                    <RefreshCw className="w-2.5 h-2.5" />
+                                  </button>
                                 </div>
                                 {matchMode === 'steam' && (
                                   <div className="mt-1 flex items-center gap-1 font-mono text-[9px]">
@@ -4312,7 +4380,7 @@ export default function App() {
                                 </span>
                               ) : (
                                 <span className="px-2 py-0.5 text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/40">
-                                  FALTA S/ {p.deficit.toFixed(2)}
+                                  FALTA S/ {Math.max(0, parseFloat((effectiveBetAmount - p.balance).toFixed(2))).toFixed(2)}
                                 </span>
                               )}
 
