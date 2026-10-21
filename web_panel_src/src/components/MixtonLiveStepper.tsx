@@ -23,6 +23,7 @@ interface MixtonLiveStepperProps {
   currentUser: CurrentUser | null;
   onOpenGuide?: () => void;
   showToast?: (msg: string, type: 'success' | 'error' | 'info') => void;
+  activeStageTab?: 'draft' | 'veto';
 }
 
 export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
@@ -31,15 +32,16 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
   requiredPlayers = 10,
   currentUser,
   onOpenGuide,
-  showToast
+  showToast,
+  activeStageTab
 }) => {
   const [showHowItWorks, setShowHowItWorks] = useState(false);
 
   // Compute Current Phase (1 to 5)
   // Phase 1: Convocatoria / Cola (draft not started, waiting for ready players)
-  // Phase 2: Capitanes & Orden (captains assigned or pick order ready/randomizing)
+  // Phase 2: Sorteo de Turno & Capitanes
   // Phase 3: Draft en Vivo (draftStarted && !draftFinished)
-  // Phase 4: Veto de Mapas CS2 (mapVeto active or completed)
+  // Phase 4: Veto de Mapas CS2 (mapVeto active or tab veto selected)
   // Phase 5: Combate / Servidor Live (match created / live)
   const isVetoActive = Boolean(lobbyState.mapVeto && (lobbyState.mapVeto.active || lobbyState.mapVeto.completed));
   const isDraftActive = Boolean(lobbyState.draftStarted && !lobbyState.draftFinished);
@@ -48,9 +50,9 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
   const isMatchLive = Boolean(isDraftFinished && (isVetoActive || lobbyState.mapVeto?.completed));
 
   let currentPhase = 1;
-  if (isVetoActive) {
+  if (activeStageTab === 'veto' || (isDraftFinished && isVetoActive)) {
     currentPhase = 4;
-  } else if (isDraftActive) {
+  } else if (isDraftActive || activeStageTab === 'draft') {
     currentPhase = 3;
   } else if (hasCaptains || isDraftFinished) {
     currentPhase = isDraftFinished ? 4 : 2;
@@ -76,29 +78,29 @@ export const MixtonLiveStepper: React.FC<MixtonLiveStepperProps> = ({
       title: 'Convocatoria',
       subtitle: `${totalReadyCount}/${requiredPlayers} Listos`,
       icon: Users,
-      isCompleted: totalReadyCount >= requiredPlayers || isDraftActive || isDraftFinished,
+      isCompleted: totalReadyCount >= requiredPlayers || isDraftActive || isDraftFinished || currentPhase > 1,
       isActive: currentPhase === 1,
     },
     {
       num: 2,
-      title: 'Capitanes',
-      subtitle: hasCaptains ? 'Asignados' : 'Por Definir',
+      title: 'Sorteo y Turno',
+      subtitle: hasCaptains ? 'Definido' : 'Por Definir',
       icon: Crown,
-      isCompleted: hasCaptains || isDraftActive || isDraftFinished,
+      isCompleted: hasCaptains || isDraftActive || isDraftFinished || currentPhase > 2,
       isActive: currentPhase === 2,
     },
     {
       num: 3,
       title: 'Draft en Vivo',
-      subtitle: isDraftActive ? (isMyTurn ? '¡Tu Turno!' : 'En Selección') : isDraftFinished ? 'Completado' : 'Pendiente',
+      subtitle: currentPhase === 3 ? `Turno: ${currentTeam?.name || 'Equipo Fénix'}` : isDraftFinished || currentPhase > 3 ? 'Completado' : 'Pendiente',
       icon: Flame,
-      isCompleted: isDraftFinished,
+      isCompleted: isDraftFinished || currentPhase > 3,
       isActive: currentPhase === 3,
     },
     {
       num: 4,
       title: 'Veto de Mapas',
-      subtitle: isVetoActive ? (lobbyState.mapVeto?.chosenMap ? `Map: ${lobbyState.mapVeto.chosenMap.name}` : 'Baneando') : 'Al terminar draft',
+      subtitle: currentPhase === 4 ? (lobbyState.mapVeto?.chosenMap ? `Map: ${lobbyState.mapVeto.chosenMap.name}` : 'Baneando') : 'Al terminar draft',
       icon: Map,
       isCompleted: Boolean(lobbyState.mapVeto?.completed),
       isActive: currentPhase === 4,

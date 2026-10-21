@@ -338,9 +338,12 @@ export default function App() {
   const [guildName, setGuildName] = useState('MachuPeek');
 
   const getTeamName = (team: any) => {
+    if (team && team.name && !/^EQUIPO \d+$/i.test(team.name)) {
+      return team.name;
+    }
     if (team && team.captain) {
       const capName = team.captain.discordUser?.displayName || team.captain.faceit_nickname;
-      return `EQUIPO ${capName}`;
+      return `EQUIPO ${capName.toUpperCase()}`;
     }
     return team ? team.name : '';
   };
@@ -2396,7 +2399,7 @@ export default function App() {
         teams: [DEMO_CONCEPT_TEAM_A, DEMO_CONCEPT_TEAM_B],
         pickOrder: ['demo_team_1', 'demo_team_2'],
         currentPickIndex: 5,
-        pickSequence: ['demo_team_1', 'demo_team_2', 'demo_team_2', 'demo_team_1', 'demo_team_1', 'demo_team_2', 'demo_team_2', 'demo_team_1'],
+        pickSequence: ['demo_team_1', 'demo_team_2', 'demo_team_2', 'demo_team_1', 'demo_team_1', 'demo_team_1', 'demo_team_2', 'demo_team_2'],
         draftStarted: true,
         draftFinished: false,
         mapVeto: demoMapVeto
@@ -2678,6 +2681,7 @@ export default function App() {
               currentUser={currentUser}
               onOpenGuide={() => handleSelectView('guia-faceit')}
               showToast={showToast}
+              activeStageTab={arenaStageTab}
             />
           </div>
 
