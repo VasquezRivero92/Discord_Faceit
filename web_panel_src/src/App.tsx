@@ -32,7 +32,11 @@ import {
   Flame,
   MapPin,
   Map,
-  Sparkles
+  Sparkles,
+  Crown,
+  Crosshair,
+  Trophy,
+  Swords
 } from 'lucide-react';
 import {
   Player, 
@@ -2262,7 +2266,7 @@ export default function App() {
               <div>
                 <h2 className="text-base sm:text-lg font-black italic tracking-tighter uppercase leading-none text-white font-mono flex items-center gap-2">
                   SALA MIXTON: <span className="text-[#FF5500]">MACHUPEEK</span>
-                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-mono font-bold uppercase not-italic tracking-wider animate-pulse">
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded font-mono font-bold uppercase not-italic tracking-wider animate-pulse">
                     ● EN VIVO
                   </span>
                 </h2>
@@ -2313,17 +2317,20 @@ export default function App() {
           <main className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 p-4 sm:p-6 relative z-10 lg:overflow-hidden overflow-y-auto lg:max-h-[calc(100vh-140px)]">
         
         {/* Left Panel: Available Players */}
-        <section className="lg:col-span-1 p-5 bg-[#111] border-4 border-[#1A1A1A] shadow-[8px_8px_0px_rgba(0,0,0,0.5)] flex flex-col lg:max-h-[calc(100vh-140px)] rounded-none">
-          <div className="mb-4">
+        <section className="lg:col-span-1 p-4 sm:p-5 bg-[#0D1017]/95 border border-white/10 shadow-2xl flex flex-col lg:max-h-[calc(100vh-140px)] rounded-none backdrop-blur-md">
+          <div className="mb-3.5 pb-3 border-b border-white/10">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-black italic tracking-tighter uppercase text-white flex items-center gap-2">
-                <Users className="w-4 h-4 text-neutral-400" /> DISPONIBLES
+              <h2 className="text-base sm:text-lg font-black italic tracking-tighter uppercase text-white flex items-center gap-2">
+                <Users className="w-4 h-4 text-[#FF5500]" /> JUGADORES LISTOS
               </h2>
-              <span className="text-[10px] font-mono bg-[#1A1A1A] border border-[#2D2D2D] px-2 py-0.5 text-neutral-400 font-bold uppercase">
-                {totalReadyCountVal} LISTO
+              <span className="text-[10px] font-mono bg-[#FF5500]/15 border border-[#FF5500]/40 px-2 py-0.5 text-[#FF5500] font-black uppercase tracking-wider">
+                {totalReadyCountVal} EN COLA
               </span>
             </div>
-            <p className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest mt-0.5">Usa /mixton_listo en Discord para unirte</p>
+            <p className="text-[9px] font-mono text-neutral-400 uppercase tracking-widest mt-1 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Escribe <strong className="text-white">/mixton_listo</strong> en Discord</span>
+            </p>
           </div>
           
           {/* Tier Filter Tabs */}
@@ -2331,29 +2338,29 @@ export default function App() {
             {['ALL', 'S', 'A', 'B', 'C'].map(tier => (
               <button 
                 key={tier}
-                className={`py-1 text-[9px] font-mono font-bold uppercase tracking-tighter border transition-colors ${
+                className={`py-1 text-[9px] font-mono font-black uppercase tracking-wider border transition-all cursor-pointer ${
                   selectedTier === tier 
-                    ? 'bg-white text-black border-white' 
-                    : 'bg-transparent text-neutral-400 border-[#2D2D2D] hover:border-neutral-500 hover:text-white'
+                    ? 'bg-[#FF5500] text-black border-[#FF5500] shadow-[0_0_10px_rgba(255,85,0,0.4)]' 
+                    : 'bg-[#121622] text-neutral-400 border-white/10 hover:border-white/30 hover:text-white'
                 }`}
                 onClick={() => setSelectedTier(tier)}
               >
-                {tier === 'ALL' ? 'TODOS' : `T_${tier}`}
+                {tier === 'ALL' ? 'TODOS' : `TIER ${tier}`}
               </button>
             ))}
           </div>
 
           {/* Search Box */}
-          <div className="relative mb-4">
+          <div className="relative mb-3.5">
             <input 
               type="text" 
-              className="w-full bg-[#1A1A1A] border-2 border-[#2D2D2D] text-xs font-mono text-white placeholder-neutral-600 px-3 py-2 pl-8 focus:outline-none focus:border-white rounded-none"
+              className="w-full bg-[#121622] border border-white/15 text-xs font-mono text-white placeholder-neutral-500 px-3 py-2 pl-8 focus:outline-none focus:border-[#FF5500] focus:ring-1 focus:ring-[#FF5500] transition-all rounded-none"
               placeholder="BUSCAR JUGADOR..." 
               autoComplete="off"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-            <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-2.5 top-2.5" />
+            <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-2.5" />
           </div>
 
           {/* Players List Scrollable Area */}
@@ -2366,18 +2373,18 @@ export default function App() {
                 return (
                   <div key={tier} className="space-y-1.5">
                     <div className="flex items-center gap-2">
-                      <span className={`text-[9px] font-extrabold px-1.5 py-0.5 border ${
-                        tier === 'S' ? 'border-red-500 text-red-400 bg-red-950/10' :
-                        tier === 'A' ? 'border-[#FF5500] text-[#FF5500] bg-orange-950/10' :
-                        tier === 'B' ? 'border-blue-500 text-blue-400 bg-blue-950/10' :
-                        'border-neutral-500 text-neutral-400 bg-neutral-900/50'
+                      <span className={`text-[9px] font-black px-2 py-0.5 border ${
+                        tier === 'S' ? 'border-red-500/80 text-red-400 bg-red-950/30' :
+                        tier === 'A' ? 'border-[#FF5500]/80 text-[#FF5500] bg-orange-950/30' :
+                        tier === 'B' ? 'border-blue-500/80 text-blue-400 bg-blue-950/30' :
+                        'border-neutral-600 text-neutral-400 bg-neutral-900/60'
                       }`}>
                         TIER {tier}
                       </span>
-                      <div className="flex-1 h-[1px] bg-[#1A1A1A]" />
+                      <div className="flex-1 h-[1px] bg-white/10" />
                     </div>
 
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       {players.map(player => {
                         const isPendingThis = pendingPick && pendingPick.discordId === player.discordId;
                         const avatarURL = player.discordUser?.avatarURL || 'https://cdn.discordapp.com/embed/avatars/0.png';
@@ -2385,26 +2392,43 @@ export default function App() {
                         return (
                           <div 
                             key={player.discordId}
-                            className={`p-2 bg-[#151515] border border-[#222] flex items-center justify-between gap-2 transition-all ${
-                              isPendingThis ? 'border-[#FF5500] bg-[#FF5500]/5' : 'hover:border-neutral-600'
+                            className={`p-2.5 bg-[#121622]/90 border transition-all flex items-center justify-between gap-2 rounded-none group ${
+                              isPendingThis 
+                                ? 'border-[#FF5500] bg-[#FF5500]/15 ring-2 ring-[#FF5500]/50 shadow-[0_0_15px_rgba(255,85,0,0.3)] animate-pulse' 
+                                : 'border-white/10 hover:border-white/30 hover:bg-[#161C2C]'
                             }`}
                           >
-                            <div className="flex items-center gap-2 overflow-hidden">
-                              <img className="w-6 h-6 rounded-none border border-[#2D2D2D] object-cover" src={avatarURL} alt="Avatar" />
+                            <div className="flex items-center gap-2.5 overflow-hidden">
+                              <div className="relative flex-shrink-0">
+                                <img 
+                                  className="w-7 h-7 rounded-none border border-white/20 object-cover" 
+                                  src={avatarURL} 
+                                  alt="Avatar" 
+                                />
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 border border-black absolute -bottom-0.5 -right-0.5" title="En línea" />
+                              </div>
                               <div className="min-w-0">
-                                <p className="text-[10px] font-bold text-white leading-none truncate">
+                                <p className="text-[11px] font-bold text-white leading-tight truncate group-hover:text-[#FF5500] transition-colors">
                                   {player.discordUser?.displayName || player.faceit_nickname}
                                 </p>
-                                <span className="text-[8px] text-neutral-500 block leading-none mt-0.5">{player.faceit_nickname}</span>
+                                <a 
+                                  href={`https://www.faceit.com/es/players/${player.faceit_nickname}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[9px] text-neutral-400 hover:text-[#FF5500] hover:underline block leading-none mt-0.5 font-mono truncate"
+                                  title="Ver perfil de Faceit"
+                                >
+                                  {player.faceit_nickname} ↗
+                                </a>
                               </div>
                             </div>
 
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className={`text-[9px] font-bold px-1.5 py-0.5 border ${
-                                player.faceit_level === 10 ? 'border-red-500 text-red-500 bg-red-950/10' :
-                                player.faceit_level >= 8 ? 'border-orange-500 text-orange-500 bg-orange-950/10' :
-                                player.faceit_level >= 5 ? 'border-blue-500 text-blue-500 bg-blue-950/10' :
-                                'border-neutral-500 text-neutral-400 bg-neutral-900/50'
+                              <span className={`text-[9px] font-black px-1.5 py-0.5 border font-mono ${
+                                player.faceit_level === 10 ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white border-red-500/80 shadow-[0_0_8px_rgba(239,68,68,0.5)]' :
+                                player.faceit_level >= 8 ? 'bg-gradient-to-r from-[#FF5500] to-amber-600 text-white border-orange-500/80 shadow-[0_0_6px_rgba(255,85,0,0.4)]' :
+                                player.faceit_level >= 5 ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white border-blue-500/80' :
+                                'bg-neutral-800 text-neutral-300 border-neutral-700'
                               }`}>
                                 L_{player.faceit_level}
                               </span>
@@ -2413,7 +2437,7 @@ export default function App() {
                                 <div className="flex gap-1">
                                   {/* Admin override select */}
                                   <select 
-                                    className="bg-[#222] border border-[#333] text-[9px] font-mono text-neutral-400 px-1 py-0.5 focus:outline-none focus:text-white focus:border-white rounded-none cursor-pointer"
+                                    className="bg-[#1A2030] border border-white/20 text-[9px] font-mono text-neutral-300 px-1 py-0.5 focus:outline-none focus:text-white focus:border-[#FF5500] rounded-none cursor-pointer"
                                     value={player.mixton_tier_override || ''}
                                     onChange={(e) => handleOverridePlayerTier(player.discordId, e.target.value)}
                                   >
@@ -2426,7 +2450,7 @@ export default function App() {
 
                                   {/* Directly assign to team */}
                                   <select 
-                                    className="bg-[#222] border border-[#333] text-[9px] font-mono text-neutral-400 px-1 py-0.5 focus:outline-none focus:text-white focus:border-white rounded-none cursor-pointer"
+                                    className="bg-[#1A2030] border border-white/20 text-[9px] font-mono text-neutral-300 px-1 py-0.5 focus:outline-none focus:text-white focus:border-[#FF5500] rounded-none cursor-pointer"
                                     value=""
                                     onChange={(e) => handleAssignPlayerToTeam(player.discordId, e.target.value)}
                                   >
@@ -2438,7 +2462,7 @@ export default function App() {
 
                                   {/* Remove player from queue */}
                                   <button
-                                    className="p-1 bg-red-950/40 border border-red-900/60 hover:bg-red-900 hover:text-white text-red-400 transition-colors rounded-none cursor-pointer"
+                                    className="p-1 bg-red-950/60 border border-red-700/60 hover:bg-red-900 hover:text-white text-red-300 transition-colors rounded-none cursor-pointer"
                                     onClick={() => handleRemovePlayerFromQueue(player.discordId, player.discordUser?.displayName || player.faceit_nickname)}
                                     title="Quitar de la Cola"
                                   >
@@ -2452,24 +2476,27 @@ export default function App() {
                                 isPendingThis ? (
                                   <div className="flex gap-1">
                                     <button 
-                                      className="bg-white text-black border border-white font-mono text-[9px] font-black px-2 py-0.5 hover:bg-neutral-200 transition-colors"
+                                      className="bg-emerald-500 text-black border border-emerald-400 font-mono text-[9px] font-black px-2 py-0.5 hover:bg-emerald-400 transition-colors shadow-sm cursor-pointer"
                                       onClick={handleConfirmPendingPlayer}
+                                      title="Confirmar elección"
                                     >
-                                      OK
+                                      ✓ OK
                                     </button>
                                     <button 
-                                      className="bg-red-950 border border-red-500 text-red-400 font-mono text-[9px] font-black px-1.5 py-0.5 hover:bg-red-900 transition-colors"
+                                      className="bg-red-950 border border-red-500 text-red-300 font-mono text-[9px] font-black px-1.5 py-0.5 hover:bg-red-900 transition-colors cursor-pointer"
                                       onClick={handleCancelPendingPlayer}
+                                      title="Cancelar"
                                     >
                                       <X className="w-2.5 h-2.5" />
                                     </button>
                                   </div>
                                 ) : (
                                   <button 
-                                    className="bg-transparent hover:bg-white hover:text-black border border-white text-white font-mono text-[9px] font-black tracking-wider px-2 py-0.5 transition-all"
+                                    className="bg-[#FF5500] hover:bg-[#FF7733] border border-[#FF5500] text-black font-mono text-[9px] font-black tracking-wider px-2.5 py-1 transition-all shadow-[0_0_10px_rgba(255,85,0,0.3)] hover:scale-105 active:scale-95 cursor-pointer"
                                     onClick={() => handleSelectPendingPlayer(player)}
+                                    title="Elegir para tu equipo"
                                   >
-                                    PICK
+                                    ELEGIR
                                   </button>
                                 )
                               )}
@@ -2482,25 +2509,161 @@ export default function App() {
                 );
               })
             ) : (
-              <div className="text-center py-10 border border-dashed border-[#222]">
-                <p className="text-xs text-neutral-500 font-mono uppercase">SIN JUGADORES DISPONIBLES</p>
+              <div className="text-center py-10 border border-dashed border-white/10 bg-[#121622]/40">
+                <Users className="w-8 h-8 text-neutral-600 mx-auto mb-2" />
+                <p className="text-xs text-neutral-400 font-mono uppercase font-bold">SIN JUGADORES EN COLA</p>
+                <p className="text-[10px] text-neutral-500 font-mono mt-1">Usa /mixton_listo en Discord para sumarte</p>
               </div>
             )}
           </div>
         </section>
 
         {/* Center & Right Panel */}
-        <section className="lg:col-span-3 flex flex-col gap-6 lg:overflow-y-auto lg:max-h-[calc(100vh-140px)] pr-2">
+        <section className="lg:col-span-3 flex flex-col gap-5 lg:overflow-y-auto lg:max-h-[calc(100vh-140px)] pr-2">
+          
+          {/* Hero Live Action Status Card */}
+          {(() => {
+            const currentActiveTeamId = lobbyState.pickSequence?.[lobbyState.currentPickIndex] || lobbyState.pickOrder[lobbyState.currentPickIndex % (lobbyState.pickOrder.length || 1)];
+            const activeTeam = lobbyState.teams.find(t => t.id === currentActiveTeamId);
+            const isTeamTurn = lobbyState.draftStarted && !lobbyState.draftFinished && activeTeam;
+            const isVetoActive = lobbyState.mapVeto && (lobbyState.mapVeto.active || lobbyState.mapVeto.completed);
+
+            if (isVetoActive) {
+              const veto = lobbyState.mapVeto!;
+              const teamA = lobbyState.teams.find(t => t.id === veto.teamIdA);
+              const teamB = lobbyState.teams.find(t => t.id === veto.teamIdB);
+              return (
+                <div className="p-4 bg-gradient-to-r from-red-950/40 via-[#10141E] to-[#FF5500]/20 border border-[#FF5500]/40 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-[#FF5500] text-black flex items-center justify-center font-black text-xl shadow-[0_0_15px_rgba(255,85,0,0.5)] flex-shrink-0">
+                      🎯
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase text-[#FF5500] tracking-widest bg-[#FF5500]/15 border border-[#FF5500]/30 px-2 py-0.5">
+                          FASE DE VETO DE MAPAS CS2
+                        </span>
+                        <span className="text-[10px] text-neutral-400">
+                          {veto.completed ? '🏆 MAPA DECIDIDO' : `Baneo ${veto.currentBanIndex + 1} de ${veto.banSequence?.length || 6}`}
+                        </span>
+                      </div>
+                      <h3 className="text-sm sm:text-base font-black text-white uppercase mt-0.5">
+                        {teamA ? getTeamName(teamA) : 'EQUIPO A'} <span className="text-[#FF5500]">VS</span> {teamB ? getTeamName(teamB) : 'EQUIPO B'}
+                      </h3>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-neutral-400 bg-black/60 px-2.5 py-1 border border-white/10">Modal de Veto Activo en Pantalla</span>
+                  </div>
+                </div>
+              );
+            }
+
+            if (isTeamTurn) {
+              const captainNick = activeTeam.captain?.discordUser?.displayName || activeTeam.captain?.faceit_nickname || 'Capitán';
+              const isMyTurn = (activeTeam.captain && currentUser && activeTeam.captain.discordId === currentUser.userId);
+              const totalPicks = lobbyState.pickSequence?.length || 8;
+              const currentPickNum = (lobbyState.currentPickIndex || 0) + 1;
+
+              return (
+                <div className="p-4 sm:p-5 bg-gradient-to-r from-[#FF5500]/20 via-[#121622] to-[#00A3FF]/20 border-2 border-[#FF5500]/60 shadow-[0_0_30px_rgba(255,85,0,0.25)] flex flex-col sm:flex-row items-center justify-between gap-4 font-mono relative overflow-hidden">
+                  <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-[#FF5500]/10 to-transparent pointer-events-none" />
+                  <div className="flex items-center gap-3.5 relative z-10">
+                    <div className="w-12 h-12 bg-[#FF5500] text-black font-black flex items-center justify-center text-2xl shadow-[0_0_20px_rgba(255,85,0,0.6)] animate-pulse flex-shrink-0">
+                      🔥
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-black uppercase text-[#FF5500] tracking-widest bg-[#FF5500]/20 border border-[#FF5500]/40 px-2 py-0.5">
+                          DRAFT EN VIVO // TURNO DE ELECCIÓN
+                        </span>
+                        <span className="text-[10px] font-bold text-neutral-400 bg-black/60 px-2 py-0.5 border border-white/10">
+                          ELECCIÓN {currentPickNum} DE {totalPicks}
+                        </span>
+                      </div>
+                      <h3 className="text-base sm:text-lg font-black text-white uppercase mt-1">
+                        Capitán <span className="text-[#FF5500]">{captainNick}</span> eligiendo para <span className="text-white underline">{getTeamName(activeTeam)}</span>
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 relative z-10">
+                    {isMyTurn ? (
+                      <div className="flex items-center gap-2 bg-[#FF5500] text-black px-4 py-2 font-black text-xs uppercase tracking-wider animate-bounce shadow-lg">
+                        <span>👉</span>
+                        <span>¡ES TU TURNO! HAZ CLIC EN "ELEGIR"</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 bg-black/70 border border-white/20 text-neutral-300 px-3.5 py-2 text-xs font-bold">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#FF5500] animate-ping" />
+                        <span>Esperando selección de {captainNick}...</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+
+            if (lobbyState.draftFinished) {
+              return (
+                <div className="p-4 bg-gradient-to-r from-emerald-950/40 via-[#10141E] to-emerald-950/40 border border-emerald-500/50 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-emerald-500 text-black flex items-center justify-center font-black text-xl shadow-[0_0_15px_rgba(16,185,129,0.5)] flex-shrink-0">
+                      ✓
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase text-emerald-400 tracking-widest bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5">
+                          DRAFT COMPLETADO
+                        </span>
+                        <span className="text-[10px] text-neutral-400">
+                          Equipos listos para el Sorteo de Enfrentamientos y Veto de Mapas
+                        </span>
+                      </div>
+                      <h3 className="text-sm sm:text-base font-black text-white uppercase mt-0.5">
+                        Todas las escuadras están completas con 5 jugadores
+                      </h3>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div className="p-3.5 bg-[#0D1017]/95 border border-white/10 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-[#161C2C] border border-white/15 text-[#FF5500] flex items-center justify-center font-black text-base flex-shrink-0">
+                    <Swords className="w-4 h-4 text-[#FF5500]" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase text-[#FF5500] tracking-widest bg-[#FF5500]/10 border border-[#FF5500]/30 px-2 py-0.5">
+                        SALA PRE-DRAFT
+                      </span>
+                      <span className="text-[10px] text-neutral-400">
+                        {totalReadyCountVal} / {numTeamsSelect * 5} JUGADORES LISTOS
+                      </span>
+                    </div>
+                    <span className="text-xs font-bold text-white block mt-0.5">
+                      {totalReadyCountVal >= numTeamsSelect * 5 
+                        ? '¡Convocatoria completa! Listo para configurar capitanes e iniciar el draft' 
+                        : `Faltan ${Math.max(0, numTeamsSelect * 5 - totalReadyCountVal)} jugadores para completar los equipos`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
           
           {/* Admin Dashboard Section */}
           {currentUser?.isAdmin && (
-            <div className="p-5 bg-[#111] border-4 border-[#1A1A1A] shadow-[8px_8px_0px_rgba(0,0,0,0.5)] rounded-none flex flex-col gap-4 relative">
-              <div className="border-b border-[#2D2D2D] pb-3 flex items-center justify-between">
+            <div className="p-4 sm:p-5 bg-[#0D1017]/95 border border-white/10 shadow-2xl rounded-none flex flex-col gap-4 relative">
+              <div className="border-b border-white/10 pb-3 flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-black italic tracking-tighter uppercase text-white flex items-center gap-2">
                     <ShieldAlert className="w-4 h-4 text-[#FF5500]" /> PANEL DE CONTROL DE ADMINISTRACIÓN
                   </h3>
-                  <p className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest mt-0.5">
+                  <p className="text-[9px] font-mono text-neutral-400 uppercase tracking-widest mt-0.5">
                     Gestión directa de equipos, cola de jugadores, órdenes de elección y despliegues
                   </p>
                 </div>
@@ -2750,14 +2913,33 @@ export default function App() {
             </div>
           )}
 
-          {/* Teams Grid Title */}
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="text-xl font-black italic tracking-tighter uppercase text-white flex items-center gap-2">
-              <Award className="w-5 h-5 text-neutral-400" /> EQUIPOS PARTICIPANTES
-            </h2>
-            <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">
-              Fase de Draft interactiva live
-            </span>
+          {/* Teams Grid Title & Head-to-Head Banner */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
+            <div>
+              <h2 className="text-xl font-black italic tracking-tighter uppercase text-white flex items-center gap-2">
+                <Award className="w-5 h-5 text-[#FF5500]" /> ESCUADRAS RIVALES
+              </h2>
+              <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest">
+                {lobbyState.teams.length === 2 ? 'Enfrentamiento directo 5v5 CS2 // Fase de Draft' : `${lobbyState.teams.length} Equipos Participantes`}
+              </span>
+            </div>
+
+            {/* VS Showdown Bar (If 2 Teams) */}
+            {lobbyState.teams.length === 2 && (
+              <div className="flex items-center gap-2 bg-[#0D1017]/95 border border-white/10 px-3 py-1.5 font-mono shadow-md text-xs">
+                <span className="text-[#FF5500] font-black tracking-wider">{getTeamName(lobbyState.teams[0]).toUpperCase()}</span>
+                <span className="text-[10px] font-bold text-neutral-300 bg-black/60 px-2 py-0.5 border border-white/10">
+                  AVG {getAverageElo(lobbyState.teams[0])}
+                </span>
+                <span className="text-white font-black text-[10px] px-1.5 py-0.5 bg-neutral-900 border border-neutral-700">
+                  VS
+                </span>
+                <span className="text-[10px] font-bold text-neutral-300 bg-black/60 px-2 py-0.5 border border-white/10">
+                  AVG {getAverageElo(lobbyState.teams[1])}
+                </span>
+                <span className="text-[#00A3FF] font-black tracking-wider">{getTeamName(lobbyState.teams[1]).toUpperCase()}</span>
+              </div>
+            )}
           </div>
 
           {/* Live teams stay intentionally independent from completed matches. */}
@@ -2768,41 +2950,67 @@ export default function App() {
                 const currentActiveTeamId = lobbyState.pickSequence?.[lobbyState.currentPickIndex] || lobbyState.pickOrder[lobbyState.currentPickIndex % (lobbyState.pickOrder.length || 1)];
                 const isCurrentTurn = lobbyState.draftStarted && !lobbyState.draftFinished && currentActiveTeamId === team.id;
                 const avgElo = getAverageElo(team);
+                const isTeamA = tIdx === 0;
+                const isTeamB = tIdx === 1;
 
                 // Render Captain Slot
                 let captainElement;
                 if (team.captain) {
                   const capAvatar = team.captain.discordUser?.avatarURL || 'https://cdn.discordapp.com/embed/avatars/0.png';
                   captainElement = (
-                    <div className="p-3 bg-[#1A1A1A] border-2 border-white flex items-center justify-between gap-3 relative overflow-hidden">
-                      {/* Retro top corner badge */}
-                      <div className="absolute right-0 top-0 bg-white text-black text-[8px] font-bold px-1.5 py-0.5 uppercase tracking-wider font-mono">
-                        CAPITÁN
+                    <div className={`p-3 bg-[#131722]/90 border-2 flex items-center justify-between gap-3 relative overflow-hidden transition-all shadow-md ${
+                      isTeamA 
+                        ? 'border-amber-400/80 bg-gradient-to-r from-amber-950/20 to-[#131722]' 
+                        : 'border-cyan-400/80 bg-gradient-to-r from-cyan-950/20 to-[#131722]'
+                    }`}>
+                      {/* Top corner Captain Badge */}
+                      <div className={`absolute right-0 top-0 text-[8px] font-black px-2 py-0.5 uppercase tracking-wider font-mono flex items-center gap-1 shadow-sm ${
+                        isTeamA ? 'bg-amber-400 text-black' : 'bg-cyan-400 text-black'
+                      }`}>
+                        <Crown className="w-3 h-3 fill-current" />
+                        <span>CAPITÁN</span>
                       </div>
+
                       <div className="flex items-center gap-3 overflow-hidden">
-                        <img className="w-8 h-8 rounded-none border border-[#2D2D2D] object-cover" src={capAvatar} alt="Avatar" />
+                        <div className="relative flex-shrink-0">
+                          <img 
+                            className={`w-9 h-9 rounded-none border-2 object-cover ${
+                              isTeamA ? 'border-amber-400' : 'border-cyan-400'
+                            }`} 
+                            src={capAvatar} 
+                            alt="Capitán" 
+                          />
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-black absolute -bottom-0.5 -right-0.5" />
+                        </div>
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-white leading-none truncate">
+                          <p className="text-xs font-black text-white leading-tight truncate">
                             {team.captain.discordUser?.displayName || team.captain.faceit_nickname}
                           </p>
                           <a 
                             href={`https://www.faceit.com/es/players/${team.captain.faceit_nickname}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[9px] text-[#FF5500]/80 hover:text-[#FF5500] hover:underline block leading-none mt-1 font-mono"
+                            className="text-[9px] text-neutral-400 hover:text-[#FF5500] hover:underline block leading-none mt-1 font-mono truncate"
                             title="Abrir perfil de Faceit"
                           >
                             {team.captain.faceit_nickname} ↗
                           </a>
                         </div>
                       </div>
+
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-[10px] font-extrabold text-[#FF5500] font-mono">
-                          L_{team.captain.faceit_level}
+                        <span className={`text-[10px] font-black px-2 py-0.5 border font-mono ${
+                          team.captain.faceit_level === 10
+                            ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white border-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
+                            : team.captain.faceit_level >= 8
+                              ? 'bg-gradient-to-r from-[#FF5500] to-amber-600 text-white border-orange-500 shadow-[0_0_6px_rgba(255,85,0,0.4)]'
+                              : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white border-blue-500'
+                        }`}>
+                          LVL {team.captain.faceit_level}
                         </span>
                         {currentUser?.isAdmin && (
                           <button 
-                            className="p-1 bg-red-950 border border-red-500 hover:bg-red-900 text-red-400 hover:text-white transition-colors"
+                            className="p-1 bg-red-950/80 border border-red-500/80 hover:bg-red-900 text-red-300 hover:text-white transition-colors cursor-pointer"
                             onClick={() => handleRemoveCaptain(team.id)}
                             title="Remover Capitán"
                           >
@@ -2814,13 +3022,13 @@ export default function App() {
                   );
                 } else {
                   captainElement = (
-                    <div className="p-3 bg-[#121212] border-2 border-dashed border-[#222] flex items-center justify-between gap-3">
-                      <span className="text-[10px] text-neutral-600 font-mono font-black uppercase tracking-wider">
-                        SIN CAPITÁN ASIGNADO
+                    <div className="p-3 bg-[#10141E]/60 border-2 border-dashed border-white/15 flex items-center justify-between gap-3">
+                      <span className="text-[10px] text-neutral-500 font-mono font-black uppercase tracking-wider flex items-center gap-1.5">
+                        <span>⚠️</span> SIN CAPITÁN ASIGNADO
                       </span>
                       {currentUser?.isAdmin && (
                         <button 
-                          className="bg-white hover:bg-neutral-200 text-black font-mono text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 transition-colors cursor-pointer"
+                          className="bg-white hover:bg-neutral-200 text-black font-mono text-[9px] font-black uppercase tracking-widest px-3 py-1.5 transition-colors cursor-pointer shadow-md"
                           onClick={() => handleOpenCaptainModal(team.id, team.name)}
                         >
                           + ASIGNAR
@@ -2840,16 +3048,21 @@ export default function App() {
                   if (player) {
                     const avatar = player.discordUser?.avatarURL || 'https://cdn.discordapp.com/embed/avatars/0.png';
                     playerSlots.push(
-                      <div key={player.discordId} className="p-2 bg-[#1A1A1A] border border-[#2D2D2D] flex items-center justify-between gap-3 text-xs relative overflow-hidden">
+                      <div key={player.discordId} className="p-2.5 bg-[#121622]/90 border border-white/10 hover:border-white/25 flex items-center justify-between gap-2.5 text-xs relative overflow-hidden transition-all group">
                         <div className="flex items-center gap-2 overflow-hidden">
-                          <img className="w-6 h-6 rounded-none border border-[#2D2D2D] object-cover" src={avatar} alt="Avatar" />
+                          <div className="relative flex-shrink-0">
+                            <img className="w-7 h-7 rounded-none border border-white/20 object-cover" src={avatar} alt="Avatar" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 absolute -bottom-0.5 -right-0.5 border border-black" />
+                          </div>
                           <div className="min-w-0">
-                            <span className="text-[10px] text-neutral-300 font-mono truncate block leading-none">{player.discordUser?.displayName || player.faceit_nickname}</span>
+                            <span className="text-[10px] text-white font-bold font-mono truncate block leading-tight group-hover:text-[#FF5500] transition-colors">
+                              {player.discordUser?.displayName || player.faceit_nickname}
+                            </span>
                             <a 
                               href={`https://www.faceit.com/es/players/${player.faceit_nickname}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[8px] text-[#FF5500]/70 hover:text-[#FF5500] hover:underline font-mono truncate mt-0.5 block leading-none"
+                              className="text-[8px] text-neutral-400 hover:text-[#FF5500] hover:underline font-mono truncate mt-0.5 block leading-none"
                               title="Ver perfil de Faceit"
                             >
                               {player.faceit_nickname} ↗
@@ -2857,14 +3070,24 @@ export default function App() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <span className="text-[9px] font-mono text-neutral-400 font-bold">L_{player.faceit_level}</span>
+                          <span className={`text-[9px] font-mono font-black px-1.5 py-0.5 border ${
+                            player.faceit_level === 10
+                              ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white border-red-500/80 shadow-[0_0_6px_rgba(239,68,68,0.4)]'
+                              : player.faceit_level >= 8
+                                ? 'bg-gradient-to-r from-[#FF5500] to-amber-600 text-white border-orange-500/80'
+                                : player.faceit_level >= 5
+                                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white border-blue-500/80'
+                                  : 'bg-neutral-800 text-neutral-300 border-neutral-700'
+                          }`}>
+                            L_{player.faceit_level}
+                          </span>
                           {currentUser?.isAdmin && (
                             <button 
-                              className="p-0.5 bg-neutral-900 border border-neutral-700 hover:border-red-500 text-neutral-500 hover:text-red-400 transition-colors"
+                              className="p-1 bg-neutral-900 border border-white/10 hover:border-red-500 text-neutral-400 hover:text-red-400 transition-colors cursor-pointer"
                               onClick={() => handleRemovePlayerFromTeam(team.id, player.discordId)}
                               title="Remover Jugador"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-3 h-3" />
                             </button>
                           )}
                         </div>
@@ -2873,18 +3096,30 @@ export default function App() {
                   } else if (isThisTeamTurn && pendingPick && !pendingRendered) {
                     const playerAvatar = pendingPick.discordUser?.avatarURL || 'https://cdn.discordapp.com/embed/avatars/0.png';
                     playerSlots.push(
-                      <div key="pending-slot" className="p-2 bg-[#FF5500]/5 border-2 border-dashed border-[#FF5500]/40 flex items-center justify-between gap-3 text-xs animate-pulse">
+                      <div key="pending-slot" className="p-2.5 bg-[#FF5500]/15 border-2 border-dashed border-[#FF5500] flex items-center justify-between gap-2.5 text-xs animate-pulse shadow-[0_0_15px_rgba(255,85,0,0.3)]">
                         <div className="flex items-center gap-2 overflow-hidden">
-                          <img className="w-6 h-6 rounded-none border border-[#FF5500]/20 object-cover opacity-60" src={playerAvatar} alt="Avatar" />
-                          <span className="text-[10px] text-[#FF5500] font-mono truncate">{pendingPick.discordUser?.displayName || pendingPick.faceit_nickname}</span>
+                          <img className="w-7 h-7 rounded-none border border-[#FF5500] object-cover" src={playerAvatar} alt="Avatar" />
+                          <div>
+                            <span className="text-[10px] text-white font-black font-mono truncate block">{pendingPick.discordUser?.displayName || pendingPick.faceit_nickname}</span>
+                            <span className="text-[8px] text-[#FF5500] font-bold block uppercase">Confirmación pendiente</span>
+                          </div>
                         </div>
-                        <span className="text-[8px] font-mono font-black bg-[#FF5500] text-black px-1.5 uppercase">PENDIENTE</span>
+                        <span className="text-[8px] font-mono font-black bg-[#FF5500] text-black px-2 py-0.5 uppercase tracking-wider">SELECCIÓN</span>
                       </div>
                     );
                     pendingRendered = true;
                   } else {
                     // Render empty slot
-                    let emptySlotContent = <span className="text-[9px] text-neutral-600 font-mono font-bold uppercase">RANURA VACÍA</span>;
+                    let emptySlotContent = isThisTeamTurn ? (
+                      <div className="py-1 text-center animate-pulse">
+                        <span className="text-[10px] font-black text-[#FF5500] font-mono uppercase tracking-wider flex items-center justify-center gap-1.5">
+                          <span>👉</span> ELIGIENDO COMPAÑERO...
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-[9px] text-neutral-500 font-mono font-bold uppercase tracking-wider">RANURA VACÍA</span>
+                    );
+
                     if (currentUser?.isAdmin) {
                       const assignablePlayers: Player[] = [];
                       ['S', 'A', 'B', 'C'].forEach(tier => {
@@ -2896,7 +3131,7 @@ export default function App() {
 
                       emptySlotContent = (
                         <select 
-                          className="w-full bg-[#181818] border border-dashed border-[#333] hover:border-white text-[9px] font-mono text-neutral-500 hover:text-white px-2 py-1.5 focus:outline-none focus:border-white rounded-none cursor-pointer text-center"
+                          className="w-full bg-[#141A28] border border-dashed border-white/20 hover:border-white text-[9px] font-mono text-neutral-300 hover:text-white px-2 py-1.5 focus:outline-none focus:border-[#FF5500] rounded-none cursor-pointer text-center"
                           value=""
                           onChange={(e) => {
                             if (e.target.value) {
@@ -2915,7 +3150,11 @@ export default function App() {
                     }
                     
                     playerSlots.push(
-                      <div key={`empty-${i}`} className="p-2 bg-[#121212] border border-[#1A1A1A] flex items-center justify-center">
+                      <div key={`empty-${i}`} className={`p-2.5 border flex items-center justify-center ${
+                        isThisTeamTurn 
+                          ? 'bg-[#FF5500]/10 border-dashed border-[#FF5500]/70' 
+                          : 'bg-[#0B0E14] border-dashed border-white/10'
+                      }`}>
                         {emptySlotContent}
                       </div>
                     );
@@ -2923,31 +3162,34 @@ export default function App() {
                 }
 
                 // Team color styling with high-contrast esports theme
-                const isTeamA = tIdx === 0;
-                const isTeamB = tIdx === 1;
                 const teamBg = isCurrentTurn 
-                  ? 'bg-gradient-to-b from-[#1E140F] to-[#0D1017] border-white shadow-[0_0_30px_rgba(255,85,0,0.35)] ring-2 ring-[#FF5500]' 
+                  ? 'bg-gradient-to-b from-[#22140E] via-[#0E121B] to-[#0A0D14] border-white ring-2 ring-[#FF5500] shadow-[0_0_35px_rgba(255,85,0,0.35)]' 
                   : isTeamA 
-                    ? 'bg-gradient-to-b from-[#16110F] to-[#0D1017] border-[#FF5500]/50 shadow-lg' 
+                    ? 'bg-gradient-to-b from-[#1E120D] via-[#0E121B] to-[#0A0D14] border-[#FF5500]/60 shadow-[0_0_20px_rgba(255,85,0,0.15)]' 
                     : isTeamB 
-                      ? 'bg-gradient-to-b from-[#0E1524] to-[#0D1017] border-[#00A3FF]/50 shadow-lg' 
-                      : 'bg-[#11141D] border-neutral-800';
+                      ? 'bg-gradient-to-b from-[#0D182A] via-[#0E121B] to-[#0A0D14] border-[#00A3FF]/60 shadow-[0_0_20px_rgba(0,163,255,0.15)]' 
+                      : 'bg-[#0E121B] border-white/10';
 
                 return (
-                  <div key={team.id} className={`p-4 sm:p-5 border-2 shadow-xl rounded-none relative flex flex-col gap-3 transition-all ${teamBg}`}>
+                  <div key={team.id} className={`p-4 sm:p-5 border-2 shadow-2xl rounded-none relative flex flex-col gap-3.5 transition-all ${teamBg}`}>
                     {/* Turn Active Badge */}
                     {isCurrentTurn && (
-                      <div className="bg-[#FF5500] text-black font-black font-mono text-[9px] px-2.5 py-0.5 uppercase tracking-widest animate-pulse flex items-center gap-1.5 self-start shadow-md -mt-1 mb-1">
-                        <Flame className="w-3 h-3 fill-current" />
+                      <div className="bg-[#FF5500] text-black font-black font-mono text-[9px] px-3 py-1 uppercase tracking-widest animate-pulse flex items-center gap-1.5 self-start shadow-md -mt-1 mb-1">
+                        <Flame className="w-3.5 h-3.5 fill-current" />
                         <span>TURNO DE ELECCIÓN // ELIGE JUGADOR</span>
                       </div>
                     )}
-                    <div className="flex justify-between items-center border-b border-white/10 pb-2 font-mono">
+
+                    <div className="flex justify-between items-center border-b border-white/10 pb-2.5 font-mono">
                       <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-black italic tracking-tighter uppercase text-white">{getTeamName(team)}</h4>
+                        <h4 className={`text-base font-black italic tracking-tighter uppercase ${
+                          isTeamA ? 'text-[#FF5500]' : isTeamB ? 'text-[#00A3FF]' : 'text-white'
+                        }`}>
+                          {getTeamName(team)}
+                        </h4>
                         {team.players && team.players.length > 0 && (
                           <button
-                            className="px-1.5 py-0.5 bg-[#FF5500]/10 border border-[#FF5500]/40 hover:bg-[#FF5500] hover:text-white text-[#FF5500] text-[8px] font-black uppercase transition-colors cursor-pointer rounded-none"
+                            className="px-2 py-0.5 bg-black/60 border border-white/20 hover:border-white text-neutral-300 hover:text-white text-[8px] font-black uppercase transition-colors cursor-pointer rounded-none"
                             onClick={() => {
                               const nicks = (team.players || []).map(p => p.faceit_nickname).filter(Boolean).join(', ');
                               navigator.clipboard.writeText(nicks);
@@ -2960,7 +3202,7 @@ export default function App() {
                         )}
                         {currentUser?.isAdmin && (team.captain || (team.players && team.players.length > 0)) && (
                           <button
-                            className="px-1.5 py-0.5 bg-red-950 border border-red-500 hover:bg-red-900 hover:border-red-400 text-red-400 hover:text-white text-[8px] font-black uppercase transition-colors cursor-pointer rounded-none"
+                            className="px-2 py-0.5 bg-red-950/80 border border-red-500/80 hover:bg-red-900 text-red-300 hover:text-white text-[8px] font-black uppercase transition-colors cursor-pointer rounded-none"
                             onClick={() => handleClearTeam(team.id, team.name)}
                             title="Vaciar Equipo"
                           >
@@ -2968,7 +3210,13 @@ export default function App() {
                           </button>
                         )}
                       </div>
-                      <span className="text-[10px] text-neutral-400 font-extrabold uppercase bg-[#1C1C1C] border border-[#2D2D2D] px-2 py-0.5">
+                      <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 border ${
+                        isTeamA 
+                          ? 'bg-[#FF5500]/15 text-[#FF5500] border-[#FF5500]/40' 
+                          : isTeamB 
+                            ? 'bg-[#00A3FF]/15 text-[#00A3FF] border-[#00A3FF]/40' 
+                            : 'bg-black/60 text-neutral-400 border-white/10'
+                      }`}>
                         AVG ELO: {avgElo}
                       </span>
                     </div>
@@ -2977,10 +3225,10 @@ export default function App() {
                       {captainElement}
                       
                       <div className="flex items-center gap-2">
-                        <span className="text-[8px] font-bold text-neutral-500 font-mono uppercase tracking-wider">
+                        <span className="text-[9px] font-black text-neutral-400 font-mono uppercase tracking-wider">
                           MIEMBROS ({team.players ? team.players.length : 0}/4)
                         </span>
-                        <div className="flex-1 h-[1px] bg-[#1A1A1A]" />
+                        <div className="flex-1 h-[1px] bg-white/10" />
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -3301,33 +3549,45 @@ export default function App() {
 
       {/* MAP VETO MODAL (CS2 Competitive Map Ban Phase) */}
       {lobbyState.mapVeto && (lobbyState.mapVeto.active || lobbyState.mapVeto.completed) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/90 backdrop-blur-md overflow-y-auto">
-          <div className="bg-[#121212] border-2 border-neutral-700 w-full max-w-[96vw] 2xl:max-w-[1550px] max-h-[96vh] my-auto flex flex-col shadow-2xl rounded-none font-mono text-white animate-fade-in overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/92 backdrop-blur-md overflow-y-auto font-mono">
+          <div className="bg-[#0D1017] border-2 border-white/15 w-full max-w-[96vw] 2xl:max-w-[1550px] max-h-[96vh] my-auto flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.9)] rounded-none text-white animate-fade-in overflow-hidden">
             {/* Veto Header */}
-            <div className="bg-[#181818] border-b border-neutral-700 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="bg-[#121622] border-b border-white/10 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#FF5500]/20 border border-[#FF5500] flex items-center justify-center text-[#FF5500] flex-shrink-0">
+                <div className="w-10 h-10 bg-[#FF5500] text-black flex items-center justify-center font-black shadow-[0_0_15px_rgba(255,85,0,0.5)] flex-shrink-0">
                   <Flame className="w-5 h-5 animate-pulse" />
                 </div>
                 <div>
                   <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-white flex items-center gap-2">
-                    FASE DE VETO DE MAPAS (CS2)
+                    FASE DE VETO DE MAPAS CS2 // TOURNAMENT BROADCAST
                   </h3>
                   <p className="text-[10px] text-neutral-400">
-                    Baneo por turnos: 1er capitán banea 1, 2do capitán banea 2, y así hasta definir 1 solo mapa.
+                    Baneo alternado por turnos hasta definir el mapa competitivo oficial
                   </p>
                 </div>
               </div>
 
-              {/* Matchup badges */}
+              {/* Matchup Badges */}
               {(() => {
                 const teamA = lobbyState.teams.find(t => t.id === lobbyState.mapVeto?.teamIdA);
                 const teamB = lobbyState.teams.find(t => t.id === lobbyState.mapVeto?.teamIdB);
                 return (
-                  <div className="flex items-center gap-2 bg-[#0E0E0E] px-3 py-1.5 border border-neutral-800 text-xs">
-                    <span className="font-bold text-[#FF5500]">{teamA ? getTeamName(teamA).toUpperCase() : 'EQUIPO A'}</span>
-                    <span className="text-neutral-500 font-black text-[10px]">VS</span>
-                    <span className="font-bold text-[#0088FF]">{teamB ? getTeamName(teamB).toUpperCase() : 'EQUIPO B'}</span>
+                  <div className="flex items-center gap-2 bg-[#090C12] px-3.5 py-1.5 border border-white/15 text-xs shadow-md">
+                    <span className="font-black text-[#FF5500] tracking-wider">
+                      {teamA ? getTeamName(teamA).toUpperCase() : 'EQUIPO A'}
+                      <span className="text-[9px] font-normal text-neutral-400 ml-1">
+                        ({teamA?.captain?.faceit_nickname || 'Capitán'})
+                      </span>
+                    </span>
+                    <span className="text-white font-black text-[10px] px-1.5 py-0.5 bg-neutral-800 border border-neutral-700">
+                      VS
+                    </span>
+                    <span className="font-black text-[#00A3FF] tracking-wider">
+                      {teamB ? getTeamName(teamB).toUpperCase() : 'EQUIPO B'}
+                      <span className="text-[9px] font-normal text-neutral-400 ml-1">
+                        ({teamB?.captain?.faceit_nickname || 'Capitán'})
+                      </span>
+                    </span>
                   </div>
                 );
               })()}
@@ -3335,7 +3595,7 @@ export default function App() {
               {currentUser?.isAdmin && (
                 <button 
                   onClick={handleCancelVeto}
-                  className="text-neutral-400 hover:text-red-400 text-[10px] uppercase font-bold border border-neutral-800 hover:border-red-900 px-2.5 py-1 transition-colors cursor-pointer"
+                  className="text-neutral-400 hover:text-red-400 text-[10px] uppercase font-bold border border-white/10 hover:border-red-900 px-3 py-1.5 transition-colors cursor-pointer"
                 >
                   ✕ CANCELAR VETO
                 </button>
@@ -3347,12 +3607,18 @@ export default function App() {
               const veto = lobbyState.mapVeto!;
               if (veto.completed && veto.chosenMap) {
                 return (
-                  <div className="bg-[#15C253]/15 border-b border-[#15C253]/40 p-4 text-center flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="bg-gradient-to-r from-emerald-950/60 via-emerald-900/30 to-emerald-950/60 border-b-2 border-emerald-400 p-4 sm:p-5 text-center flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0_0_25px_rgba(16,185,129,0.25)]">
                     <div className="flex items-center gap-3">
-                      <span className="text-3xl">🏆</span>
+                      <div className="w-12 h-12 bg-emerald-500 text-black font-black flex items-center justify-center text-2xl shadow-[0_0_20px_rgba(16,185,129,0.6)]">
+                        <Trophy className="w-6 h-6 text-black fill-current" />
+                      </div>
                       <div className="text-left">
-                        <span className="text-xs uppercase text-[#15C253] font-black tracking-widest block">MAPA DECIDIDO</span>
-                        <span className="text-lg font-black text-white uppercase">{veto.chosenMap.name}</span>
+                        <span className="text-xs uppercase text-emerald-400 font-black tracking-widest block">
+                          MAPA FINAL DECIDIDO
+                        </span>
+                        <span className="text-xl font-black text-white uppercase tracking-wider">
+                          {veto.chosenMap.name}
+                        </span>
                       </div>
                     </div>
                     {currentUser?.isAdmin ? (
@@ -3365,13 +3631,13 @@ export default function App() {
                           fetchQueues();
                           fetchBetStatus(effectiveBetAmount);
                         }}
-                        className="bg-[#15C253] hover:bg-[#15C253]/90 text-black font-black uppercase text-xs px-5 py-2 transition-all cursor-pointer shadow-[0_0_15px_rgba(21,194,83,0.4)]"
+                        className="bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase text-xs px-6 py-2.5 transition-all cursor-pointer shadow-[0_0_20px_rgba(21,194,83,0.5)] hover:scale-105 active:scale-95"
                       >
                         ➡️ CONTINUAR A SALDOS Y LANZAR PARTIDA
                       </button>
                     ) : (
-                      <span className="text-xs text-neutral-400 animate-pulse font-bold">
-                        Esperando a que el Administrador confirme las cuotas y envíe la partida...
+                      <span className="text-xs text-neutral-300 animate-pulse font-bold bg-black/60 px-3 py-1.5 border border-white/10">
+                        Esperando a que el Administrador confirme saldos y lance la partida...
                       </span>
                     )}
                   </div>
@@ -3392,14 +3658,14 @@ export default function App() {
               const blockLabel = blockTotal > 1 ? `(BANEO ${pickInBlock} DE ${blockTotal})` : `(1 BANEO)`;
 
               return (
-                <div className={`p-3.5 border-b text-center flex flex-col sm:flex-row items-center justify-between gap-2 ${
+                <div className={`p-4 border-b text-center flex flex-col sm:flex-row items-center justify-between gap-3 ${
                   isMyTurn 
-                    ? 'bg-[#FF5500]/15 border-[#FF5500]/50' 
-                    : 'bg-neutral-900 border-neutral-800'
+                    ? 'bg-gradient-to-r from-[#FF5500]/25 via-black/80 to-[#FF5500]/25 border-y-2 border-[#FF5500] shadow-[0_0_20px_rgba(255,85,0,0.35)]' 
+                    : 'bg-[#121622] border-white/10'
                 }`}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs uppercase text-neutral-400 font-bold">TURNO ACTUAL:</span>
-                    <span className="text-xs font-black uppercase text-white bg-black/60 px-2 py-0.5 border border-neutral-700">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xs uppercase text-neutral-400 font-bold">TURNO DE BANEO:</span>
+                    <span className="text-xs font-black uppercase text-white bg-black/70 px-2.5 py-1 border border-white/20">
                       {teamInTurn ? getTeamName(teamInTurn).toUpperCase() : 'EQUIPO'} {blockLabel}
                     </span>
                     <span className="text-[10px] text-neutral-400">
@@ -3409,13 +3675,13 @@ export default function App() {
 
                   <div>
                     {isMyTurn ? (
-                      <span className="text-xs font-black uppercase text-[#FF5500] animate-pulse">
-                        👉 ¡ES TU TURNO! HAZ CLIC EN EL MAPA QUE DESEAS BANEAR
+                      <span className="text-xs font-black uppercase text-[#FF5500] animate-pulse flex items-center gap-1.5">
+                        <span>👉</span> ¡ES TU TURNO! HAZ CLIC EN EL MAPA QUE DESEAS DESCARTAR
                       </span>
                     ) : (
                       currentUser?.isAdmin ? (
-                        <span className="text-[11px] font-bold text-[#1B9AAA]">
-                          👑 Modo Administrador: Puedes banear en nombre del capitán si tarda
+                        <span className="text-[11px] font-bold text-[#1B9AAA] flex items-center gap-1.5">
+                          <span>👑</span> Modo Administrador: Puedes banear en nombre del capitán si tarda
                         </span>
                       ) : (
                         <span className="text-[11px] text-neutral-400 animate-pulse">
@@ -3460,12 +3726,12 @@ export default function App() {
                       }}
                       className={`relative group rounded-none overflow-hidden h-64 sm:h-72 md:h-80 lg:h-[350px] flex flex-col justify-between p-3 select-none transition-all duration-300 ${
                         isChosen
-                          ? 'border-4 border-[#15C253] shadow-[0_0_25px_rgba(21,194,83,0.5)] scale-[1.02]'
+                          ? 'border-4 border-emerald-400 shadow-[0_0_35px_rgba(16,185,129,0.6)] ring-2 ring-emerald-400/50 scale-[1.03]'
                           : isBanned
-                            ? 'border-2 border-red-950 opacity-45 cursor-not-allowed'
+                            ? 'border-2 border-red-950 opacity-55 cursor-not-allowed'
                             : canBan
-                              ? 'border-2 border-neutral-700 hover:border-white hover:scale-[1.03] hover:shadow-[0_0_20px_rgba(255,255,255,0.25)] cursor-pointer'
-                              : 'border-2 border-neutral-800 opacity-80 cursor-default'
+                              ? 'border-2 border-white/20 hover:border-[#FF5500] hover:scale-[1.03] hover:shadow-[0_0_25px_rgba(255,85,0,0.5)] cursor-pointer'
+                              : 'border-2 border-white/10 opacity-80 cursor-default'
                       }`}
                     >
                       {/* Background Map Screenshot */}
@@ -3473,62 +3739,68 @@ export default function App() {
                         src={mapItem.image} 
                         alt={mapItem.name} 
                         className={`absolute inset-0 w-full h-full object-cover transition-transform duration-500 ${
-                          canBan ? 'group-hover:scale-105' : ''
+                          canBan ? 'group-hover:scale-110' : ''
                         } ${isBanned ? 'grayscale contrast-125' : ''}`}
                       />
 
                       {/* Dark Gradient Overlay */}
                       <div className={`absolute inset-0 ${
                         isChosen
-                          ? 'bg-gradient-to-t from-black/90 via-[#15C253]/10 to-black/60'
+                          ? 'bg-gradient-to-t from-emerald-950/90 via-emerald-950/20 to-black/70'
                           : isBanned
-                            ? 'bg-red-950/70 backdrop-grayscale'
+                            ? 'bg-red-950/75 backdrop-grayscale'
                             : 'bg-gradient-to-t from-black/95 via-black/40 to-black/60'
                       }`} />
 
                       {/* Top Bar: CS2 tag & status badge */}
                       <div className="relative z-10 flex items-center justify-between">
-                        <span className="text-[9px] font-black uppercase tracking-wider bg-black/70 px-1.5 py-0.5 border border-white/20 text-neutral-300">
+                        <span className="text-[9px] font-black uppercase tracking-wider bg-black/80 px-2 py-0.5 border border-white/20 text-neutral-300">
                           CS2
                         </span>
                         {isChosen && (
-                          <span className="text-[8px] font-black uppercase tracking-wider bg-[#15C253] text-black px-1.5 py-0.5 animate-pulse font-bold">
-                            MAPA ELEGIDO
+                          <span className="text-[8px] font-black uppercase tracking-wider bg-emerald-500 text-black px-2 py-0.5 animate-pulse font-bold shadow-md flex items-center gap-1">
+                            <Trophy className="w-3 h-3 fill-current" />
+                            <span>MAPA ELEGIDO</span>
                           </span>
                         )}
                         {isBanned && (
-                          <span className="text-[8px] font-black uppercase tracking-wider bg-red-600 text-white px-1.5 py-0.5">
+                          <span className="text-[8px] font-black uppercase tracking-wider bg-red-600 text-white px-2 py-0.5 shadow-md">
                             BANEADO
                           </span>
                         )}
                       </div>
 
-                      {/* Center: Official CS2 Pin / Badge */}
+                      {/* Diagonal Banned Banner Overlay (Matches Mockup) */}
+                      {isBanned && (
+                        <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none px-2">
+                          <div className="w-[125%] bg-gradient-to-r from-red-700 via-red-600 to-rose-700 text-white font-black uppercase text-[10px] sm:text-xs tracking-widest py-1.5 shadow-[0_0_20px_rgba(220,38,38,0.85)] rotate-[-12deg] border-y-2 border-white/50 text-center">
+                            ✖ BANEADO POR {banInfo?.teamName?.toUpperCase() || 'EQUIPO'}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Center: Official CS2 Pin / Crest Badge */}
                       <div className="relative z-10 my-auto flex flex-col items-center justify-center">
                         <img 
                           src={mapItem.icon} 
                           alt={mapItem.name} 
-                          className={`w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.8)] transition-transform duration-300 ${
-                            canBan ? 'group-hover:scale-110' : ''
-                          } ${isBanned ? 'opacity-40 grayscale' : ''}`}
+                          className={`w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 object-contain drop-shadow-[0_12px_20px_rgba(0,0,0,0.9)] transition-transform duration-300 ${
+                            canBan ? 'group-hover:scale-115' : ''
+                          } ${isBanned ? 'opacity-30 grayscale' : ''} ${isChosen ? 'filter drop-shadow-[0_0_20px_rgba(16,185,129,0.8)]' : ''}`}
                         />
-                        {isBanned && (
-                          <div className="mt-2 text-[9px] font-black uppercase text-red-300 bg-black/80 px-2 py-0.5 border border-red-800 text-center">
-                            Baneado por {banInfo?.teamName || 'Equipo'}
-                          </div>
-                        )}
                       </div>
 
                       {/* Bottom: Map Name & Ban Action Prompt */}
                       <div className="relative z-10 text-center">
                         <span className={`block font-black uppercase tracking-wider text-sm sm:text-base drop-shadow-md ${
-                          isChosen ? 'text-[#15C253]' : isBanned ? 'text-neutral-500 line-through' : 'text-white'
+                          isChosen ? 'text-emerald-400 font-extrabold' : isBanned ? 'text-neutral-500 line-through' : 'text-white'
                         }`}>
                           {mapItem.name}
                         </span>
                         {canBan && !isBanned && (
-                          <span className="text-[9px] font-bold uppercase text-[#FF5500] bg-black/70 px-2 py-0.5 mt-1 inline-block border border-[#FF5500]/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                            Hacer clic para banear
+                          <span className="text-[9px] font-black uppercase text-black bg-[#FF5500] px-3 py-1 mt-1.5 inline-flex items-center gap-1.5 shadow-[0_0_12px_rgba(255,85,0,0.5)] opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Crosshair className="w-3 h-3" />
+                            <span>CLIC PARA BANEAR</span>
                           </span>
                         )}
                       </div>
@@ -3540,14 +3812,19 @@ export default function App() {
 
             {/* Ban History Footer */}
             {lobbyState.mapVeto?.banHistory && lobbyState.mapVeto.banHistory.length > 0 && (
-              <div className="bg-[#101010] border-t border-neutral-800 p-3 px-5 flex items-center gap-2 overflow-x-auto text-[10px]">
-                <span className="text-neutral-500 font-bold uppercase flex-shrink-0">Historial de Baneos:</span>
-                <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="bg-[#0A0D14] border-t border-white/10 p-3.5 px-5 flex items-center gap-3 overflow-x-auto text-[10px]">
+                <span className="text-neutral-400 font-black uppercase flex-shrink-0 tracking-wider">
+                  Historial de Baneos:
+                </span>
+                <div className="flex items-center gap-2 flex-wrap">
                   {lobbyState.mapVeto.banHistory.map((item, idx) => (
-                    <span key={idx} className="bg-neutral-900 border border-neutral-800 px-2 py-0.5 text-neutral-300 flex items-center gap-1">
-                      <span className="text-neutral-500">{idx + 1}.</span>
-                      <span className="text-red-400 line-through font-bold">{item.mapName}</span>
-                      <span className="text-[9px] text-neutral-500">({item.teamName})</span>
+                    <span key={idx} className="bg-[#121622] border border-white/10 px-2.5 py-1 text-neutral-300 flex items-center gap-1.5 shadow-sm">
+                      <span className="text-neutral-500 font-bold">{idx + 1}.</span>
+                      <span className="text-red-400 line-through font-black">{item.mapName}</span>
+                      <span className="text-[9px] text-[#FF5500] font-bold">({item.teamName})</span>
+                      {idx < (lobbyState.mapVeto?.banHistory?.length || 0) - 1 && (
+                        <span className="text-neutral-600 font-bold ml-1">➔</span>
+                      )}
                     </span>
                   ))}
                 </div>
@@ -3652,7 +3929,7 @@ export default function App() {
                       <div className={`absolute inset-0 transition-opacity ${isActive ? 'bg-gradient-to-t from-black/95 via-black/40 to-black/60' : 'bg-black/80'}`} />
 
                       <div className="relative z-10 p-1.5 flex items-center justify-between">
-                        <span className={`text-[8px] font-bold uppercase px-1.5 py-0.2 border ${
+                        <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 border ${
                           isActive ? 'bg-emerald-500 text-black border-emerald-400' : 'bg-neutral-800 text-neutral-400 border-neutral-700'
                         }`}>
                           {isActive ? '✓ ACTIVO' : '✕ INACTIVO'}
