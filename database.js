@@ -1426,12 +1426,22 @@ export const db = {
 
     const fetchHistory = (async () => {
       try {
-        let query = firestore.collection(MATCHES_HISTORY_COLLECTION);
-        if (guildId) query = query.where('guild_id', '==', guildId);
-        const snapshot = await query.get();
+        let snapshot;
+        try {
+          let query = firestore.collection(MATCHES_HISTORY_COLLECTION);
+          if (guildId) {
+            query = query.where('guild_id', '==', guildId);
+          }
+          snapshot = await query.orderBy('createdAt', 'desc').limit(safeLimit).get();
+        } catch (idxError) {
+          // Fallback seguro con límite si falta índice compuesto en Firestore
+          let fallbackQuery = firestore.collection(MATCHES_HISTORY_COLLECTION);
+          if (guildId) fallbackQuery = fallbackQuery.where('guild_id', '==', guildId);
+          snapshot = await fallbackQuery.limit(safeLimit).get();
+        }
         const history = snapshot.docs.map(doc => doc.data());
         
-        // Ordenar en memoria por createdAt descendente para evitar requerir un índice compuesto en Firestore
+        // Ordenar en memoria por createdAt descendente como verificación adicional
         history.sort((a, b) => {
           const timeA = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate().getTime() : (a.createdAt._seconds ? a.createdAt._seconds * 1000 : new Date(a.createdAt).getTime())) : 0;
           const timeB = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate().getTime() : (b.createdAt._seconds ? b.createdAt._seconds * 1000 : new Date(b.createdAt).getTime())) : 0;

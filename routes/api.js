@@ -231,11 +231,74 @@ export function createApiRouter(client, db, config) {
   };
   const NICKNAME_MAP_TTL = 5 * 60 * 1000; // 5 minutos
 
+  // --- Caché Centralizada de Usuarios (Deduplica peticiones simultáneas) ---
+  let allUsersCache = {
+    docs: null,
+    timestamp: 0
+  };
+  let allUsersFetchPromise = null;
+  const ALL_USERS_CACHE_TTL = 45 * 1000; // 45 segundos
+
+  async function getAllUsersCached() {
+    const now = Date.now();
+    if (allUsersCache.docs && (now - allUsersCache.timestamp < ALL_USERS_CACHE_TTL)) {
+      return allUsersCache.docs;
+    }
+    if (allUsersFetchPromise) {
+      return allUsersFetchPromise;
+    }
+
+    allUsersFetchPromise = (async () => {
+      try {
+        const snapshot = await db._firestore.collection('faceit_users').get();
+        const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        allUsersCache.docs = docs;
+        allUsersCache.timestamp = Date.now();
+
+        // Actualizar simultáneamente el mapa de apodos en la misma lectura
+        const map = {};
+        for (const u of docs) {
+          if (u.faceit_nickname) {
+            map[u.faceit_nickname.toLowerCase()] = u.id;
+          }
+        }
+        nicknameToDiscordCache.map = map;
+        nicknameToDiscordCache.timestamp = Date.now();
+        return docs;
+      } finally {
+        allUsersFetchPromise = null;
+      }
+    })();
+
+    return allUsersFetchPromise;
+  }
+
+  // --- Caché de Transacciones Yape ---
+  let yapeTransactionsCache = {
+    data: null,
+    timestamp: 0
+  };
+  let yapeTransactionsFetchPromise = null;
+  const YAPE_CACHE_TTL = 30 * 1000;
+
+  // --- Caché de Logs del Bot ---
+  const botLogsCache = new Map();
+  const BOT_LOGS_TTL = 30 * 1000;
+
   function invalidateAdminUsersCache() {
     usersListCache.clear();
     statsCache.clear();
+    allUsersCache.docs = null;
+    allUsersCache.timestamp = 0;
+    allUsersFetchPromise = null;
     nicknameToDiscordCache.map = null;
     nicknameToDiscordCache.timestamp = 0;
+  }
+
+  function invalidateYapeCache() {
+    yapeTransactionsCache.data = null;
+    yapeTransactionsCache.timestamp = 0;
+    yapeTransactionsFetchPromise = null;
   }
 
   // --- Métricas de Firestore en Tiempo Real ---
@@ -341,7 +404,7 @@ export function createApiRouter(client, db, config) {
         return res.json({ users: cached.users });
       }
 
-      const snapshot = await db._firestore.collection('faceit_users').get();
+      const allUsers = await getAllUsersCached();
       
       const guildIdToUse = targetGuildId || (env.DISCORD_GUILD_ID || DISCORD_GUILD_ID);
       const guild = guildIdToUse ? await client.guilds.fetch(guildIdToUse).catch(() => null) : null;
@@ -350,8 +413,7 @@ export function createApiRouter(client, db, config) {
       const clubRoleNames = Object.values(CLUB_ROLES_MAP);
       const users = [];
       
-      snapshot.forEach(doc => {
-        const data = doc.data();
+      allUsers.forEach(data => {
         const userGuild = data.guild_id || data.servidor || data.mixton_guild_id || null;
         if (targetGuildId) {
           if (userGuild !== targetGuildId) {
@@ -359,7 +421,7 @@ export function createApiRouter(client, db, config) {
           }
         }
 
-        const actualDiscordId = data.discordId || doc.id;
+        const actualDiscordId = data.discordId || data.id;
         let clubRole = null;
         if (guild) {
           const member = guild.members.cache.get(actualDiscordId);
@@ -1036,16 +1098,8 @@ export function createApiRouter(client, db, config) {
       if (nicknameToDiscordCache.map && (now - nicknameToDiscordCache.timestamp < NICKNAME_MAP_TTL)) {
         nicknameToDiscord = nicknameToDiscordCache.map;
       } else {
-        const snapshot = await db._firestore.collection('faceit_users').get();
-        nicknameToDiscord = {};
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          if (data.faceit_nickname) {
-            nicknameToDiscord[data.faceit_nickname.toLowerCase()] = doc.id;
-          }
-        });
-        nicknameToDiscordCache.map = nicknameToDiscord;
-        nicknameToDiscordCache.timestamp = now;
+        await getAllUsersCached();
+        nicknameToDiscord = nicknameToDiscordCache.map || {};
       }
 
       const leaderboardData = await fetchLeaderboard(effectiveConfig.faceitLeaderboardId);
@@ -1476,12 +1530,20 @@ export function createApiRouter(client, db, config) {
     }
   });
 
-  // --- Logs del bot ---
+  // --- Logs del bot (con caché de 30s) ---
   router.get('/logs', requireAuth, async (req, res) => {
     try {
       const limit = parseInt(req.query.limit) || 50;
       const targetGuildId = resolveTargetGuildId(req);
+      const cacheKey = `${targetGuildId || 'global'}:${limit}`;
+      const cached = botLogsCache.get(cacheKey);
+      const now = Date.now();
+      if (cached && (now - cached.timestamp < BOT_LOGS_TTL)) {
+        return res.json({ logs: cached.logs });
+      }
+
       const logs = await db.getRecentLogs(limit, targetGuildId);
+      botLogsCache.set(cacheKey, { logs, timestamp: now });
       res.json({ logs });
     } catch (err) {
       logger.error('Error en /logs:', err);
@@ -1840,15 +1902,36 @@ export function createApiRouter(client, db, config) {
     }
   });
 
-  // --- Transacciones y Auditoría Yape ---
+  // --- Transacciones y Auditoría Yape (con caché de 30s y deduplicación) ---
   router.get('/yape/transactions', requireAuth, async (req, res) => {
     try {
-      const [transactions, operations, auditLogs] = await Promise.all([
-        db.getYapeTransactions(50),
-        db.getYapeOperations(50),
-        db.getYapeAuditLogs(50)
-      ]);
-      res.json({ transactions, operations, auditLogs });
+      const now = Date.now();
+      if (yapeTransactionsCache.data && (now - yapeTransactionsCache.timestamp < YAPE_CACHE_TTL)) {
+        return res.json(yapeTransactionsCache.data);
+      }
+      if (yapeTransactionsFetchPromise) {
+        const data = await yapeTransactionsFetchPromise;
+        return res.json(data);
+      }
+
+      yapeTransactionsFetchPromise = (async () => {
+        try {
+          const [transactions, operations, auditLogs] = await Promise.all([
+            db.getYapeTransactions(50),
+            db.getYapeOperations(50),
+            db.getYapeAuditLogs(50)
+          ]);
+          const result = { transactions, operations, auditLogs };
+          yapeTransactionsCache.data = result;
+          yapeTransactionsCache.timestamp = Date.now();
+          return result;
+        } finally {
+          yapeTransactionsFetchPromise = null;
+        }
+      })();
+
+      const data = await yapeTransactionsFetchPromise;
+      res.json(data);
     } catch (err) {
       logger.error('Error en GET /yape/transactions:', err);
       res.status(500).json({ error: 'Error al obtener transacciones Yape' });
@@ -1885,6 +1968,7 @@ export function createApiRouter(client, db, config) {
       }
 
       await db.addLogEntry('success', `Recarga Yape manual aprobada: S/ ${parsedAmount} para <@${discordId}> por ${req.user?.username}.`, 'wallet', targetGuildId);
+      invalidateYapeCache();
       return res.json({ success: true, newBalance, message: `Acreditado exitosamente S/ ${parsedAmount} a <@${discordId}>.` });
     } catch (err) {
       logger.error('Error en POST /yape/manual-approve:', err);
