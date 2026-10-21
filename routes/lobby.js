@@ -484,7 +484,7 @@ export function createLobbyRouter(client, db, config, wss) {
       if (req.user?.userId) {
         fullUser = await db.getFullUser(req.user.userId, req.guildId);
         if (fullUser?.phoneNumber) hasSavedPhone = true;
-        balance = await db.getUserBalance(req.user.userId, req.guildId);
+        balance = fullUser?.wallet_balance !== undefined ? Number(fullUser.wallet_balance) || 0 : 0;
 
         // Si tiene Faceit vinculado pero aún no tiene steam_id_64 o avatar en la BD, consultamos la API de Faceit
         if (fullUser?.faceit_player_id && (!fullUser.steam_id_64 || !fullUser.faceit_avatar)) {

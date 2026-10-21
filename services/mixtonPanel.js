@@ -2,9 +2,14 @@ import { EmbedBuilder } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { getEffectiveConfigForGuild } from '../config/index.js';
 
+const cleanedGuildPanels = new Set();
+
 export async function updateMixtonReadyPanel(client, guildId, db) {
+  const key = guildId || 'global';
+  if (cleanedGuildPanels.has(key)) return;
+
   try {
-    const docRef = db._firestore.collection('faceit_config').doc(`mixton_ready_panel_${guildId || 'global'}`);
+    const docRef = db._firestore.collection('faceit_config').doc(`mixton_ready_panel_${key}`);
     const doc = await docRef.get();
     if (doc.exists) {
       const panelConfig = doc.data();
@@ -24,8 +29,9 @@ export async function updateMixtonReadyPanel(client, guildId, db) {
         }
       }
       await docRef.delete().catch(() => {});
-      logger.info(`Limpia del panel de mixton listo completada para guild ${guildId || 'global'}.`);
+      logger.info(`Limpia del panel de mixton listo completada para guild ${key}.`);
     }
+    cleanedGuildPanels.add(key);
   } catch (err) {
     logger.error('Error al limpiar panel mixton desactivado:', err);
   }

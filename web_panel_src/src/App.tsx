@@ -104,6 +104,17 @@ export default function App() {
   const [activeView, setActiveView] = useState<ActiveView>(getInitialView);
 
   useEffect(() => {
+    if (activeView === 'inicio') {
+      document.documentElement.classList.add('has-scroll-snap');
+    } else {
+      document.documentElement.classList.remove('has-scroll-snap');
+    }
+    return () => {
+      document.documentElement.classList.remove('has-scroll-snap');
+    };
+  }, [activeView]);
+
+  useEffect(() => {
     const handlePopState = () => {
       setActiveView(getInitialView());
     };
@@ -2201,7 +2212,7 @@ export default function App() {
   const captainEligiblePlayers = getCaptainEligiblePlayers();
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white font-sans flex flex-col relative overflow-y-auto">
+    <div className="min-h-screen bg-[#0A0A0A] text-white font-sans flex flex-col relative pt-[94px] sm:pt-[98px]">
       {/* Subtle tech grid background to match admin web */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.012)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
 

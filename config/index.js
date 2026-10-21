@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import { getSettings } from '../utils/featureFlags.js';
-import { db } from '../database.js';
+import { db, onConfigChange } from '../database.js';
 
 dotenv.config();
 
@@ -155,16 +155,41 @@ export async function getEffectiveConfig() {
   };
 }
 
+const effectiveGuildConfigCache = new Map();
+const EFFECTIVE_CONFIG_TTL = 10 * 60 * 1000; // 10 minutos (invalida en memoria ante cualquier actualización)
+
+export function invalidateEffectiveConfigCache(guildId = null) {
+  if (guildId) {
+    effectiveGuildConfigCache.delete(guildId);
+  } else {
+    effectiveGuildConfigCache.clear();
+  }
+}
+
+// Invalida la configuración en caché de inmediato cuando se alteran ajustes en Firestore
+onConfigChange((guildId) => {
+  invalidateEffectiveConfigCache(guildId);
+});
+
 export async function getEffectiveConfigForGuild(guildId) {
+  const cacheKey = guildId || 'global';
+  const cached = effectiveGuildConfigCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp < EFFECTIVE_CONFIG_TTL)) {
+    return cached.data;
+  }
+
   const globalConfig = await getEffectiveConfig();
-  if (!guildId) return globalConfig;
+  if (!guildId) {
+    effectiveGuildConfigCache.set(cacheKey, { data: globalConfig, timestamp: Date.now() });
+    return globalConfig;
+  }
 
   const guildSettings = await db.getGuildSettings(guildId).catch(() => ({}));
   const rawQueues = Array.isArray(guildSettings.queues) && guildSettings.queues.length > 0
     ? guildSettings.queues
     : globalConfig.queues;
 
-  return {
+  const resolved = {
     ...globalConfig,
     ...guildSettings,
     discordGuildId: guildId,
@@ -189,6 +214,9 @@ export async function getEffectiveConfigForGuild(guildId) {
     matchTimeoutMinutes: guildSettings.matchTimeoutMinutes !== undefined ? parseInt(guildSettings.matchTimeoutMinutes, 10) : globalConfig.matchTimeoutMinutes,
     queues: rawQueues,
   };
+
+  effectiveGuildConfigCache.set(cacheKey, { data: resolved, timestamp: Date.now() });
+  return resolved;
 }
 
 /**

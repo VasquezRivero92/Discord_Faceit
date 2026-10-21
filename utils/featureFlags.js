@@ -5,21 +5,12 @@
 import { db } from '../database.js';
 import { logger } from './logger.js';
 
-let cachedSettings = null;
-let lastFetch = 0;
-const CACHE_TTL_MS = 30 * 1000; // 30 segundos
-
 export async function getSettings(forceRefresh = false) {
-  if (!forceRefresh && cachedSettings && Date.now() - lastFetch < CACHE_TTL_MS) {
-    return cachedSettings;
-  }
   try {
-    cachedSettings = await db.getSettings();
-    lastFetch = Date.now();
-    return cachedSettings;
+    return await db.getSettings(forceRefresh);
   } catch (err) {
     logger.error('Error cargando settings:', err.message);
-    return cachedSettings || getDefaultSettings();
+    return getDefaultSettings();
   }
 }
 

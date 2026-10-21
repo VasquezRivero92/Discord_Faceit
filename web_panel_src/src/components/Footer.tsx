@@ -8,7 +8,7 @@ interface FooterProps {
 
 export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
   return (
-    <footer className="bg-[#07080B] border-t border-white/[0.08] text-neutral-300 font-sans text-xs pt-12 pb-8 relative z-10">
+    <footer className="bg-[#07080B] border-t border-white/[0.08] text-neutral-300 font-sans text-xs pt-12 pb-8 relative z-10 snap-footer">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         {/* Main 4-column layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-10 mb-12">
@@ -25,7 +25,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
                 MACHU<span className="text-[#FF5500]">PEEK</span>
               </span>
             </div>
-            <p className="text-neutral-400 text-xs leading-relaxed font-sans">
+            <p className="text-neutral-400 text-xs leading-relaxed font-sans text-pretty">
               Comunidad peruana de Counter-Strike 2 y plataforma competitiva Mixtón en FACEIT. Brindamos servicios competitivos, matchmaking por tiers, membresías VIP y recarga de créditos gamer en Soles (PEN).
             </p>
             <div className="text-xs font-mono text-neutral-400 space-y-1.5 pt-1">
@@ -134,7 +134,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
                   href="https://www.faceit.com/es/hub/52a88f17-1660-42ae-8322-76592f0c6f23/Mixtones"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-2.5 py-1.5 rounded bg-neutral-900 border border-white/[0.1] hover:border-[#FF5500] text-neutral-300 hover:text-white text-xs font-mono flex items-center gap-1.5 transition-all"
+                  className="px-2.5 py-1.5 rounded-lg bg-neutral-900 border border-white/[0.1] hover:border-[#FF5500] text-neutral-300 hover:text-white text-xs font-mono flex items-center gap-1.5 transition-all active:scale-[0.98]"
                 >
                   FACEIT Hub <ExternalLink className="w-3 h-3 text-[#FF5500]" />
                 </a>
@@ -142,7 +142,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
                   href="https://discord.gg/xsWwaNjQ"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-2.5 py-1.5 rounded bg-neutral-900 border border-white/[0.1] hover:border-[#5865F2] text-neutral-300 hover:text-white text-xs font-mono flex items-center gap-1.5 transition-all"
+                  className="px-2.5 py-1.5 rounded-lg bg-neutral-900 border border-white/[0.1] hover:border-[#5865F2] text-neutral-300 hover:text-white text-xs font-mono flex items-center gap-1.5 transition-all active:scale-[0.98]"
                 >
                   Discord <ExternalLink className="w-3 h-3 text-[#5865F2]" />
                 </a>
@@ -150,7 +150,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
                   href="https://wa.me/51949165677"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-2.5 py-1.5 rounded bg-neutral-900 border border-white/[0.1] hover:border-emerald-500 text-neutral-300 hover:text-white text-xs font-mono flex items-center gap-1.5 transition-all"
+                  className="px-2.5 py-1.5 rounded-lg bg-neutral-900 border border-white/[0.1] hover:border-emerald-500 text-neutral-300 hover:text-white text-xs font-mono flex items-center gap-1.5 transition-all active:scale-[0.98]"
                 >
                   WhatsApp <ExternalLink className="w-3 h-3 text-emerald-400" />
                 </a>
@@ -159,9 +159,9 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
           </div>
 
           {/* Column 4: Libro de Reclamaciones INDECOPI */}
-          <div className="rounded-xl bg-neutral-900/50 border border-sky-500/30 p-5 text-center flex flex-col justify-between shadow-[0_4px_25px_rgba(2,132,199,0.1)]">
+          <div className="rounded-2xl bg-neutral-900/50 border border-sky-500/30 p-5 text-center flex flex-col justify-between shadow-[0_4px_25px_rgba(2,132,199,0.12)]">
             <div>
-              <div className="w-12 h-12 mx-auto mb-3 bg-sky-500/10 border border-sky-500/30 rounded-full flex items-center justify-center text-sky-400 shadow-[0_0_15px_rgba(2,132,199,0.25)]">
+              <div className="w-12 h-12 mx-auto mb-3 bg-sky-500/10 border border-sky-500/30 rounded-xl flex items-center justify-center text-sky-400 shadow-[0_0_15px_rgba(2,132,199,0.25)]">
                 <BookOpen className="w-6 h-6" />
               </div>
               <h5 className="text-white font-mono font-black uppercase text-xs tracking-tight mb-1">
@@ -170,7 +170,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
               <p className="text-[11px] text-sky-400 font-mono font-bold mb-2">
                 VIRTUAL // INDECOPI
               </p>
-              <p className="text-xs text-neutral-400 mb-5 leading-relaxed font-sans">
+              <p className="text-xs text-neutral-400 mb-5 leading-relaxed font-sans text-pretty">
                 Conforme a lo establecido en el Código de Protección y Defensa del Consumidor (Ley N° 29571) y el D.S. N° 011-2011-PCM.
               </p>
             </div>
@@ -178,7 +178,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveView }) => {
             <button
               type="button"
               onClick={() => setActiveView('libro-de-reclamaciones')}
-              className="w-full py-2.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-mono font-bold text-xs uppercase tracking-wider transition-all shadow-[0_2px_15px_rgba(2,132,199,0.3)] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
+              className="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-mono font-bold text-xs uppercase tracking-wider transition-all shadow-[0_2px_15px_rgba(2,132,199,0.3)] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
             >
               <BookOpen className="w-4 h-4" /> Ingresar Queja o Reclamo
             </button>

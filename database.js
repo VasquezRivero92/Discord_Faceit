@@ -548,20 +548,20 @@ const CS2_PENDING_MATCH_COLLECTION = 'cs2_pending_matches';
 // truth on a cache miss, after a restart, or after the TTL expires.
 const lobbyStateCache = new Map();
 const lobbyStateFetches = new Map();
-const LOBBY_STATE_TTL = 60 * 1000;
+const LOBBY_STATE_TTL = 5 * 60 * 1000; // 5 minutos (se actualiza inmediatamente en memoria ante cambios)
 
 const readyPlayersCache = new Map();
 const readyPlayersFetches = new Map();
-const READY_PLAYERS_TTL = 60 * 1000;
+const READY_PLAYERS_TTL = 5 * 60 * 1000; // 5 minutos (se invalida inmediatamente en memoria ante cambios)
 
 // Historial del Mixtón: cada entrada conserva solamente la página solicitada.
 // Las escrituras lo invalidan de inmediato, por lo que el TTL solo absorbe
 // aperturas simultáneas del panel y nunca deja datos obsoletos tras un cambio.
 const matchHistoryCache = new Map();
 const matchHistoryFetches = new Map();
-const MATCH_HISTORY_TTL = 2 * 60 * 1000;
+const MATCH_HISTORY_TTL = 5 * 60 * 1000; // 5 minutos
 const matchStatsCache = new Map();
-const MATCH_STATS_TTL = 10 * 60 * 1000;
+const MATCH_STATS_TTL = 15 * 60 * 1000; // 15 minutos
 
 function getMatchHistoryCacheKey(guildId, limit) {
   return `${guildId || 'global'}:${limit}`;
@@ -580,11 +580,34 @@ function invalidateMatchHistoryCache(guildId = null) {
 let settingsCache = null;
 let settingsLastFetch = 0;
 let settingsFetch = null;
-const SETTINGS_TTL = 180000; // 3 minutos (se actualiza inmediatamente en memoria ante cambios)
+const SETTINGS_TTL = 10 * 60 * 1000; // 10 minutos (se actualiza inmediatamente en memoria ante cambios)
 
 let nicknameToDiscordMapCache = null;
 let nicknameToDiscordMapLastFetch = 0;
 const NICKNAME_MAP_TTL = 300000; // 5 minutes
+
+// Caché de plantillas de mensajes y paneles fijos
+let messageTemplatesCache = null;
+let messageTemplatesLastFetch = 0;
+const panelConfigCache = new Map();
+let statusConfigCache = null;
+let statusConfigLastFetch = 0;
+const PANEL_CONFIG_TTL = 10 * 60 * 1000; // 10 minutos
+
+// Listeners de cambio de configuración
+const configChangeListeners = new Set();
+export function onConfigChange(listener) {
+  configChangeListeners.add(listener);
+}
+function notifyConfigChange(guildId = null) {
+  for (const listener of configChangeListeners) {
+    try {
+      listener(guildId);
+    } catch (err) {
+      logger.warn('Error en listener de configChange:', err.message);
+    }
+  }
+}
 
 // --- Nuevas Estructuras de Caché Optimizadas ---
 const userByDiscordIdCache = new Map();
@@ -641,7 +664,7 @@ const activeMatchesCacheMap = new Map();
 let activeMatchesLastFetch = 0;
 let activeMatchesFetched = false;
 let activeMatchesFetch = null;
-const ACTIVE_MATCHES_TTL = 30000; // 30 segundos (se sincroniza en memoria con addActiveMatch/removeActiveMatch)
+const ACTIVE_MATCHES_TTL = 5 * 60 * 1000; // 5 minutos (se sincroniza en memoria con addActiveMatch/removeActiveMatch)
 
 async function ensureActiveMatchesCache(forceRefresh = false) {
   const now = Date.now();
@@ -679,7 +702,7 @@ function invalidateActiveMatchesCache() {
 // Caché de Configuración por Servidor (Guild Settings)
 const guildSettingsCache = new Map();
 const guildSettingsFetches = new Map();
-const GUILD_SETTINGS_TTL = 180000; // 3 minutos (se invalida o actualiza inmediatamente ante setGuildSettings)
+const GUILD_SETTINGS_TTL = 10 * 60 * 1000; // 10 minutos (se invalida o actualiza inmediatamente ante setGuildSettings)
 const hubIdToGuildIdsCache = new Map();
 
 // Caché de Baneos de Hub en memoria (evita consultar decenas de documentos de Firestore cada 2 minutos)
@@ -1037,7 +1060,10 @@ export const db = {
         }
       }
       const snapshot = await query.limit(1).get();
-      if (snapshot.empty) return null;
+      if (snapshot.empty) {
+        userByFaceitIdCache.set(faceitPlayerId, { data: null, timestamp: Date.now() });
+        return null;
+      }
       const doc = snapshot.docs[0];
       const data = doc.data();
       const resolvedId = data.discordId || (doc.id.includes('_') ? doc.id.split('_')[1] : doc.id);
@@ -1075,7 +1101,10 @@ export const db = {
         }
       }
       const snapshot = await query.limit(1).get();
-      if (snapshot.empty) return null;
+      if (snapshot.empty) {
+        userByNicknameCache.set(key, { data: null, timestamp: Date.now() });
+        return null;
+      }
       const doc = snapshot.docs[0];
       const data = doc.data();
       const resolvedId = data.discordId || (doc.id.includes('_') ? doc.id.split('_')[1] : doc.id);
@@ -1093,9 +1122,10 @@ export const db = {
     if (!discordId) return null;
     const docId = guildId ? `${guildId}_${discordId}` : discordId;
     
-    // 1. Revisar caché en memoria por docId
+    // 1. Revisar caché en memoria por docId (admite null si fue marcado como inexistente)
     const cached = getCachedUserByDiscordId(docId);
-    if (cached && cached.faceit_player_id) {
+    if (cached !== undefined) {
+      if (!cached || !cached.faceit_player_id) return null;
       return {
         faceit_player_id: cached.faceit_player_id,
         faceit_nickname: cached.faceit_nickname || null,
@@ -1107,7 +1137,8 @@ export const db = {
     // 2. Revisar caché global si se proporcionó guildId
     if (guildId && docId !== discordId) {
       const globalCached = getCachedUserByDiscordId(discordId);
-      if (globalCached && globalCached.faceit_player_id) {
+      if (globalCached !== undefined) {
+        if (!globalCached || !globalCached.faceit_player_id) return null;
         return {
           faceit_player_id: globalCached.faceit_player_id,
           faceit_nickname: globalCached.faceit_nickname || null,
@@ -1118,8 +1149,7 @@ export const db = {
     }
 
     try {
-      // 3. Delegar a getFullUser que busca jerárquicamente:
-      // guildDoc -> globalDoc -> query where('discordId', '==', discordId)
+      // 3. Delegar a getFullUser que busca jerárquicamente y cachea el resultado (incluyendo null)
       const fullUser = await this.getFullUser(discordId, guildId);
       if (fullUser && fullUser.faceit_player_id) {
         // Auto-sincronizar documento del servidor si faltaba
@@ -1151,6 +1181,59 @@ export const db = {
       return null;
     } catch (error) {
       logger.error('Error al obtener Faceit ID por Discord ID:', error);
+      return null;
+    }
+  },
+
+  async hasActiveMatches(guildId = null) {
+    try {
+      await ensureActiveMatchesCache();
+      if (activeMatchesCacheMap.size === 0) return false;
+      if (!guildId) return true;
+      for (const match of activeMatchesCacheMap.values()) {
+        if (!match.guild_id || match.guild_id === guildId) return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  async getActiveMatchForMember(discordId, guildId = null) {
+    if (!discordId) return null;
+    try {
+      await ensureActiveMatchesCache();
+      if (activeMatchesCacheMap.size === 0) return null;
+
+      // 1. Buscar directamente por discord_id en los rosters de las partidas en memoria
+      for (const match of activeMatchesCacheMap.values()) {
+        if (guildId && match.guild_id && match.guild_id !== guildId) continue;
+        const allPlayers = [
+          ...(match.faction1_roster || []),
+          ...(match.faction2_roster || [])
+        ];
+        if (allPlayers.some(p => p.discord_id === discordId || p.discordId === discordId)) {
+          return match;
+        }
+      }
+
+      // 2. Si no coincide por discord_id, consultar el faceit_player_id (con caché negativo en memoria)
+      const userData = await this.getFaceitIdByDiscordId(discordId, guildId);
+      if (!userData || !userData.faceit_player_id) return null;
+
+      for (const match of activeMatchesCacheMap.values()) {
+        if (guildId && match.guild_id && match.guild_id !== guildId) continue;
+        const allPlayers = [
+          ...(match.faction1_roster || []),
+          ...(match.faction2_roster || [])
+        ];
+        if (allPlayers.some(p => p.id === userData.faceit_player_id || p.player_id === userData.faceit_player_id)) {
+          return match;
+        }
+      }
+      return null;
+    } catch (error) {
+      logger.error('Error al buscar partida activa para miembro:', error);
       return null;
     }
   },
@@ -1308,6 +1391,7 @@ export const db = {
         }
       }
 
+      hubIdToGuildIdsCache.set(hubId, []);
       return [];
     } catch (e) {
       logger.error('Error al buscar guilds por hub ID:', e);
@@ -1614,11 +1698,15 @@ export const db = {
 
   // --- Configuración del Panel Fijo ---
   async getPanelMessageConfig(guildId) {
+    const key = guildId || 'global';
+    const cached = readCachedValue(panelConfigCache, key, PANEL_CONFIG_TTL);
+    if (cached !== undefined) return cached;
     try {
       const docName = guildId ? `panel_${guildId}` : 'panel';
       const doc = await firestore.collection(CONFIG_COLLECTION).doc(docName).get();
-      if (doc.exists) return doc.data();
-      return null;
+      const data = doc.exists ? doc.data() : null;
+      cacheValue(panelConfigCache, key, data);
+      return data;
     } catch (error) {
       logger.error('Error al obtener configuración del panel:', error);
       return null;
@@ -1628,12 +1716,14 @@ export const db = {
   async setPanelMessageConfig(messageId, channelId, guildId) {
     try {
       const docName = guildId ? `panel_${guildId}` : 'panel';
-      await firestore.collection(CONFIG_COLLECTION).doc(docName).set({
+      const data = {
         messageId,
         channelId,
         guildId: guildId || null,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+      };
+      await firestore.collection(CONFIG_COLLECTION).doc(docName).set(data);
+      cacheValue(panelConfigCache, guildId || 'global', data);
     } catch (error) {
       logger.error('Error al guardar configuración del panel:', error);
     }
@@ -1641,10 +1731,14 @@ export const db = {
 
   // --- Configuración del Mensaje de Estado de Servidores ---
   async getStatusMessageConfig() {
+    if (statusConfigCache !== null && (Date.now() - statusConfigLastFetch < PANEL_CONFIG_TTL)) {
+      return statusConfigCache;
+    }
     try {
       const doc = await firestore.collection(CONFIG_COLLECTION).doc('status_panel').get();
-      if (doc.exists) return doc.data();
-      return null;
+      statusConfigCache = doc.exists ? doc.data() : null;
+      statusConfigLastFetch = Date.now();
+      return statusConfigCache;
     } catch (error) {
       logger.error('Error al obtener configuración del estado de servidores:', error);
       return null;
@@ -1653,19 +1747,22 @@ export const db = {
 
   async setStatusMessageConfig(messageId, channelId) {
     try {
-      await firestore.collection(CONFIG_COLLECTION).doc('status_panel').set({
+      const data = {
         messageId,
         channelId,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+      };
+      await firestore.collection(CONFIG_COLLECTION).doc('status_panel').set(data);
+      statusConfigCache = data;
+      statusConfigLastFetch = Date.now();
     } catch (error) {
       logger.error('Error al guardar configuración del estado de servidores:', error);
     }
   },
 
   // --- Settings / Feature Flags ---
-  async getSettings() {
-    if (settingsCache && (Date.now() - settingsLastFetch < SETTINGS_TTL)) {
+  async getSettings(forceRefresh = false) {
+    if (!forceRefresh && settingsCache && (Date.now() - settingsLastFetch < SETTINGS_TTL)) {
       return settingsCache;
     }
     if (settingsFetch) return settingsFetch;
@@ -1697,6 +1794,7 @@ export const db = {
       await firestore.collection(CONFIG_COLLECTION).doc('settings').set(updatedSettings);
       settingsCache = updatedSettings;
       settingsLastFetch = Date.now();
+      notifyConfigChange(null);
       logger.success('Settings actualizados en Firestore.');
     } catch (error) {
       logger.error('Error al guardar settings:', error);
@@ -1742,6 +1840,7 @@ export const db = {
         // A partial update cannot safely represent the whole settings document.
         guildSettingsCache.delete(guildId);
       }
+      notifyConfigChange(guildId);
       return true;
     } catch (error) {
       logger.error(`Error al guardar settings de la guild ${guildId}:`, error);
@@ -1755,6 +1854,7 @@ export const db = {
     settingsFetch = null;
     guildSettingsCache.clear();
     guildSettingsFetches.clear();
+    notifyConfigChange(null);
   },
 
   // --- Logs del Bot ---
@@ -1900,22 +2000,29 @@ export const db = {
   },
 
   async getMessageTemplates() {
+    if (messageTemplatesCache && (Date.now() - messageTemplatesLastFetch < PANEL_CONFIG_TTL)) {
+      return messageTemplatesCache;
+    }
     try {
       const doc = await firestore.collection(CONFIG_COLLECTION).doc('messages').get();
-      if (doc.exists) return doc.data();
-      return getDefaultMessageTemplates();
+      messageTemplatesCache = doc.exists ? doc.data() : getDefaultMessageTemplates();
+      messageTemplatesLastFetch = Date.now();
+      return messageTemplatesCache;
     } catch (error) {
       logger.error('Error al obtener plantillas de mensajes:', error);
-      return getDefaultMessageTemplates();
+      return messageTemplatesCache || getDefaultMessageTemplates();
     }
   },
 
   async setMessageTemplates(templates) {
     try {
-      await firestore.collection(CONFIG_COLLECTION).doc('messages').set({
+      const data = {
         ...templates,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+      };
+      await firestore.collection(CONFIG_COLLECTION).doc('messages').set(data);
+      messageTemplatesCache = data;
+      messageTemplatesLastFetch = Date.now();
       logger.success('Plantillas de mensajes actualizadas en Firestore.');
     } catch (error) {
       logger.error('Error al guardar plantillas de mensajes:', error);
@@ -2183,7 +2290,14 @@ export const db = {
     if (!discordId) return null;
     const docId = guildId ? `${guildId}_${discordId}` : discordId;
     const cached = getCachedUserByDiscordId(docId);
-    if (cached !== undefined && cached !== null) return cached;
+    if (cached !== undefined) return cached;
+    if (guildId && docId !== discordId) {
+      const globalCached = getCachedUserByDiscordId(discordId);
+      if (globalCached === null) {
+        cacheUser(docId, null);
+        return null;
+      }
+    }
     if (fullUserFetches.has(docId)) return fullUserFetches.get(docId);
 
     const fetchUser = (async () => {
@@ -2252,7 +2366,11 @@ export const db = {
           return combined;
         }
 
+        // Cachear resultado negativo tanto para el docId local como global
         cacheUser(docId, null);
+        if (guildId && docId !== discordId) {
+          cacheUser(discordId, null);
+        }
         return null;
       } catch (error) {
         logger.error(`Error al obtener usuario completo ${discordId}:`, error);
@@ -2276,12 +2394,19 @@ export const db = {
     // 1. Revisar caché local en memoria primero
     for (const discordId of uniqueIds) {
       const docId = guildId ? `${guildId}_${discordId}` : discordId;
-      const cached = getCachedUserByDiscordId(docId) || (guildId ? getCachedUserByDiscordId(discordId) : null);
-      if (cached && typeof cached === 'object') {
+      const cached = getCachedUserByDiscordId(docId);
+      if (cached !== undefined) {
         resultMap[discordId] = cached;
-      } else {
-        idsToFetch.push(discordId);
+        continue;
       }
+      if (guildId && docId !== discordId) {
+        const globalCached = getCachedUserByDiscordId(discordId);
+        if (globalCached !== undefined) {
+          resultMap[discordId] = globalCached;
+          continue;
+        }
+      }
+      idsToFetch.push(discordId);
     }
 
     if (idsToFetch.length === 0) {
@@ -2331,24 +2456,28 @@ export const db = {
       for (const discordId of idsToFetch) {
         const item = rawUserData[discordId] || { guildData: null, globalData: null };
         let combined = { ...(item.globalData || {}), ...(item.guildData || {}) };
+        const docId = guildId ? `${guildId}_${discordId}` : discordId;
 
         if (Object.keys(combined).length > 0) {
           if (!combined.discordId) combined.discordId = discordId;
-          const docId = guildId ? `${guildId}_${discordId}` : discordId;
           cacheUser(docId, combined);
           if (guildId && docId !== discordId) {
             cacheUser(discordId, combined);
           }
           resultMap[discordId] = combined;
         } else {
-          resultMap[discordId] = await this.getFullUser(discordId, guildId).catch(() => null);
+          cacheUser(docId, null);
+          if (guildId && docId !== discordId) {
+            cacheUser(discordId, null);
+          }
+          resultMap[discordId] = null;
         }
       }
     } catch (err) {
       logger.error('Error al consultar usuarios en lote (getFullUsersMap):', err);
-      await Promise.all(idsToFetch.map(async (id) => {
-        resultMap[id] = await this.getFullUser(id, guildId).catch(() => null);
-      }));
+      idsToFetch.forEach(id => {
+        if (resultMap[id] === undefined) resultMap[id] = null;
+      });
     }
 
     return resultMap;

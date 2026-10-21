@@ -19,23 +19,43 @@ export async function onVoiceStateUpdate(oldState, newState, db) {
   // Si se desconectó de la llamada por completo, ignorar
   if (!newChannelId) return;
 
-  // Comprobar feature flag
+  // Comprobar feature flag (desde memoria)
   const autoMove = await isFeatureEnabled('autoMovePlayers', member.guild?.id);
   if (!autoMove) return;
 
-  try {
-    // 1. Obtener datos de Faceit vinculados
-    const userData = await db.getFaceitIdByDiscordId(member.id, member.guild.id);
-    if (!userData || !userData.faceit_player_id) return;
+  // 1. Obtener canales de espera (Waiting Rooms) de la configuración en memoria
+  const guildConfig = await getEffectiveConfigForGuild(member.guild.id).catch(() => ({}));
+  const waitingRoomIds = getAllWaitingRoomIds(guildConfig);
 
-    // 2. Comprobar si tiene una partida activa
-    const activeMatch = await db.getActiveMatchByPlayerId(userData.faceit_player_id);
+  const isConnecting = oldChannelId === null;
+  const isEnteringWaitingRoom = waitingRoomIds.includes(newChannelId);
+
+  // Si el usuario no se está conectando de cero ni entra a una sala de espera, descartar de inmediato
+  if (!isConnecting && !isEnteringWaitingRoom) return;
+
+  try {
+    // 2. Comprobar si hay partidas activas en el bot (usando caché de partidas)
+    // Si no hay ninguna partida activa, es imposible que el usuario deba ser movido
+    const hasMatches = await db.hasActiveMatches(member.guild.id);
+    if (!hasMatches) return;
+
+    // 3. Buscar si el miembro pertenece a una partida activa (primero por Discord ID en roster, luego Faceit ID con caché negativo)
+    const activeMatch = await db.getActiveMatchForMember(member.id, member.guild.id);
     if (!activeMatch) return;
 
-    // 3. Obtener canal destino del equipo
+    // 4. Obtener canal destino del equipo
     let targetVcId = null;
-    const isFaction1 = (activeMatch.faction1_roster || []).some(p => p.id === userData.faceit_player_id);
-    const isFaction2 = (activeMatch.faction2_roster || []).some(p => p.id === userData.faceit_player_id);
+    const userData = await db.getFaceitIdByDiscordId(member.id, member.guild.id);
+    const faceitPlayerId = userData?.faceit_player_id;
+
+    const isFaction1 = (activeMatch.faction1_roster || []).some(p => 
+      (p.discord_id && p.discord_id === member.id) || 
+      (faceitPlayerId && (p.id === faceitPlayerId || p.player_id === faceitPlayerId))
+    );
+    const isFaction2 = (activeMatch.faction2_roster || []).some(p => 
+      (p.discord_id && p.discord_id === member.id) || 
+      (faceitPlayerId && (p.id === faceitPlayerId || p.player_id === faceitPlayerId))
+    );
 
     if (isFaction1) {
       targetVcId = activeMatch.faction1_vc_id;
@@ -48,24 +68,14 @@ export async function onVoiceStateUpdate(oldState, newState, db) {
     // Si el jugador viene de su canal de partida activa (se está saliendo o fue movido por cleanup), no auto-mover de vuelta
     if (oldChannelId === targetVcId) return;
 
-    // 4. Obtener canales de espera (Waiting Rooms) de todas las colas configuradas
-    const guildConfig = await getEffectiveConfigForGuild(member.guild.id).catch(() => ({}));
-    const waitingRoomIds = getAllWaitingRoomIds(guildConfig);
-    if (activeMatch.waiting_room_id && !waitingRoomIds.includes(activeMatch.waiting_room_id)) {
-      waitingRoomIds.push(activeMatch.waiting_room_id);
-    }
+    // Si ya está en su canal destino, no hacer nada
+    if (newChannelId === targetVcId) return;
 
-    // Mover si se conecta de cero (oldChannelId === null) O entra a cualquiera de las salas de espera
-    const isConnecting = oldChannelId === null;
-    const isEnteringWaitingRoom = waitingRoomIds.includes(newChannelId);
-
-    if ((isConnecting || isEnteringWaitingRoom) && newChannelId !== targetVcId) {
-      const targetChannel = await member.guild.channels.fetch(targetVcId).catch(() => null);
-      if (targetChannel) {
-        await member.voice.setChannel(targetChannel, 'Auto-mover a canal de partida activa Faceit');
-        logger.info(`Auto-movido ${member.user.tag} al canal de partida activa: ${targetChannel.name}`);
-        await db.addLogEntry('info', `Auto-movido ${member.user.tag} al canal de partida activa ${targetChannel.name} en reconexión.`, 'bot');
-      }
+    const targetChannel = await member.guild.channels.fetch(targetVcId).catch(() => null);
+    if (targetChannel) {
+      await member.voice.setChannel(targetChannel, 'Auto-mover a canal de partida activa Faceit');
+      logger.info(`Auto-movido ${member.user.tag} al canal de partida activa: ${targetChannel.name}`);
+      await db.addLogEntry('info', `Auto-movido ${member.user.tag} al canal de partida activa ${targetChannel.name} en reconexión.`, 'bot');
     }
   } catch (err) {
     logger.error(`Error en onVoiceStateUpdate para ${member.user.tag}:`, err.message);
