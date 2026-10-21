@@ -31,7 +31,8 @@ import {
   Zap,
   Flame,
   MapPin,
-  Map
+  Map,
+  Sparkles
 } from 'lucide-react';
 import {
   Player, 
@@ -58,6 +59,7 @@ import { DevolucionesView } from './components/DevolucionesView';
 import { ContactoView } from './components/ContactoView';
 import { GuiaFaceitView } from './components/GuiaFaceitView';
 import { MatchHistoryView } from './components/MatchHistoryView';
+import { MixtonLiveStepper } from './components/MixtonLiveStepper';
 
 export default function App() {
   // Authentication & Loading states
@@ -208,6 +210,10 @@ export default function App() {
 
   // Toast stack state
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Concept Mockup Preview Modal
+  const [showMockupModal, setShowMockupModal] = useState<boolean>(false);
+  const [selectedMockupTab, setSelectedMockupTab] = useState<'draft' | 'veto'>('draft');
 
   const wsRef = useRef<WebSocket | null>(null);
   const wsReconnectTimerRef = useRef<number | null>(null);
@@ -2247,44 +2253,64 @@ export default function App() {
             </div>
           )}
 
-          {/* Arena Subheader Bar */}
-            <div className="border-b-2 border-[#1A1A1A] bg-[#111] px-6 py-3 flex flex-col md:flex-row justify-between items-center gap-4 relative z-10 shadow-md">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-white text-black flex items-center justify-center font-bold rotate-3 shadow-md">
-                  <Gamepad2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-black italic tracking-tighter uppercase leading-none text-white">
-                    SALA: <span className="text-[#FF5500]">MACHUPEEK</span>
-                  </h2>
-                  <p className="text-[9px] text-neutral-500 uppercase tracking-widest font-mono font-bold">MATCHMAKING DRAFT ARENA // LOBBY LIVE</p>
-                </div>
+          {/* Arena Subheader Bar with Live Stepper */}
+          <div className="border-b border-white/10 bg-[#0B0E14] px-4 sm:px-6 py-3 flex flex-col md:flex-row justify-between items-center gap-3 relative z-10 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-[#FF5500] text-black flex items-center justify-center font-black shadow-[0_0_15px_rgba(255,85,0,0.3)]">
+                <Gamepad2 className="w-5 h-5" />
               </div>
-              
-              {/* Status Banner */}
-              <div className="flex-1 max-w-lg md:mx-6">
-                <div className={statusInfo.className}>
-                  <span 
-                    className="text-[10px] font-mono tracking-wide"
-                    dangerouslySetInnerHTML={{ __html: statusInfo.text }} 
-                  />
-                </div>
+              <div>
+                <h2 className="text-base sm:text-lg font-black italic tracking-tighter uppercase leading-none text-white font-mono flex items-center gap-2">
+                  SALA MIXTON: <span className="text-[#FF5500]">MACHUPEEK</span>
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-mono font-bold uppercase not-italic tracking-wider animate-pulse">
+                    ● EN VIVO
+                  </span>
+                </h2>
+                <p className="text-[10px] text-neutral-400 uppercase tracking-widest font-mono font-bold mt-0.5">
+                  MATCHMAKING & CS2 COMPETITIVE ARENA
+                </p>
               </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Button to view CS2 improved visual mockups */}
+              <button
+                type="button"
+                onClick={() => setShowMockupModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-[#FF5500]/20 to-purple-600/20 border border-[#FF5500]/50 hover:border-[#FF5500] text-white hover:text-white transition-all text-xs font-mono font-bold uppercase tracking-wider cursor-pointer shadow-md"
+                title="Ver vista previa gráfica de la mejora visual del Mixtón"
+              >
+                <span>🎨</span>
+                <span>Ver Diseño Concepto</span>
+              </button>
 
               <a 
                 href="https://www.faceit.com/es/hub/52a88f17-1660-42ae-8322-76592f0c6f23/Mixtones"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5500]/10 border-2 border-[#FF5500]/40 text-[#FF5500] hover:bg-[#FF5500] hover:text-white transition-colors text-xs font-mono font-bold uppercase tracking-wider"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FF5500]/10 border border-[#FF5500]/40 text-[#FF5500] hover:bg-[#FF5500] hover:text-black transition-all text-xs font-mono font-bold uppercase tracking-wider"
                 title="Abrir Hub de Faceit en una pestaña nueva"
               >
                 <span className="w-2 h-2 rounded-full bg-[#FF5500] animate-pulse" />
                 Hub Faceit
               </a>
             </div>
+          </div>
 
-      {/* Main Content Grid */}
-      <main className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 p-6 relative z-10 lg:overflow-hidden overflow-y-auto lg:max-h-[calc(100vh-80px)]">
+          {/* Stepper Banner Container */}
+          <div className="px-4 sm:px-6 pt-4 pb-0 bg-[#08090C]">
+            <MixtonLiveStepper
+              lobbyState={lobbyState}
+              totalReadyCount={totalReadyCountVal}
+              requiredPlayers={numTeamsSelect * 5}
+              currentUser={currentUser}
+              onOpenGuide={() => handleSelectView('guia-faceit')}
+              showToast={showToast}
+            />
+          </div>
+
+          {/* Main Content Grid */}
+          <main className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 p-4 sm:p-6 relative z-10 lg:overflow-hidden overflow-y-auto lg:max-h-[calc(100vh-140px)]">
         
         {/* Left Panel: Available Players */}
         <section className="lg:col-span-1 p-5 bg-[#111] border-4 border-[#1A1A1A] shadow-[8px_8px_0px_rgba(0,0,0,0.5)] flex flex-col lg:max-h-[calc(100vh-140px)] rounded-none">
@@ -2896,20 +2922,27 @@ export default function App() {
                   }
                 }
 
-                // Color indicators on card borders depending on the team index
-                const borderStyles = [
-                  'border-neutral-800', // Default
-                  'border-[#FF5500]/60', // Orange theme
-                  'border-blue-600/60', // Blue theme
-                  'border-green-600/60', // Green theme
-                ];
-                const borderStyle = isCurrentTurn 
-                  ? 'border-white shadow-[0_0_20px_rgba(255,255,255,0.15)] bg-[#131313]' 
-                  : `${borderStyles[(tIdx + 1) % borderStyles.length]} bg-[#111]`;
+                // Team color styling with high-contrast esports theme
+                const isTeamA = tIdx === 0;
+                const isTeamB = tIdx === 1;
+                const teamBg = isCurrentTurn 
+                  ? 'bg-gradient-to-b from-[#1E140F] to-[#0D1017] border-white shadow-[0_0_30px_rgba(255,85,0,0.35)] ring-2 ring-[#FF5500]' 
+                  : isTeamA 
+                    ? 'bg-gradient-to-b from-[#16110F] to-[#0D1017] border-[#FF5500]/50 shadow-lg' 
+                    : isTeamB 
+                      ? 'bg-gradient-to-b from-[#0E1524] to-[#0D1017] border-[#00A3FF]/50 shadow-lg' 
+                      : 'bg-[#11141D] border-neutral-800';
 
                 return (
-                  <div key={team.id} className={`p-5 border-4 shadow-[8px_8px_0px_rgba(0,0,0,0.5)] rounded-none relative flex flex-col gap-3 transition-all ${borderStyle}`}>
-                    <div className="flex justify-between items-center border-b border-[#222] pb-2 font-mono">
+                  <div key={team.id} className={`p-4 sm:p-5 border-2 shadow-xl rounded-none relative flex flex-col gap-3 transition-all ${teamBg}`}>
+                    {/* Turn Active Badge */}
+                    {isCurrentTurn && (
+                      <div className="bg-[#FF5500] text-black font-black font-mono text-[9px] px-2.5 py-0.5 uppercase tracking-widest animate-pulse flex items-center gap-1.5 self-start shadow-md -mt-1 mb-1">
+                        <Flame className="w-3 h-3 fill-current" />
+                        <span>TURNO DE ELECCIÓN // ELIGE JUGADOR</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center border-b border-white/10 pb-2 font-mono">
                       <div className="flex items-center gap-2">
                         <h4 className="text-sm font-black italic tracking-tighter uppercase text-white">{getTeamName(team)}</h4>
                         {team.players && team.players.length > 0 && (
@@ -4629,6 +4662,160 @@ export default function App() {
           </div>
         </div>
       )}
+
+        {/* Modal de Vista Previa Conceptual CS2 (Mockups de las 3 Skills) */}
+        {showMockupModal && (
+          <div 
+            className="fixed inset-0 z-[1200] flex items-center justify-center p-3 sm:p-6 bg-black/90 backdrop-blur-md overflow-y-auto animate-fade-in font-mono"
+            onClick={() => setShowMockupModal(false)}
+          >
+            <div 
+              className="bg-[#0B0E14] border-2 border-[#FF5500]/60 w-full max-w-6xl max-h-[94vh] flex flex-col shadow-[0_0_50px_rgba(255,85,0,0.25)] rounded-none text-white overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-[#121622] border-b border-white/10 p-4 sm:p-5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#FF5500] text-black flex items-center justify-center font-black">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-white flex items-center gap-2">
+                      DISEÑO Y ARQUITECTURA DE EXPERIENCIA CS2 <span className="text-[#FF5500]">// MACHUPEEK</span>
+                    </h3>
+                    <p className="text-[10px] text-neutral-400">
+                      Concepto generado aplicando las directivas de Taste Skill, UI/UX Pro Max e Impeccable
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowMockupModal(false)}
+                  className="text-neutral-400 hover:text-white p-1 text-xl cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Tabs */}
+              <div className="bg-[#161B28] border-b border-white/10 px-4 py-2.5 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedMockupTab('draft')}
+                  className={`px-4 py-2 text-xs font-bold uppercase transition-all cursor-pointer flex items-center gap-2 ${
+                    selectedMockupTab === 'draft'
+                      ? 'bg-[#FF5500] text-black font-black shadow-md'
+                      : 'bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10 border border-white/5'
+                  }`}
+                >
+                  <Flame className="w-4 h-4" />
+                  <span>1. Lobby & Draft en Vivo (5 Fases)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedMockupTab('veto')}
+                  className={`px-4 py-2 text-xs font-bold uppercase transition-all cursor-pointer flex items-center gap-2 ${
+                    selectedMockupTab === 'veto'
+                      ? 'bg-[#FF5500] text-black font-black shadow-md'
+                      : 'bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10 border border-white/5'
+                  }`}
+                >
+                  <Map className="w-4 h-4" />
+                  <span>2. Veto de Mapas CS2 (BLAST Premier Style)</span>
+                </button>
+              </div>
+
+              {/* Image & Description View */}
+              <div className="p-4 sm:p-6 overflow-y-auto max-h-[75vh] space-y-4">
+                {selectedMockupTab === 'draft' ? (
+                  <div className="space-y-4">
+                    <div className="border-2 border-white/10 bg-black/80 overflow-hidden shadow-2xl relative group">
+                      <img 
+                        src="/mixton_draft_preview.jpg" 
+                        alt="Mockup Draft Lobby CS2 MachuPeek" 
+                        className="w-full h-auto object-contain max-h-[60vh] mx-auto"
+                      />
+                      <div className="absolute bottom-2 right-2 bg-black/80 border border-white/20 px-2.5 py-1 text-[10px] text-neutral-300">
+                        HD Concept Preview // Mixton Draft Arena
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                      <div className="p-3 bg-[#111622] border border-white/10">
+                        <span className="text-[#FF5500] font-bold block mb-1">1. Pipeline de 5 Fases:</span>
+                        <p className="text-neutral-400 text-[11px] leading-relaxed">
+                          El usuario sabe exactamente en qué paso está la partida: Convocatoria → Sorteo → Draft → Veto → Servidor en Vivo.
+                        </p>
+                      </div>
+                      <div className="p-3 bg-[#111622] border border-white/10">
+                        <span className="text-sky-400 font-bold block mb-1">2. Rivalidad Visual Fénix vs Kobra:</span>
+                        <p className="text-neutral-400 text-[11px] leading-relaxed">
+                          Colores de equipo de alta distinción (Fénix en Fuego / Naranja y Kobra en Cobalt / Azul), con corona dorada para el capitán.
+                        </p>
+                      </div>
+                      <div className="p-3 bg-[#111622] border border-white/10">
+                        <span className="text-emerald-400 font-bold block mb-1">3. Estado de Turno Inmediato:</span>
+                        <p className="text-neutral-400 text-[11px] leading-relaxed">
+                          El banner superior notifica en tiempo real quién debe elegir y cuánto tiempo queda en el reloj.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="border-2 border-white/10 bg-black/80 overflow-hidden shadow-2xl relative group">
+                      <img 
+                        src="/mixton_veto_preview.jpg" 
+                        alt="Mockup Veto de Mapas CS2 MachuPeek" 
+                        className="w-full h-auto object-contain max-h-[60vh] mx-auto"
+                      />
+                      <div className="absolute bottom-2 right-2 bg-black/80 border border-white/20 px-2.5 py-1 text-[10px] text-neutral-300">
+                        HD Concept Preview // CS2 Map Veto Phase
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                      <div className="p-3 bg-[#111622] border border-white/10">
+                        <span className="text-red-400 font-bold block mb-1">1. Mapas Baneados Claros:</span>
+                        <p className="text-neutral-400 text-[11px] leading-relaxed">
+                          Los mapas descartados quedan sellados con banda roja y el nombre del equipo que realizó el ban, evitando confusiones.
+                        </p>
+                      </div>
+                      <div className="p-3 bg-[#111622] border border-white/10">
+                        <span className="text-[#FF5500] font-bold block mb-1">2. Turno Activo Resaltado:</span>
+                        <p className="text-neutral-400 text-[11px] leading-relaxed">
+                          El mapa en hover muestra borde de neón ardiente con el llamado interactivo "CLIC PARA BANEAR".
+                        </p>
+                      </div>
+                      <div className="p-3 bg-[#111622] border border-white/10">
+                        <span className="text-emerald-400 font-bold block mb-1">3. Mapa Ganador con Trofeo:</span>
+                        <p className="text-neutral-400 text-[11px] leading-relaxed">
+                          El mapa decider se corona con resplandor verde esmeralda y trofeo dorado 🏆 listo para ser enviado al servidor de CS2.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="bg-[#121622] border-t border-white/10 p-3.5 px-6 flex items-center justify-between">
+                <span className="text-[10px] text-neutral-400">
+                  Concepto visual generado para MachuPeek Esports Perú
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowMockupModal(false)}
+                  className="px-5 py-1.5 bg-[#FF5500] text-black font-black uppercase text-xs hover:bg-[#e04c00] transition-colors cursor-pointer"
+                >
+                  Entendido
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         </>
       )}
