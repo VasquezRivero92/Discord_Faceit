@@ -115,23 +115,13 @@ export function createAuthRouter(client, db, config) {
         if (now - captainIdsCache.timestamp < CAPTAINS_CACHE_TTL) {
           isCaptain = captainIdsCache.ids.has(user.id);
         } else {
-          const lobbySnapshot = await db._firestore.collection('faceit_config').get();
-          const newCaptainIds = new Set();
-          for (const doc of lobbySnapshot.docs) {
-            if (doc.id.startsWith('mixton_lobby')) {
-              const data = doc.data();
-              if (data.teams && Array.isArray(data.teams)) {
-                for (const team of data.teams) {
-                  if (team.captain && team.captain.discordId) {
-                    newCaptainIds.add(team.captain.discordId);
-                  }
-                }
-              }
-            }
+          isCaptain = await db.isUserCaptain(user.id, servidor);
+          if (isCaptain) {
+            captainIdsCache.ids.add(user.id);
+          } else {
+            captainIdsCache.ids.delete(user.id);
           }
-          captainIdsCache.ids = newCaptainIds;
           captainIdsCache.timestamp = now;
-          isCaptain = newCaptainIds.has(user.id);
         }
       } catch (err) {
         logger.error('Error al verificar si el usuario es capitán:', err);

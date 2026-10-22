@@ -363,26 +363,29 @@ function getCallerInfo() {
   try {
     const err = new Error();
     const stack = err.stack ? err.stack.split('\n') : [];
+    let fallbackCaller = 'unknown';
     for (let i = 2; i < stack.length; i++) {
       const line = stack[i];
-      if (
-        !line.includes('database.js') &&
-        !line.includes('node_modules') &&
-        !line.includes('node:')
-      ) {
-        const match = line.match(/\((.*?)\)/) || line.match(/at\s+(.*?)$/);
-        if (match) {
-          const raw = match[1].replace(/\\/g, '/');
-          const parts = raw.split('/');
-          return parts.slice(-2).join('/');
+      if (line.includes('node_modules') || line.includes('node:')) continue;
+      const match = line.match(/\((.*?)\)/) || line.match(/at\s+(.*?)$/);
+      if (match) {
+        const raw = match[1].replace(/\\/g, '/');
+        const parts = raw.split('/');
+        const callerStr = parts.slice(-2).join('/');
+        if (fallbackCaller === 'unknown') {
+          fallbackCaller = callerStr;
+        }
+        if (!line.includes('database.js')) {
+          return callerStr;
         }
       }
     }
+    return fallbackCaller;
   } catch {}
   return 'unknown';
 }
 
-function recordRead(col, count, caller) {
+function recordRead(col, count, caller, targetInfo = '') {
   firestoreMetrics.totalReads++;
   firestoreMetrics.totalDocsRead += count;
   if (!firestoreMetrics.reads.has(col)) {
@@ -393,13 +396,11 @@ function recordRead(col, count, caller) {
   entry.docs += count;
   entry.callers.set(caller, (entry.callers.get(caller) || 0) + count);
 
-  // Alerta en consola si se leen 10 o más documentos de golpe, o si DEBUG_FIRESTORE está activo
-  if (count >= 10 || process.env.DEBUG_FIRESTORE === 'true') {
-    logger.warn(`📊 [FIRESTORE READ] [${col}] docs: ${count} <- ${caller}`);
-  }
+  const detail = targetInfo ? ` (${targetInfo})` : '';
+  logger.info(`📖 [FIRESTORE READ] [${col}]${detail}: ${count} doc(s) <- ${caller}`);
 }
 
-function recordWrite(col, caller) {
+function recordWrite(col, caller, targetInfo = '') {
   firestoreMetrics.totalWrites++;
   if (!firestoreMetrics.writes.has(col)) {
     firestoreMetrics.writes.set(col, { count: 0, callers: new Map() });
@@ -407,12 +408,12 @@ function recordWrite(col, caller) {
   const entry = firestoreMetrics.writes.get(col);
   entry.count++;
   entry.callers.set(caller, (entry.callers.get(caller) || 0) + 1);
-  if (process.env.DEBUG_FIRESTORE === 'true') {
-    logger.info(`📝 [FIRESTORE WRITE] [${col}] <- ${caller}`);
-  }
+
+  const detail = targetInfo ? ` (${targetInfo})` : '';
+  logger.info(`📝 [FIRESTORE WRITE] [${col}]${detail} <- ${caller}`);
 }
 
-function recordDelete(col, caller) {
+function recordDelete(col, caller, targetInfo = '') {
   firestoreMetrics.totalDeletes++;
   if (!firestoreMetrics.deletes.has(col)) {
     firestoreMetrics.deletes.set(col, { count: 0, callers: new Map() });
@@ -420,9 +421,9 @@ function recordDelete(col, caller) {
   const entry = firestoreMetrics.deletes.get(col);
   entry.count++;
   entry.callers.set(caller, (entry.callers.get(caller) || 0) + 1);
-  if (process.env.DEBUG_FIRESTORE === 'true') {
-    logger.info(`🗑️ [FIRESTORE DELETE] [${col}] <- ${caller}`);
-  }
+
+  const detail = targetInfo ? ` (${targetInfo})` : '';
+  logger.info(`🗑️ [FIRESTORE DELETE] [${col}]${detail} <- ${caller}`);
 }
 
 export function printFirestoreSummary() {
@@ -446,6 +447,37 @@ export function printFirestoreSummary() {
       logger.info(`   └─ ${caller}: ${docs} docs leídos`);
     }
   }
+
+  if (firestoreMetrics.totalWrites > 0) {
+    logger.info('--- TOP ESCRITURAS POR COLECCIÓN ---');
+    const sortedWrites = Array.from(firestoreMetrics.writes.entries())
+      .sort((a, b) => b[1].count - a[1].count);
+    for (const [col, stats] of sortedWrites) {
+      logger.info(`📝 [${col}]: ${stats.count} escrituras`);
+      const sortedCallers = Array.from(stats.callers.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3);
+      for (const [caller, count] of sortedCallers) {
+        logger.info(`   └─ ${caller}: ${count} escrituras`);
+      }
+    }
+  }
+
+  if (firestoreMetrics.totalDeletes > 0) {
+    logger.info('--- TOP BORRADOS POR COLECCIÓN ---');
+    const sortedDeletes = Array.from(firestoreMetrics.deletes.entries())
+      .sort((a, b) => b[1].count - a[1].count);
+    for (const [col, stats] of sortedDeletes) {
+      logger.info(`🗑️ [${col}]: ${stats.count} borrados`);
+      const sortedCallers = Array.from(stats.callers.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3);
+      for (const [caller, count] of sortedCallers) {
+        logger.info(`   └─ ${caller}: ${count} borrados`);
+      }
+    }
+  }
+
   logger.info('=================================================================\n');
 }
 
@@ -481,28 +513,28 @@ try {
     const origDocGet = admin.firestore.DocumentReference.prototype.get;
     admin.firestore.DocumentReference.prototype.get = async function(...args) {
       const col = this.parent ? this.parent.id : (this.path ? this.path.split('/')[0] : 'unknown');
-      recordRead(col, 1, getCallerInfo());
+      recordRead(col, 1, getCallerInfo(), this.path || this.id);
       return origDocGet.apply(this, args);
     };
 
     const origDocSet = admin.firestore.DocumentReference.prototype.set;
     admin.firestore.DocumentReference.prototype.set = async function(...args) {
       const col = this.parent ? this.parent.id : (this.path ? this.path.split('/')[0] : 'unknown');
-      recordWrite(col, getCallerInfo());
+      recordWrite(col, getCallerInfo(), this.path || this.id);
       return origDocSet.apply(this, args);
     };
 
     const origDocUpdate = admin.firestore.DocumentReference.prototype.update;
     admin.firestore.DocumentReference.prototype.update = async function(...args) {
       const col = this.parent ? this.parent.id : (this.path ? this.path.split('/')[0] : 'unknown');
-      recordWrite(col, getCallerInfo());
+      recordWrite(col, getCallerInfo(), this.path || this.id);
       return origDocUpdate.apply(this, args);
     };
 
     const origDocDelete = admin.firestore.DocumentReference.prototype.delete;
     admin.firestore.DocumentReference.prototype.delete = async function(...args) {
       const col = this.parent ? this.parent.id : (this.path ? this.path.split('/')[0] : 'unknown');
-      recordDelete(col, getCallerInfo());
+      recordDelete(col, getCallerInfo(), this.path || this.id);
       return origDocDelete.apply(this, args);
     };
   }
@@ -513,9 +545,66 @@ try {
       const col = this._queryOptions?.collectionId || (this.parent ? this.parent.id : 'unknown');
       const caller = getCallerInfo();
       const snapshot = await origQueryGet.apply(this, args);
-      const docsCount = snapshot && typeof snapshot.size === 'number' ? (snapshot.size || 1) : 1;
-      recordRead(col, docsCount, caller);
+      const docsCount = snapshot && typeof snapshot.size === 'number' ? snapshot.size : 1;
+      const billedDocs = docsCount === 0 ? 1 : docsCount;
+      recordRead(col, billedDocs, caller, `query ${docsCount} doc(s)`);
       return snapshot;
+    };
+  }
+
+  if (admin.firestore?.WriteBatch?.prototype) {
+    const origBatchSet = admin.firestore.WriteBatch.prototype.set;
+    admin.firestore.WriteBatch.prototype.set = function(docRef, ...args) {
+      const col = docRef?.parent ? docRef.parent.id : (docRef?.path ? docRef.path.split('/')[0] : 'unknown');
+      recordWrite(col, getCallerInfo(), `batch.set ${docRef?.path || docRef?.id}`);
+      return origBatchSet.apply(this, [docRef, ...args]);
+    };
+
+    const origBatchUpdate = admin.firestore.WriteBatch.prototype.update;
+    admin.firestore.WriteBatch.prototype.update = function(docRef, ...args) {
+      const col = docRef?.parent ? docRef.parent.id : (docRef?.path ? docRef.path.split('/')[0] : 'unknown');
+      recordWrite(col, getCallerInfo(), `batch.update ${docRef?.path || docRef?.id}`);
+      return origBatchUpdate.apply(this, [docRef, ...args]);
+    };
+
+    const origBatchDelete = admin.firestore.WriteBatch.prototype.delete;
+    admin.firestore.WriteBatch.prototype.delete = function(docRef, ...args) {
+      const col = docRef?.parent ? docRef.parent.id : (docRef?.path ? docRef.path.split('/')[0] : 'unknown');
+      recordDelete(col, getCallerInfo(), `batch.delete ${docRef?.path || docRef?.id}`);
+      return origBatchDelete.apply(this, [docRef, ...args]);
+    };
+  }
+
+  if (admin.firestore?.Transaction?.prototype) {
+    const origTxGet = admin.firestore.Transaction.prototype.get;
+    admin.firestore.Transaction.prototype.get = async function(refOrQuery, ...args) {
+      const col = refOrQuery?.parent ? refOrQuery.parent.id : (refOrQuery?.path ? refOrQuery.path.split('/')[0] : 'unknown');
+      const caller = getCallerInfo();
+      const res = await origTxGet.apply(this, [refOrQuery, ...args]);
+      const docsCount = res && typeof res.size === 'number' ? res.size : 1;
+      recordRead(col, docsCount, caller, `tx.get ${refOrQuery?.path || col}`);
+      return res;
+    };
+
+    const origTxSet = admin.firestore.Transaction.prototype.set;
+    admin.firestore.Transaction.prototype.set = function(docRef, ...args) {
+      const col = docRef?.parent ? docRef.parent.id : (docRef?.path ? docRef.path.split('/')[0] : 'unknown');
+      recordWrite(col, getCallerInfo(), `tx.set ${docRef?.path || docRef?.id}`);
+      return origTxSet.apply(this, [docRef, ...args]);
+    };
+
+    const origTxUpdate = admin.firestore.Transaction.prototype.update;
+    admin.firestore.Transaction.prototype.update = function(docRef, ...args) {
+      const col = docRef?.parent ? docRef.parent.id : (docRef?.path ? docRef.path.split('/')[0] : 'unknown');
+      recordWrite(col, getCallerInfo(), `tx.update ${docRef?.path || docRef?.id}`);
+      return origTxUpdate.apply(this, [docRef, ...args]);
+    };
+
+    const origTxDelete = admin.firestore.Transaction.prototype.delete;
+    admin.firestore.Transaction.prototype.delete = function(docRef, ...args) {
+      const col = docRef?.parent ? docRef.parent.id : (docRef?.path ? docRef.path.split('/')[0] : 'unknown');
+      recordDelete(col, getCallerInfo(), `tx.delete ${docRef?.path || docRef?.id}`);
+      return origTxDelete.apply(this, [docRef, ...args]);
     };
   }
 
@@ -526,7 +615,7 @@ try {
       sampleAgg.constructor.prototype.get = async function(...args) {
         const query = this.query;
         const col = query?._queryOptions?.collectionId || (query?.parent ? query.parent.id : 'unknown');
-        recordRead(`${col} (count)`, 1, getCallerInfo());
+        recordRead(`${col} (count)`, 1, getCallerInfo(), 'aggregate.count');
         return origAggGet.apply(this, args);
       };
     }
@@ -580,7 +669,7 @@ function invalidateMatchHistoryCache(guildId = null) {
 let settingsCache = null;
 let settingsLastFetch = 0;
 let settingsFetch = null;
-const SETTINGS_TTL = 10 * 60 * 1000; // 10 minutos (se actualiza inmediatamente en memoria ante cambios)
+const SETTINGS_TTL = 6 * 60 * 60 * 1000; // 6 horas (se actualiza inmediatamente en memoria ante cambios)
 
 let nicknameToDiscordMapCache = null;
 let nicknameToDiscordMapLastFetch = 0;
@@ -592,7 +681,7 @@ let messageTemplatesLastFetch = 0;
 const panelConfigCache = new Map();
 let statusConfigCache = null;
 let statusConfigLastFetch = 0;
-const PANEL_CONFIG_TTL = 10 * 60 * 1000; // 10 minutos
+const PANEL_CONFIG_TTL = 6 * 60 * 60 * 1000; // 6 horas (se invalida de inmediato ante setPanelMessageConfig)
 
 // Listeners de cambio de configuración
 const configChangeListeners = new Set();
@@ -664,7 +753,7 @@ const activeMatchesCacheMap = new Map();
 let activeMatchesLastFetch = 0;
 let activeMatchesFetched = false;
 let activeMatchesFetch = null;
-const ACTIVE_MATCHES_TTL = 5 * 60 * 1000; // 5 minutos (se sincroniza en memoria con addActiveMatch/removeActiveMatch)
+const ACTIVE_MATCHES_TTL = 2 * 60 * 60 * 1000; // 2 horas (se sincroniza inmediatamente en memoria con addActiveMatch/removeActiveMatch)
 
 async function ensureActiveMatchesCache(forceRefresh = false) {
   const now = Date.now();
@@ -702,12 +791,61 @@ function invalidateActiveMatchesCache() {
 // Caché de Configuración por Servidor (Guild Settings)
 const guildSettingsCache = new Map();
 const guildSettingsFetches = new Map();
-const GUILD_SETTINGS_TTL = 10 * 60 * 1000; // 10 minutos (se invalida o actualiza inmediatamente ante setGuildSettings)
+const GUILD_SETTINGS_TTL = 6 * 60 * 60 * 1000; // 6 horas (se invalida o actualiza inmediatamente ante setGuildSettings)
 const hubIdToGuildIdsCache = new Map();
 
 // Caché de Baneos de Hub en memoria (evita consultar decenas de documentos de Firestore cada 2 minutos)
 const hubBansMemoryCache = new Map(); // hubId -> { bans: [], timestamp: number }
 const HUB_BANS_TTL = 10 * 60 * 1000; // 10 minutos
+
+// Sincronización reactiva en tiempo real desde Firestore
+if (firestoreInitialized && firestore && typeof firestore.collection === 'function') {
+  try {
+    // 1. Escuchar cambios de configuración global en tiempo real
+    firestore.collection(CONFIG_COLLECTION).doc('settings').onSnapshot(doc => {
+      if (doc.exists) {
+        settingsCache = doc.data();
+        settingsLastFetch = Date.now();
+      }
+      notifyConfigChange(null);
+    }, err => {
+      logger.warn('Listener onSnapshot settings ignorado:', err.message);
+    });
+
+    // 2. Escuchar cambios de configuración de servidores (guilds) en tiempo real
+    firestore.collection('guild_settings').onSnapshot(snapshot => {
+      snapshot.docChanges().forEach(change => {
+        const guildId = change.doc.id;
+        if (change.type === 'removed') {
+          guildSettingsCache.delete(guildId);
+        } else {
+          cacheValue(guildSettingsCache, guildId, change.doc.data());
+        }
+        notifyConfigChange(guildId);
+      });
+    }, err => {
+      logger.warn('Listener onSnapshot guild_settings ignorado:', err.message);
+    });
+
+    // 3. Escuchar altas, bajas y actualizaciones de partidas activas en tiempo real
+    firestore.collection(ACTIVE_MATCHES_COLLECTION).onSnapshot(snapshot => {
+      snapshot.docChanges().forEach(change => {
+        const matchId = change.doc.id;
+        if (change.type === 'removed') {
+          activeMatchesCacheMap.delete(matchId);
+        } else {
+          activeMatchesCacheMap.set(matchId, change.doc.data());
+        }
+      });
+      activeMatchesFetched = true;
+      activeMatchesLastFetch = Date.now();
+    }, err => {
+      logger.warn('Listener onSnapshot active_matches ignorado:', err.message);
+    });
+  } catch (err) {
+    logger.warn('No se pudieron inicializar listeners en tiempo real de Firestore:', err.message);
+  }
+}
 
 export const db = {
   _firestore: firestore,
@@ -2096,6 +2234,29 @@ export const db = {
       logger.error('Error al guardar estado del lobby mixton:', error);
       return false;
     }
+  },
+
+  async isUserCaptain(discordId, guildId = null) {
+    if (!discordId) return false;
+    // 1. Revisar primero en los estados cacheados en memoria de cualquier lobby
+    for (const entry of lobbyStateCache.values()) {
+      const state = entry?.data;
+      if (state && Array.isArray(state.teams)) {
+        for (const team of state.teams) {
+          if (team.captain && team.captain.discordId === discordId) return true;
+        }
+      }
+    }
+    // 2. Si no se encontró en caché activa, consultar el lobby específico del servidor o global
+    try {
+      const state = await this.getMixtonLobbyState(guildId);
+      if (state && Array.isArray(state.teams)) {
+        for (const team of state.teams) {
+          if (team.captain && team.captain.discordId === discordId) return true;
+        }
+      }
+    } catch {}
+    return false;
   },
 
   // --- Ready Players Cache & Helper Methods ---

@@ -156,7 +156,7 @@ export async function getEffectiveConfig() {
 }
 
 const effectiveGuildConfigCache = new Map();
-const EFFECTIVE_CONFIG_TTL = 10 * 60 * 1000; // 10 minutos (invalida en memoria ante cualquier actualización)
+const EFFECTIVE_CONFIG_TTL = 6 * 60 * 60 * 1000; // 6 horas (invalida en memoria ante cualquier actualización)
 
 export function invalidateEffectiveConfigCache(guildId = null) {
   if (guildId) {
