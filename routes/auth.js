@@ -54,9 +54,12 @@ export function createAuthRouter(client, db, config) {
 
     try {
       // Intercambiar code por access_token
-      const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
+      const tokenRes = await fetch('https://discord.com/api/v10/oauth2/token', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': `DiscordBot (${BASE_URL || 'https://discord.com'}, 1.0.0)`
+        },
         body: new URLSearchParams({
           client_id: DISCORD_CLIENT_ID,
           client_secret: DISCORD_CLIENT_SECRET,
@@ -68,7 +71,12 @@ export function createAuthRouter(client, db, config) {
 
       if (!tokenRes.ok) {
         const err = await tokenRes.text();
-        logger.error('Error intercambiando code en Discord:', err);
+        const isCloudflareBlock = err.includes('1015') || err.includes('cf-wrapper') || err.includes('Cloudflare');
+        if (isCloudflareBlock) {
+          logger.error(`[AUTH] Cloudflare bloqueó la petición a Discord API (HTTP ${tokenRes.status}) por Rate Limit (Error 1015).`);
+          return res.status(429).send('Discord / Cloudflare ha limitado temporalmente las conexiones del servidor. Por favor, espera 15 minutos antes de volver a intentarlo.');
+        }
+        logger.error(`[AUTH] Error intercambiando code en Discord (HTTP ${tokenRes.status}):`, err);
         return res.status(500).send('Error al intercambiar token con Discord.');
       }
 
@@ -76,8 +84,11 @@ export function createAuthRouter(client, db, config) {
       const accessToken = tokenData.access_token;
 
       // Obtener datos del usuario
-      const userRes = await fetch('https://discord.com/api/users/@me', {
-        headers: { Authorization: `Bearer ${accessToken}` }
+      const userRes = await fetch('https://discord.com/api/v10/users/@me', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': `DiscordBot (${BASE_URL || 'https://discord.com'}, 1.0.0)`
+        }
       });
 
       if (!userRes.ok) {
